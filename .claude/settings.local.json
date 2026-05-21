@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter --version)",
+      "Bash(flutter create *)",
+      "PowerShell(Get-Process | Where-Object { $_.Name -match \"dart|flutter|chrome\" } | Select-Object Name, Id | Format-Table -AutoSize)",
+      "PowerShell(cmd /c \"rd /s /q C:\\\\Users\\\\ShaboldaV\\\\Documents\\\\GitHub\\\\savtAssistAppAO-frontend\\\\savt_assist\" 2>&1)",
+      "PowerShell(Rename-Item \"c:\\\\Users\\\\ShaboldaV\\\\Documents\\\\GitHub\\\\savtAssistAppAO-frontend\\\\savt-assist\\\\src\\\\middleware.ts\" \"proxy.ts\")",
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"c:\\\\Users\\\\ShaboldaV\\\\Documents\\\\GitHub\\\\savtAssistAppAO-frontend\\\\savt-assist\\\\src\\\\components\\\\cabinets\")",
+      "PowerShell(Get-NetTCPConnection -LocalPort 8080 -ErrorAction SilentlyContinue)",
+      "PowerShell(netstat -ano)",
+      "PowerShell($p = Get-Process -Id 16188 -ErrorAction SilentlyContinue; Write-Host \"$\\($p.Name\\) — $\\($p.Id\\)\"; Stop-Process -Id 16188 -Force; Write-Host \"Killed\")",
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"c:\\\\Users\\\\ShaboldaV\\\\Documents\\\\GitHub\\\\savtAssistAppAO-frontend\\\\savt-assist\\\\src\\\\components\\\\chats\")",
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"c:\\\\Users\\\\ShaboldaV\\\\Documents\\\\GitHub\\\\savtAssistAppAO-frontend\\\\savt-assist\\\\src\\\\app\\\\admin\\\\chats\")",
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"c:\\\\Users\\\\ShaboldaV\\\\Documents\\\\GitHub\\\\savtAssistAppAO-frontend\\\\savt-assist\\\\src\\\\app\\\\operator\\\\chats\")",
+      "PowerShell(Stop-Process -Id 6916 -Force)"
+    ]
+  }
+}

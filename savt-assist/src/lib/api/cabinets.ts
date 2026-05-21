@@ -1,0 +1,82 @@
+import { apiClient } from './client'
+import type { Cabinet, PaginatedResponse } from '@/types'
+
+export interface CabinetsParams {
+  search?: string
+  sort_by?: string
+  sort_order?: 'asc' | 'desc'
+  page?: number
+  size?: number
+}
+
+export interface CreateCabinetDto {
+  type: string
+  object_number: string
+  admin_internal_name?: string | null
+  description?: string | null
+  purpose?: string | null
+  admin_comment?: string | null
+  warranty_starts_at?: string | null
+  warranty_ends_at?: string | null
+}
+
+export interface UpdateCabinetDto {
+  type?: string | null
+  object_number?: string | null
+  admin_internal_name?: string | null
+  description?: string | null
+  purpose?: string | null
+  admin_comment?: string | null
+  warranty_starts_at?: string | null
+  warranty_ends_at?: string | null
+}
+
+export const cabinetsApi = {
+  getAll: async (params: CabinetsParams = {}): Promise<PaginatedResponse<Cabinet>> => {
+    const { data } = await apiClient.get('/admin/cabinets', { params })
+    return data
+  },
+
+  getOne: async (id: number): Promise<Cabinet> => {
+    const { data } = await apiClient.get(`/admin/cabinets/${id}`)
+    return data
+  },
+
+  create: async (dto: CreateCabinetDto): Promise<Cabinet> => {
+    const { data } = await apiClient.post('/admin/cabinets', dto)
+    return data
+  },
+
+  update: async (id: number, dto: UpdateCabinetDto): Promise<Cabinet> => {
+    const { data } = await apiClient.patch(`/admin/cabinets/${id}`, dto)
+    return data
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/admin/cabinets/${id}`)
+  },
+
+  getQr: async (id: number): Promise<Blob> => {
+    const { data } = await apiClient.get(`/admin/cabinets/${id}/qr`, { responseType: 'blob' })
+    return data
+  },
+
+  getStats: async () => {
+    const [cabinets, serviceReqs, additions, shares, users] = await Promise.allSettled([
+      apiClient.get('/admin/cabinets', { params: { page: 1, size: 1 } }),
+      apiClient.get('/admin/service-requests', { params: { status: 'open', page: 1, size: 1 } }),
+      apiClient.get('/admin/cabinet-requests/additions', { params: { status: 'pending' } }),
+      apiClient.get('/admin/cabinet-requests/shares', { params: { status: 'pending' } }),
+      apiClient.get('/admin/users'),
+    ])
+
+    return {
+      totalCabinets: cabinets.status === 'fulfilled' ? cabinets.value.data.total : 0,
+      openServiceRequests: serviceReqs.status === 'fulfilled' ? serviceReqs.value.data.total : 0,
+      pendingCabinetRequests:
+        (additions.status === 'fulfilled' ? additions.value.data.length : 0) +
+        (shares.status === 'fulfilled' ? shares.value.data.length : 0),
+      totalUsers: users.status === 'fulfilled' ? users.value.data.length : 0,
+    }
+  },
+}
