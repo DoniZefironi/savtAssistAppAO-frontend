@@ -22,7 +22,7 @@ export function CabinetCard({ cabinet, isAdmin, loading, onOpen, onEdit, onQr, o
       <button
         onClick={onQr}
         title="Показать QR-код"
-        className="w-12 h-12 bg-[#1B3A72] rounded-xl flex items-center justify-center flex-shrink-0 hover:bg-[#1B3A72]/80 transition-colors relative"
+        className="w-12 h-12 bg-[#1B3A72] rounded-xl flex items-center justify-center flex-shrink-0 hover:bg-[#1B3A72]/80 transition-colors relative cursor-pointer"
       >
         {loading ? (
           <svg className="w-5 h-5 text-white animate-spin" fill="none" viewBox="0 0 24 24">
@@ -60,7 +60,7 @@ export function CabinetCard({ cabinet, isAdmin, loading, onOpen, onEdit, onQr, o
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-slate-400 hover:text-[#1B3A72]"
+            className="h-8 w-8 text-slate-400 hover:text-[#1B3A72] cursor-pointer"
             title="Редактировать"
             onClick={onEdit}
           >
@@ -69,7 +69,7 @@ export function CabinetCard({ cabinet, isAdmin, loading, onOpen, onEdit, onQr, o
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-slate-400 hover:text-red-500"
+            className="h-8 w-8 text-slate-400 hover:text-red-500 cursor-pointer"
             title="Удалить"
             onClick={onDelete}
           >

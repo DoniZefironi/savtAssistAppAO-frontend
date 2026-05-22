@@ -122,17 +122,6 @@ function DetailContent({ cabinetId, isAdmin, initialMode, onClose }: {
               <WarrantyBadge warrantyEndsAt={fields.warranty_end ? new Date(fields.warranty_end).toISOString() : null} />
             </div>
           </div>
-
-          {/* Pencil — only in view mode, only admin */}
-          {!editing && isAdmin && (
-            <button
-              onClick={() => setEditing(true)}
-              title="Редактировать"
-              className="w-8 h-8 rounded-lg bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors flex-shrink-0"
-            >
-              <PencilIcon className="w-4 h-4 text-white" />
-            </button>
-          )}
         </div>
       </div>
 
@@ -184,21 +173,31 @@ function DetailContent({ cabinetId, isAdmin, initialMode, onClose }: {
 
       {/* ── Footer ── */}
       <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
+          {/* Pencil — only in view mode, only admin */}
+          {!editing && isAdmin && (
+            <button
+              onClick={() => setEditing(true)}
+              title="Редактировать"
+              className="w-8 h-8 rounded-lg bg-blue/15 hover:bg-blue/25 flex items-center justify-center transition-colors flex-shrink-0 cursor-pointer"
+            >
+              <PencilIcon className="w-4 h-4 text-blue" />
+            </button>
+          )}
         {editing ? (
           <>
-            <Button variant="ghost" onClick={handleCancel} disabled={updateMutation.isPending}>
+            <Button variant="ghost" onClick={handleCancel} disabled={updateMutation.isPending} className="cursor-pointer">
               Отмена
             </Button>
             <Button
               onClick={handleSave}
               disabled={updateMutation.isPending}
-              className="bg-[#1B3A72] hover:bg-[#1B3A72]/90"
+              className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
             >
               {updateMutation.isPending ? 'Сохранение...' : 'Сохранить'}
             </Button>
           </>
         ) : (
-          <Button variant="outline" onClick={onClose}>Закрыть</Button>
+          <Button variant="outline" onClick={onClose} className="cursor-pointer">Закрыть</Button>
         )}
       </div>
     </div>
