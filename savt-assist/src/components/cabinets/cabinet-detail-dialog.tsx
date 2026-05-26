@@ -50,7 +50,6 @@ function DetailContent({ cabinetId, isAdmin, initialMode, onClose }: {
     queryFn: () => cabinetsApi.getOne(cabinetId),
   })
 
-  // Init form when cabinet loads or dialog reopens
   useEffect(() => {
     if (cabinet) setFields(cabinetToFields(cabinet))
     setEditing(initialMode === 'edit')
@@ -87,7 +86,6 @@ function DetailContent({ cabinetId, isAdmin, initialMode, onClose }: {
 
   return (
     <div className="flex flex-col">
-      {/* ── Header ── */}
       <div className="bg-gradient-to-r from-[#4A8FE7] to-[#1B3A72] px-6 py-5">
         <div className="flex items-start gap-4 pr-2">
           <div className="w-12 h-12 bg-white/15 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -125,7 +123,6 @@ function DetailContent({ cabinetId, isAdmin, initialMode, onClose }: {
         </div>
       </div>
 
-      {/* ── Fields ── */}
       <div className="px-6 py-4 space-y-0 divide-y divide-slate-50">
         <DetailRow
           label="Тип"
@@ -171,9 +168,7 @@ function DetailContent({ cabinetId, isAdmin, initialMode, onClose }: {
         />
       </div>
 
-      {/* ── Footer ── */}
       <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
-          {/* Pencil — only in view mode, only admin */}
           {!editing && isAdmin && (
             <button
               onClick={() => setEditing(true)}
@@ -203,8 +198,6 @@ function DetailContent({ cabinetId, isAdmin, initialMode, onClose }: {
     </div>
   )
 }
-
-// ─── Shared row components ────────────────────────────────────────────────────
 
 function DetailRow({ label, value, editing, onChange, placeholder, multiline }: {
   label: string
@@ -269,8 +262,6 @@ function DateRow({ label, value, editing, onChange }: {
     </div>
   )
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 interface FormFields {
   admin_internal_name: string

@@ -6,8 +6,8 @@ interface Props {
   cabinet: Cabinet
   isAdmin: boolean
   loading?: boolean
-  onOpen: () => void    // view mode
-  onEdit: () => void    // edit mode directly
+  onOpen: () => void  
+  onEdit: () => void   
   onQr: () => void
   onDelete?: () => void
 }
@@ -16,9 +16,8 @@ export function CabinetCard({ cabinet, isAdmin, loading, onOpen, onEdit, onQr, o
   const displayName = cabinet.admin_internal_name ?? cabinet.object_number
 
   return (
-    <div className="bg-white border border-slate-100 rounded-xl p-4 flex items-center gap-4 hover:shadow-md hover:border-slate-200 transition-all group">
+    <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-4 flex items-center gap-4 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-600 transition-all group">
 
-      {/* Icon — opens QR */}
       <button
         onClick={onQr}
         title="Показать QR-код"
@@ -39,9 +38,8 @@ export function CabinetCard({ cabinet, isAdmin, loading, onOpen, onEdit, onQr, o
         )}
       </button>
 
-      {/* Info — opens detail */}
       <div className="flex-1 min-w-0 cursor-pointer" onClick={onOpen}>
-        <p className="font-semibold text-slate-800 truncate">{displayName}</p>
+        <p className="font-semibold text-slate-800 dark:text-slate-100 truncate">{displayName}</p>
         <p className="text-sm text-slate-400 mt-0.5">{cabinet.object_number}</p>
         <div className="mt-1.5">
           <WarrantyBadge
@@ -51,7 +49,6 @@ export function CabinetCard({ cabinet, isAdmin, loading, onOpen, onEdit, onQr, o
         </div>
       </div>
 
-      {/* Admin actions */}
       {isAdmin && (
         <div
           className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"

@@ -77,14 +77,13 @@ export function CabinetsView({ isAdmin }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="px-6 pt-6 pb-4 border-b border-slate-100 bg-white">
+      <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
         <div className="flex items-end justify-between mb-4">
           <div>
             {data && (
               <p className="text-xs text-slate-400 font-medium mb-0.5">{data.total} устройств</p>
             )}
-            <h1 className="text-xl font-bold text-slate-800">Шкафы управления</h1>
+            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Шкафы управления</h1>
           </div>
           {isAdmin && (
             <Button
@@ -97,26 +96,24 @@ export function CabinetsView({ isAdmin }: Props) {
           )}
         </div>
 
-        {/* Search */}
         <div className="relative">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Поиск по ШУ..."
-            className="pl-9 bg-slate-50 border-slate-200 focus-visible:ring-[#4A8FE7]"
+            className="pl-9 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 focus-visible:ring-[#4A8FE7]"
           />
           {search && (
             <button
               onClick={() => setSearch('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
             >
               ✕
             </button>
           )}
         </div>
 
-        {/* Sort pills */}
         <div className="flex gap-2 mt-3">
           {SORT_OPTIONS.map((opt) => {
             const active = sortBy === opt.value
@@ -127,7 +124,7 @@ export function CabinetsView({ isAdmin }: Props) {
                 className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
                   active
                     ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                 }`}
               >
                 {active && <span>✓</span>}
@@ -139,7 +136,6 @@ export function CabinetsView({ isAdmin }: Props) {
         </div>
       </div>
 
-      {/* List */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
         {isLoading && (
           <div className="space-y-3">
@@ -181,7 +177,6 @@ export function CabinetsView({ isAdmin }: Props) {
         )}
       </div>
 
-      {/* Dialogs */}
       <CabinetDetailDialog cabinetId={openId} isAdmin={isAdmin} initialMode={openMode} onClose={() => setOpenId(null)} />
       {isAdmin && <CreateCabinetDialog open={showCreate} onClose={() => setShowCreate(false)} />}
       <QrDialog cabinet={qrCabinet} onClose={() => setQrCabinet(null)} />

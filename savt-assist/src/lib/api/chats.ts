@@ -17,13 +17,24 @@ export const chatsApi = {
   sendMessage: async (
     chatId: number,
     text: string,
-    attachments?: Omit<MessageAttachment, 'duration_seconds'>[]
+    attachments?: Omit<MessageAttachment, 'duration_seconds'>[],
+    replyToId?: number
   ): Promise<ChatMessage> => {
     const { data } = await apiClient.post<ChatMessage>(`/operator/chats/${chatId}/messages`, {
       text: text || undefined,
       attachments: attachments?.length ? attachments : undefined,
+      reply_to_message_id: replyToId || undefined,
     })
     return data
+  },
+
+  editMessage: async (chatId: number, messageId: number, text: string): Promise<ChatMessage> => {
+    const { data } = await apiClient.patch<ChatMessage>(`/chats/${chatId}/messages/${messageId}`, { text })
+    return data
+  },
+
+  deleteMessage: async (chatId: number, messageId: number): Promise<void> => {
+    await apiClient.delete(`/chats/${chatId}/messages/${messageId}`)
   },
 
   uploadAttachment: async (file: File): Promise<{ url: string }> => {

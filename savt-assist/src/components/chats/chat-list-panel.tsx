@@ -9,9 +9,10 @@ interface Props {
   selectedId: number | null
   onSelect: (chat: Chat) => void
   loading: boolean
+  onCollapse?: () => void
 }
 
-export function ChatListPanel({ chats, selectedId, onSelect, loading }: Props) {
+export function ChatListPanel({ chats, selectedId, onSelect, loading, onCollapse }: Props) {
   const [search, setSearch] = useState('')
 
   const filtered = chats.filter((c) =>
@@ -25,10 +26,9 @@ export function ChatListPanel({ chats, selectedId, onSelect, loading }: Props) {
   })
 
   return (
-    <div className="flex flex-col h-full bg-white border-r border-slate-200">
-      {/* Search */}
-      <div className="px-3 py-3 border-b border-slate-100">
-        <div className="relative">
+    <div className="flex flex-col h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700/60">
+      <div className="px-3 py-3 border-b border-slate-100 dark:border-slate-700/60 flex items-center gap-2">
+        <div className="relative flex-1">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
           </svg>
@@ -36,21 +36,31 @@ export function ChatListPanel({ chats, selectedId, onSelect, loading }: Props) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Поиск"
-            className="w-full text-sm bg-slate-100 rounded-xl pl-9 pr-3 py-2 focus:outline-none focus:bg-slate-200 transition-colors"
+            className="w-full text-sm bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:placeholder:text-slate-500 rounded-xl pl-9 pr-3 py-2 focus:outline-none focus:bg-slate-200 dark:focus:bg-slate-700 transition-colors"
           />
         </div>
+        {onCollapse && (
+          <button
+            onClick={onCollapse}
+            title="Свернуть панель"
+            className="hidden md:flex w-7 h-7 items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex-shrink-0"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+            </svg>
+          </button>
+        )}
       </div>
 
-      {/* List */}
       <div className="flex-1 overflow-y-auto">
         {loading && (
           <div className="space-y-px pt-1">
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="flex items-center gap-3 px-3 py-3">
-                <div className="w-12 h-12 rounded-full bg-slate-200 animate-pulse flex-shrink-0" />
+                <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse flex-shrink-0" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-3.5 bg-slate-200 rounded animate-pulse w-3/4" />
-                  <div className="h-3 bg-slate-100 rounded animate-pulse w-1/2" />
+                  <div className="h-3.5 bg-slate-200 dark:bg-slate-700 rounded animate-pulse w-3/4" />
+                  <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded animate-pulse w-1/2" />
                 </div>
               </div>
             ))}
@@ -90,26 +100,24 @@ function ChatRow({ chat, selected, onSelect }: { chat: Chat; selected: boolean; 
         selected
           ? 'bg-[#1B3A72] text-white'
           : isWaiting
-            ? 'bg-amber-50 hover:bg-amber-100'
-            : 'hover:bg-slate-50'
+            ? 'bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30'
+            : 'hover:bg-slate-50 dark:hover:bg-slate-800'
       )}
     >
-      {/* Avatar */}
       <ChatAvatar chat={chat} selected={selected} />
 
-      {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
           <span className={cn(
             'text-sm font-semibold truncate',
-            selected ? 'text-white' : 'text-slate-800'
+            selected ? 'text-white' : 'text-slate-800 dark:text-slate-100'
           )}>
             {name}
           </span>
           {chat.last_message_at && (
             <span className={cn(
-              'text-xs flex-shrink-0',
-              selected ? 'text-white/70' : hasUnread ? 'text-[#1B3A72]' : 'text-slate-400'
+              'text-xs shrink-0',
+              selected ? 'text-white/70' : hasUnread ? 'text-[#1B3A72] dark:text-blue-400' : 'text-slate-400'
             )}>
               {formatTime(chat.last_message_at)}
             </span>
@@ -119,12 +127,12 @@ function ChatRow({ chat, selected, onSelect }: { chat: Chat; selected: boolean; 
         <div className="flex items-center justify-between gap-2 mt-0.5">
           <p className={cn(
             'text-xs truncate',
-            selected ? 'text-white/70' : 'text-slate-500'
+            selected ? 'text-white/70' : 'text-slate-500 dark:text-slate-400'
           )}>
             {chat.last_message_text ?? ''}
           </p>
 
-          <div className="flex items-center gap-1 flex-shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             {isWaiting && !selected && (
               <span className="w-2 h-2 bg-amber-500 rounded-full" />
             )}

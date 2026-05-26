@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -7,6 +8,7 @@ import Cookies from 'js-cookie'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/lib/store/auth'
 import { authApi } from '@/lib/api/auth'
+import Image from 'next/image'
 
 const navItems = [
   { href: '/admin/dashboard', label: 'Дашборд', icon: SquaresIcon },
@@ -17,6 +19,7 @@ const navItems = [
 ]
 
 export function AdminSidebar() {
+  const [collapsed, setCollapsed] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
   const { user, logout } = useAuthStore()
@@ -32,62 +35,85 @@ export function AdminSidebar() {
   }
 
   return (
-    <aside className="w-64 flex-shrink-0 bg-[#1B3A72] flex flex-col h-full">
-      {/* Logo */}
-      <div className="px-5 py-6 border-b border-white/10">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-white/15 rounded-lg flex items-center justify-center">
-            <ShieldIcon className="w-5 h-5 text-white" />
+    <aside className={cn(
+      'flex-shrink-0 bg-[#1B3A72] flex flex-col h-full transition-[width] duration-200 overflow-hidden',
+      collapsed ? 'w-16' : 'w-64'
+    )}>
+      <div className="border-b border-white/10 px-3 py-5">
+        {collapsed ? (
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 bg-white/15 rounded-lg flex items-center justify-center">
+              <ShieldIcon className="w-5 h-5 text-white" />
+            </div>
+            <button
+              onClick={() => setCollapsed(false)}
+              title="Развернуть"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <ChevronRightIcon />
+            </button>
           </div>
-          <div>
-            <p className="text-white font-bold text-sm leading-none">SavtAssist</p>
-            <p className="text-white/50 text-xs mt-0.5">Admin Panel</p>
+        ) : (
+          <div className="flex items-center gap-3 pl-2">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0">
+              <ShieldIcon className="w-7 h-7 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-white font-bold text-sm leading-none">SavtAssist</p>
+              <p className="text-white/50 text-xs mt-0.5">Admin Panel</p>
+            </div>
+            <button
+              onClick={() => setCollapsed(true)}
+              title="Свернуть"
+              className="w-7 h-7 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
+            >
+              <ChevronLeftIcon />
+            </button>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
         {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           return (
             <Link
               key={item.href}
               href={item.href}
+              title={collapsed ? item.label : undefined}
               className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
+                'flex items-center rounded-lg text-sm transition-colors',
+                collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5',
                 isActive
                   ? 'bg-white/15 text-white font-medium'
                   : 'text-white/60 hover:text-white hover:bg-white/10'
               )}
             >
               <item.icon className="w-5 h-5 flex-shrink-0" />
-              {item.label}
+              {!collapsed && item.label}
             </Link>
           )
         })}
       </nav>
 
-      {/* User + logout */}
-      <div className="px-3 py-4 border-t border-white/10">
-        {user && (
-          <div className="px-3 mb-3">
-            <p className="text-white text-sm font-medium truncate">{user.full_name ?? user.login}</p>
-            <p className="text-white/40 text-xs mt-0.5 capitalize">{user.role}</p>
-          </div>
-        )}
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-        >
-          <LogoutIcon className="w-5 h-5" />
-          Выйти
-        </button>
+      <div className='pb-4 pl-4'>
+        <Image 
+        src='/logo-small.png'
+        width={225}
+        height={225}
+        alt='savt'
+        />
       </div>
     </aside>
   )
 }
 
+function ChevronLeftIcon() {
+  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+}
+function ChevronRightIcon() {
+  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+}
 function ShieldIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>
 }

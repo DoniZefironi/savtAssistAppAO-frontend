@@ -5,13 +5,11 @@ import { API_URL } from '@/lib/api/client'
 import { cn } from '@/lib/utils'
 import type { MessageAttachment } from '@/types'
 
-// Относительные пути /static/... → полный URL
 function toFullUrl(url: string): string {
   if (!url) return ''
   return url.startsWith('http') ? url : `${API_URL}${url}`
 }
 
-// Скачивание через blob — обход ограничения cross-origin download атрибута
 async function downloadBlob(url: string, filename: string) {
   try {
     const res = await fetch(url, { credentials: 'include' })
@@ -25,7 +23,6 @@ async function downloadBlob(url: string, filename: string) {
     document.body.removeChild(a)
     setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
   } catch {
-    // Fallback: открываем в новой вкладке если CORS не позволяет blob fetch
     window.open(url, '_blank')
   }
 }
@@ -51,8 +48,6 @@ function fileIcon(mime: string): string {
   return '📎'
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
-
 interface Props {
   attachment: MessageAttachment
   isOwn: boolean
@@ -66,8 +61,6 @@ export function AttachmentView({ attachment, isOwn }: Props) {
   return <FileAttachment a={attachment} isOwn={isOwn} />
 }
 
-// ─── Image ────────────────────────────────────────────────────────────────────
-
 function ImageAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean }) {
   const [lightbox, setLightbox] = useState(false)
   const url = toFullUrl(a.file_url)
@@ -75,7 +68,6 @@ function ImageAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean })
   return (
     <>
       <div className="relative group mt-1 max-w-xs">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={url}
           alt={a.file_name}
@@ -105,8 +97,6 @@ function ImageAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean })
   )
 }
 
-// ─── Audio ────────────────────────────────────────────────────────────────────
-
 function AudioAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean }) {
   const url = toFullUrl(a.file_url)
   const isVoice = a.file_name === 'Голосовое сообщение' || a.mime_type.includes('ogg')
@@ -133,8 +123,6 @@ function AudioAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean })
   )
 }
 
-// ─── Video ────────────────────────────────────────────────────────────────────
-
 function VideoAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean }) {
   const url = toFullUrl(a.file_url)
 
@@ -158,8 +146,6 @@ function VideoAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean })
   )
 }
 
-// ─── File ─────────────────────────────────────────────────────────────────────
-
 function FileAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean }) {
   const url = toFullUrl(a.file_url)
 
@@ -167,7 +153,7 @@ function FileAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean }) 
     <div className={cn(
       'mt-1 rounded-xl px-3 py-2.5 flex items-center gap-3 min-w-[220px] max-w-xs',
       isOwn
-        ? 'bg-white/15 border border-white/20'
+        ? 'bg-white/25 border border-white/35'
         : 'bg-white border border-slate-200 shadow-sm'
     )}>
       <span className="text-2xl flex-shrink-0">{fileIcon(a.mime_type)}</span>
@@ -209,15 +195,12 @@ function FileAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean }) 
   )
 }
 
-// ─── Lightbox ─────────────────────────────────────────────────────────────────
-
 function ImageLightbox({ url, name, onClose }: { url: string; name: string; onClose: () => void }) {
   return (
     <div
       className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center"
       onClick={onClose}
     >
-      {/* Header */}
       <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-3 bg-black/50">
         <span className="text-white/80 text-sm truncate max-w-xs">{name}</span>
         <div className="flex items-center gap-2">
@@ -237,8 +220,6 @@ function ImageLightbox({ url, name, onClose }: { url: string; name: string; onCl
         </div>
       </div>
 
-      {/* Image */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={url}
         alt={name}
@@ -248,8 +229,6 @@ function ImageLightbox({ url, name, onClose }: { url: string; name: string; onCl
     </div>
   )
 }
-
-// ─── Icons ────────────────────────────────────────────────────────────────────
 
 function DownloadIcon({ size = 16 }: { size?: number }) {
   return (
