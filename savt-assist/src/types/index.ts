@@ -1,0 +1,88 @@
+export type UserRole = 'admin' | 'operator' | 'user'
+
+export interface User {
+  id: number
+  login: string | null
+  phone: string | null
+  full_name: string | null
+  email: string | null
+  role: UserRole
+  is_active: boolean
+  is_phone_verified: boolean
+  created_at: string
+}
+
+export interface AuthTokens {
+  access_token: string
+  refresh_token: string
+}
+
+export interface Cabinet {
+  id: number
+  unique_code: string
+  type: string | null
+  object_number: string
+  admin_internal_name: string | null
+  admin_comment: string | null
+  description: string | null
+  purpose: string | null
+  warranty_status: 'active' | 'expiring_soon' | 'expired' | null
+  warranty_starts_at: string | null
+  warranty_ends_at: string | null
+  created_at: string
+}
+
+export interface PaginatedResponse<T> {
+  items: T[]
+  total: number
+  page: number
+  size: number
+  pages: number
+}
+
+export interface Chat {
+  id: number
+  chat_type: 'cabinet' | 'support' | 'notes'
+  cabinet_id: number | null
+  cabinet_name: string | null
+  user_name?: string | null
+  user_full_name?: string | null
+  user_phone?: string | null
+  user_id?: number | null
+  last_message_text: string | null
+  last_message_at: string | null
+  unread_count: number
+  problem_status: string | null
+  bot_active: boolean
+  operator_requested: boolean
+}
+
+export interface ChatMessage {
+  id: number
+  chat_id: number
+  sender_id: number
+  sender_name: string
+  text: string | null
+  reply_to_message_id: number | null
+  is_read: boolean
+  created_at: string
+  edited_at: string | null
+  deleted_at: string | null
+  attachments: MessageAttachment[]
+  reactions: { emoji: string; user_id: number }[]
+}
+
+export interface MessageAttachment {
+  file_url: string
+  file_name: string
+  file_size_bytes: number
+  mime_type: string
+  duration_seconds: number | null
+}
+
+export interface DashboardStats {
+  totalCabinets: number
+  openServiceRequests: number
+  pendingCabinetRequests: number
+  totalUsers: number
+}
