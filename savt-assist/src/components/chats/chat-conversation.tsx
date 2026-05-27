@@ -46,6 +46,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded }: Props) {
     queryKey: ['messages', chat.id],
     queryFn: () => chatsApi.getMessages(chat.id),
     refetchInterval: 3000,
+    refetchIntervalInBackground: false,
   })
 
   useEffect(() => {
