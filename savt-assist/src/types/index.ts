@@ -86,3 +86,60 @@ export interface DashboardStats {
   pendingCabinetRequests: number
   totalUsers: number
 }
+
+export interface ServiceRequest {
+  id: number
+  user_id: number
+  cabinet_id: number
+  cabinet_object_number: string
+  request_type: string
+  description: string
+  status: 'open' | 'in_progress' | 'closed'
+  created_at: string
+  closed_at: string | null
+  user_full_name: string | null
+  user_phone: string | null
+}
+
+export interface AdditionRequest {
+  id: number
+  user_id: number
+  user_full_name: string | null
+  user_phone: string | null
+  photo_url: string
+  user_comment: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  cabinet_id: number | null
+  admin_response: string | null
+  created_at: string
+  resolved_at: string | null
+}
+
+export interface DocumentRequest {
+  id: number
+  user_id: number
+  user_full_name: string | null
+  document_id: number | null
+  cabinet_id: number | null
+  doc_type: string
+  status: 'pending' | 'approved' | 'rejected'
+  user_message: string | null
+  admin_response: string | null
+  created_at: string
+  resolved_at: string | null
+}
+
+export interface ShareRequest {
+  id: number
+  user_id: number
+  user_full_name: string | null
+  user_phone: string | null
+  cabinet_id: number
+  cabinet_type: string
+  cabinet_object_number: string
+  user_comment: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  admin_response: string | null
+  created_at: string
+  resolved_at: string | null
+}
