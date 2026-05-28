@@ -68,6 +68,7 @@ function ImageAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean })
   return (
     <>
       <div className="relative group mt-1 max-w-xs">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={url}
           alt={a.file_name}

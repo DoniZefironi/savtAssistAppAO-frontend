@@ -18,6 +18,7 @@ export function ChatsPage() {
     queryKey: ['operator-chats'],
     queryFn: chatsApi.getChats,
     refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
   })
 
   const { data: cabinetsData } = useQuery({

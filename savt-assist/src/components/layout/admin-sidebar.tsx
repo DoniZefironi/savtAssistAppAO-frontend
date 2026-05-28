@@ -13,8 +13,10 @@ import Image from 'next/image'
 const navItems = [
   { href: '/admin/dashboard', label: 'Дашборд', icon: SquaresIcon },
   { href: '/admin/cabinets', label: 'Шкафы управления', icon: BoardIcon },
+  { href: '/admin/requests', label: 'Заявки', icon: ClipboardIcon },
   { href: '/admin/chats', label: 'Чаты', icon: ChatIcon },
   { href: '/admin/users', label: 'Пользователи', icon: UsersIcon },
+  { href: '/admin/kb', label: 'База знаний', icon: BookIcon },
   { href: '/admin/settings', label: 'Настройки', icon: SettingsIcon },
 ]
 
@@ -134,4 +136,10 @@ function ChatIcon({ className }: { className?: string }) {
 }
 function LogoutIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" /></svg>
+}
+function ClipboardIcon({ className }: { className?: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+}
+function BookIcon({ className }: { className?: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>
 }
