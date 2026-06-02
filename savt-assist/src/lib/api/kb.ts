@@ -126,4 +126,7 @@ export const kbApi = {
     apiClient.post('/admin/tags', { name }).then(r => r.data),
 
   deleteTag: (id: number) => apiClient.delete(`/admin/tags/${id}`),
+
+  updateArticleTags: (articleId: number, tagIds: number[]): Promise<void> =>
+    apiClient.put(`/admin/kb-articles/${articleId}/tags`, { tag_ids: tagIds }).then(() => undefined),
 }

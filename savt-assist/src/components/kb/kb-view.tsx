@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { kbApi } from '@/lib/api/kb'
-import type { KbArticleDetail, KbArticleList, KbAttachment, KbCategory } from '@/lib/api/kb'
+import type { KbArticleDetail, KbArticleList, KbAttachment, KbCategory, Tag } from '@/lib/api/kb'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -304,7 +304,6 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose }: {
   const qc = useQueryClient()
   const isEdit = article !== null
 
-  // Load full detail if editing
   const detailQ = useQuery({
     queryKey: ['kb-article', article?.id],
     queryFn: () => kbApi.getArticle(article!.id),
@@ -312,11 +311,15 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose }: {
   })
   const detail = detailQ.data
 
+  const tagsQ = useQuery({ queryKey: ['kb-tags'], queryFn: kbApi.listTags })
+  const allTags = tagsQ.data ?? []
+
   const [title, setTitle] = useState(article?.title ?? '')
   const [description, setDescription] = useState(article?.description ?? '')
   const [categoryId, setCategoryId] = useState<number>(
     article?.category_id ?? defaultCategoryId ?? categories[0]?.id ?? 0
   )
+  const [selectedTags, setSelectedTags] = useState<Tag[]>(article?.tags ?? [])
   const [tab, setTab] = useState<'content' | 'attachments'>('content')
 
   useEffect(() => {
@@ -324,21 +327,33 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose }: {
       setTitle(detail.title)
       setDescription(detail.description ?? '')
       setCategoryId(detail.category_id)
+      setSelectedTags(detail.tags)
     }
   }, [detail])
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['kb-articles'] })
+    qc.invalidateQueries({ queryKey: ['kb-tags'] })
     if (isEdit) qc.invalidateQueries({ queryKey: ['kb-article', article.id] })
   }
 
   const saveMut = useMutation({
-    mutationFn: () => isEdit
-      ? kbApi.updateArticle(article.id, { title: title || null, description: description || null, category_id: categoryId })
-      : kbApi.createArticle({ title, description: description || null, category_id: categoryId }),
+    mutationFn: async () => {
+      const saved = isEdit
+        ? await kbApi.updateArticle(article.id, { title: title || null, description: description || null, category_id: categoryId })
+        : await kbApi.createArticle({ title, description: description || null, category_id: categoryId })
+      await kbApi.updateArticleTags(saved.id, selectedTags.map(t => t.id))
+      return saved
+    },
     onSuccess: () => { invalidate(); toast.success(isEdit ? 'Статья обновлена' : 'Статья создана'); onClose() },
     onError: () => toast.error('Не удалось сохранить'),
   })
+
+  const handleCreateTag = async (name: string): Promise<Tag> => {
+    const tag = await kbApi.createTag(name)
+    qc.invalidateQueries({ queryKey: ['kb-tags'] })
+    return tag
+  }
 
   const canSave = title.trim().length > 0 && categoryId > 0
 
@@ -422,11 +437,20 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose }: {
                   value={description}
                   onChange={e => setDescription(e.target.value)}
                   placeholder="Текст статьи"
-                  rows={10}
+                  rows={8}
                   maxLength={5000}
                   className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] resize-none"
                 />
                 <p className="text-xs text-slate-400 mt-1 text-right">{description.length}/5000</p>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500 block mb-1.5">Теги</label>
+                <TagSelector
+                  selected={selectedTags}
+                  allTags={allTags}
+                  onChange={setSelectedTags}
+                  onCreateTag={handleCreateTag}
+                />
               </div>
             </div>
           )}
@@ -632,6 +656,106 @@ function CategoryModal({ cat, onClose }: { cat: KbCategory | null; onClose: () =
         </div>
       </div>
     </AppModal>
+  )
+}
+
+// ─── Tag selector ─────────────────────────────────────────────────────────────
+
+function TagSelector({ selected, allTags, onChange, onCreateTag }: {
+  selected: Tag[]
+  allTags: Tag[]
+  onChange: (tags: Tag[]) => void
+  onCreateTag: (name: string) => Promise<Tag>
+}) {
+  const [input, setInput] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [open, setOpen] = useState(false)
+
+  const available = allTags.filter(t => !selected.some(s => s.id === t.id))
+  const filtered = available.filter(t => t.name.toLowerCase().includes(input.toLowerCase()))
+  const exactMatch = allTags.some(t => t.name.toLowerCase() === input.trim().toLowerCase())
+  const showCreate = input.trim().length > 0 && !exactMatch
+
+  const addTag = (tag: Tag) => {
+    onChange([...selected, tag])
+    setInput('')
+    setOpen(false)
+  }
+
+  const removeTag = (id: number) => onChange(selected.filter(t => t.id !== id))
+
+  const handleCreate = async () => {
+    if (!input.trim() || creating) return
+    setCreating(true)
+    try {
+      const tag = await onCreateTag(input.trim())
+      addTag(tag)
+    } catch {
+      toast.error('Не удалось создать тег')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  return (
+    <div>
+      {/* Selected tags */}
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {selected.map(tag => (
+            <span
+              key={tag.id}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#1B3A72]/10 text-[#1B3A72] dark:bg-blue-900/30 dark:text-blue-400 text-xs font-medium"
+            >
+              {tag.name}
+              <button
+                onClick={() => removeTag(tag.id)}
+                className="hover:text-red-500 transition-colors cursor-pointer leading-none"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Input + dropdown */}
+      <div className="relative">
+        <input
+          value={input}
+          onChange={e => { setInput(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); showCreate ? handleCreate() : filtered[0] && addTag(filtered[0]) } }}
+          placeholder="Найти или создать тег..."
+          className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] placeholder:text-slate-400"
+        />
+
+        {open && (filtered.length > 0 || showCreate) && (
+          <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden max-h-44 overflow-y-auto">
+            {filtered.map(tag => (
+              <button
+                key={tag.id}
+                onMouseDown={() => addTag(tag)}
+                className="w-full text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+              >
+                {tag.name}
+              </button>
+            ))}
+            {showCreate && (
+              <button
+                onMouseDown={handleCreate}
+                disabled={creating}
+                className="w-full text-left px-3 py-2 text-sm text-[#1B3A72] dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer flex items-center gap-1.5 border-t border-slate-100 dark:border-slate-700"
+              >
+                <span className="font-medium">+ Создать</span>
+                <span>«{input.trim()}»</span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 

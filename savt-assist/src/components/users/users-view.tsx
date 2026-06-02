@@ -1,5 +1,7 @@
 'use client'
 
+'use client'
+
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -68,6 +70,7 @@ export function UsersView() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
+  const [createOperatorOpen, setCreateOperatorOpen] = useState(false)
 
   useEffect(() => {
     const t = setTimeout(() => setSearch(searchInput), 300)
@@ -99,11 +102,20 @@ export function UsersView() {
   return (
     <div className="flex flex-col h-full">
       <div className="px-6 pt-6 pb-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
-        <div className="mb-4">
-          {data?.total != null && (
-            <p className="text-xs text-slate-400 font-medium mb-0.5">{data.total} пользователей</p>
-          )}
-          <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Пользователи</h1>
+        <div className="flex items-end justify-between mb-4">
+          <div>
+            {data?.total != null && (
+              <p className="text-xs text-slate-400 font-medium mb-0.5">{data.total} пользователей</p>
+            )}
+            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Пользователи</h1>
+          </div>
+          <Button
+            onClick={() => setCreateOperatorOpen(true)}
+            className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
+          >
+            <PlusIcon className="w-4 h-4 mr-1.5" />
+            Создать оператора
+          </Button>
         </div>
 
         {/* Search */}
@@ -224,6 +236,9 @@ export function UsersView() {
 
       {selectedUser && (
         <UserDialog userId={selectedUser.id} onClose={() => setSelectedUser(null)} />
+      )}
+      {createOperatorOpen && (
+        <CreateOperatorModal onClose={() => setCreateOperatorOpen(false)} />
       )}
     </div>
   )
@@ -465,4 +480,129 @@ function SearchIcon({ className }: { className?: string }) {
       <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
     </svg>
   )
+}
+
+function PlusIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    </svg>
+  )
+}
+
+function CreateOperatorModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient()
+  const [login, setLogin] = useState('')
+  const [password, setPassword] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+
+  const createMut = useMutation({
+    mutationFn: () => usersApi.createOperator({
+      login: login.trim(),
+      password,
+      full_name: fullName.trim() || null,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-users'] })
+      toast.success('Оператор создан')
+      onClose()
+    },
+    onError: () => toast.error('Не удалось создать оператора'),
+  })
+
+  const loginValid = login.trim().length >= 3 && !/\s/.test(login)
+  const passwordValid = password.length >= 8
+  const canSave = loginValid && passwordValid && !createMut.isPending
+
+  return (
+    <AppModal open onClose={onClose}>
+      <div className="flex flex-col">
+        <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-6 py-5 shrink-0">
+          <div className="flex items-start gap-4 pr-8">
+            <div className="w-12 h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0">
+              <UserIcon />
+            </div>
+            <div>
+              <p className="font-bold text-lg text-white">Новый оператор</p>
+              <p className="text-sm text-white/60 mt-0.5">Создание аккаунта оператора</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 space-y-4">
+          <div>
+            <label className="text-xs font-medium text-slate-500 block mb-1.5">
+              Логин <span className="text-red-500">*</span>
+              <span className="text-slate-400 font-normal ml-1">(мин. 3 символа, без пробелов)</span>
+            </label>
+            <input
+              value={login}
+              onChange={e => setLogin(e.target.value)}
+              placeholder="operator1"
+              autoComplete="off"
+              className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+            />
+            {login && !loginValid && (
+              <p className="text-xs text-red-500 mt-1">Мин. 3 символа, без пробелов</p>
+            )}
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-slate-500 block mb-1.5">
+              Пароль <span className="text-red-500">*</span>
+              <span className="text-slate-400 font-normal ml-1">(мин. 8 символов)</span>
+            </label>
+            <div className="relative">
+              <input
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                autoComplete="new-password"
+                className="w-full px-3 py-2 pr-10 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </div>
+            {password && !passwordValid && (
+              <p className="text-xs text-red-500 mt-1">Минимум 8 символов</p>
+            )}
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-slate-500 block mb-1.5">ФИО</label>
+            <input
+              value={fullName}
+              onChange={e => setFullName(e.target.value)}
+              placeholder="Иванов Иван Иванович"
+              className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+            />
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end shrink-0">
+          <Button
+            onClick={() => createMut.mutate()}
+            disabled={!canSave}
+            className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
+          >
+            {createMut.isPending ? 'Создание...' : 'Создать'}
+          </Button>
+        </div>
+      </div>
+    </AppModal>
+  )
+}
+
+function EyeIcon() {
+  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+}
+function EyeOffIcon() {
+  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" /></svg>
 }

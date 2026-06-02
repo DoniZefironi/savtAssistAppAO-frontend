@@ -48,6 +48,9 @@ export const usersApi = {
   getOne: (id: number): Promise<AdminUserDetail> =>
     apiClient.get(`/admin/users/${id}`).then(r => r.data),
 
+  createOperator: (data: { login: string; password: string; full_name?: string | null }): Promise<AdminUser> =>
+    apiClient.post('/admin/users/operators', data).then(r => r.data),
+
   verify: (id: number) => apiClient.post(`/admin/users/${id}/verify`, {}),
   unverify: (id: number) => apiClient.post(`/admin/users/${id}/unverify`, {}),
   ban: (id: number, reason: string) => apiClient.post(`/admin/users/${id}/ban`, { reason }),

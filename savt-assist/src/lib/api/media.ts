@@ -91,5 +91,8 @@ export const mediaApi = {
 
   deletePhoto: (photoId: number) => apiClient.delete(`/admin/photos/${photoId}`),
 
+  updateDocumentTags: (docId: number, tagIds: number[]): Promise<void> =>
+    apiClient.put(`/admin/documents/${docId}/tags`, { tag_ids: tagIds }).then(() => undefined),
+
   toFullUrl,
 }

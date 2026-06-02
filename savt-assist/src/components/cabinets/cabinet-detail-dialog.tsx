@@ -8,13 +8,16 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { WarrantyBadge } from './warranty-badge'
 import { cabinetsApi, UpdateCabinetDto } from '@/lib/api/cabinets'
+import type { CabinetUser } from '@/lib/api/cabinets'
 import { mediaApi } from '@/lib/api/media'
 import type { CabinetDocument, CabinetPhoto } from '@/lib/api/media'
+import { kbApi } from '@/lib/api/kb'
+import type { Tag } from '@/lib/api/kb'
 import { formatDate } from '@/lib/warranty'
 import { cn } from '@/lib/utils'
 import type { Cabinet } from '@/types'
 
-type Tab = 'info' | 'docs' | 'photos'
+type Tab = 'info' | 'docs' | 'photos' | 'users'
 
 interface Props {
   cabinetId: number | null
@@ -95,6 +98,7 @@ function DetailContent({ cabinetId, isAdmin, initialMode }: {
     { id: 'info', label: 'Информация' },
     { id: 'docs', label: 'Документы' },
     { id: 'photos', label: 'Фото' },
+    { id: 'users', label: 'Пользователи' },
   ]
 
   return (
@@ -168,6 +172,7 @@ function DetailContent({ cabinetId, isAdmin, initialMode }: {
         )}
         {tab === 'docs' && <DocsTab cabinetId={cabinetId} isAdmin={isAdmin} />}
         {tab === 'photos' && <PhotosTab cabinetId={cabinetId} isAdmin={isAdmin} />}
+        {tab === 'users' && <UsersTab cabinetId={cabinetId} isAdmin={isAdmin} />}
       </div>
 
       {/* Footer — only for info tab */}
@@ -213,6 +218,9 @@ function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }
     queryKey: ['cabinet-docs', cabinetId],
     queryFn: () => mediaApi.listDocuments(cabinetId),
   })
+
+  const tagsQ = useQuery({ queryKey: ['tags'], queryFn: kbApi.listTags })
+  const allTags = tagsQ.data ?? []
 
   const uploadMut = useMutation({
     mutationFn: () => mediaApi.uploadDocument(cabinetId, pending!.file, pending!.title || undefined, pending!.requiresApproval),
@@ -321,6 +329,8 @@ function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }
             <DocRow
               key={doc.id}
               doc={doc}
+              allTags={allTags}
+              isAdmin={isAdmin}
               onOpen={() => window.open(mediaApi.toFullUrl(doc.file_url), '_blank')}
               onDownload={() => mediaApi.downloadDocument(doc.file_url, doc.title)}
               onDelete={isAdmin ? () => deleteMut.mutate(doc.id) : undefined}
@@ -333,59 +343,168 @@ function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }
   )
 }
 
-function DocRow({ doc, onOpen, onDownload, onDelete, deleting }: {
+function DocRow({ doc, allTags, isAdmin, onOpen, onDownload, onDelete, deleting }: {
   doc: CabinetDocument
+  allTags: Tag[]
+  isAdmin: boolean
   onOpen: () => void
   onDownload: () => void
   onDelete?: () => void
   deleting: boolean
 }) {
+  const qc = useQueryClient()
+  const [editingTags, setEditingTags] = useState(false)
+  const [selectedTags, setSelectedTags] = useState<Tag[]>(doc.tags)
+  const [tagInput, setTagInput] = useState('')
+  const [creatingTag, setCreatingTag] = useState(false)
+
+  const tagMut = useMutation({
+    mutationFn: () => mediaApi.updateDocumentTags(doc.id, selectedTags.map(t => t.id)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cabinet-docs', doc.cabinet_id] })
+      qc.invalidateQueries({ queryKey: ['tags'] })
+      toast.success('Теги обновлены')
+      setEditingTags(false)
+      setTagInput('')
+    },
+    onError: () => toast.error('Ошибка при обновлении тегов'),
+  })
+
+  const available = allTags.filter(t => !selectedTags.some(s => s.id === t.id))
+  const filtered = available.filter(t => t.name.toLowerCase().includes(tagInput.toLowerCase()))
+  const exactMatch = allTags.some(t => t.name.toLowerCase() === tagInput.trim().toLowerCase())
+  const showCreate = tagInput.trim().length > 0 && !exactMatch
+
+  const addTag = (tag: Tag) => { setSelectedTags(p => [...p, tag]); setTagInput('') }
+  const removeTag = (id: number) => setSelectedTags(p => p.filter(t => t.id !== id))
+
+  const handleCreateTag = async () => {
+    if (!tagInput.trim() || creatingTag) return
+    setCreatingTag(true)
+    try {
+      const tag = await kbApi.createTag(tagInput.trim())
+      qc.invalidateQueries({ queryKey: ['tags'] })
+      addTag(tag)
+    } catch { toast.error('Не удалось создать тег') }
+    finally { setCreatingTag(false) }
+  }
+
+  const cancelEdit = () => { setSelectedTags(doc.tags); setTagInput(''); setEditingTags(false) }
+
   return (
-    <div onClick={onOpen} className="flex items-center gap-3 px-6 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 group cursor-pointer">
-      <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
-        {doc.mime_type.includes('pdf') ? (
-          <PdfIcon className="w-4 h-4 text-red-500" />
-        ) : doc.mime_type.startsWith('image/') ? (
-          <ImageIcon className="w-4 h-4 text-blue-500" />
-        ) : (
-          <FileIcon className="w-4 h-4 text-slate-400" />
-        )}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{doc.title}</p>
-        <div className="flex items-center gap-2 mt-0.5">
-          {doc.doc_type && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
-              {doc.doc_type}
-            </span>
+    <div className="group">
+      {/* Main row */}
+      <div onClick={onOpen} className="flex items-center gap-3 px-6 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer">
+        <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
+          {doc.mime_type.includes('pdf') ? (
+            <PdfIcon className="w-4 h-4 text-red-500" />
+          ) : doc.mime_type.startsWith('image/') ? (
+            <ImageIcon className="w-4 h-4 text-blue-500" />
+          ) : (
+            <FileIcon className="w-4 h-4 text-slate-400" />
           )}
-          <span className="text-xs text-slate-400">{fmtSize(doc.file_size_bytes)}</span>
-          {doc.requires_approval && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
-              Согласование
-            </span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{doc.title}</p>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {doc.doc_type && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
+                {doc.doc_type}
+              </span>
+            )}
+            <span className="text-xs text-slate-400">{fmtSize(doc.file_size_bytes)}</span>
+            {doc.requires_approval && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
+                Согласование
+              </span>
+            )}
+            {doc.tags.map(tag => (
+              <span key={tag.id} className="text-xs px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
+                {tag.name}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {isAdmin && (
+            <button
+              onClick={e => { e.stopPropagation(); setEditingTags(v => !v) }}
+              title="Теги"
+              className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 transition-colors cursor-pointer"
+            >
+              <TagIcon className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); onDownload() }}
+            title="Скачать"
+            className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+          >
+            <DownloadIcon className="w-4 h-4" />
+          </button>
+          {onDelete && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete() }}
+              disabled={deleting}
+              title="Удалить"
+              className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+            >
+              <TrashIcon className="w-4 h-4" />
+            </button>
           )}
         </div>
       </div>
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          onClick={(e) => { e.stopPropagation(); onDownload() }}
-          title="Скачать"
-          className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
-        >
-          <DownloadIcon className="w-4 h-4" />
-        </button>
-        {onDelete && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete() }}
-            disabled={deleting}
-            title="Удалить"
-            className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
-          >
-            <TrashIcon className="w-4 h-4" />
-          </button>
-        )}
-      </div>
+
+      {/* Inline tag editor */}
+      {editingTags && (
+        <div onClick={e => e.stopPropagation()} className="px-6 pb-3 space-y-2 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-700/30">
+          {/* Selected tags */}
+          <div className="flex flex-wrap gap-1.5 pt-2">
+            {selectedTags.length === 0 && (
+              <span className="text-xs text-slate-400 italic">Нет тегов</span>
+            )}
+            {selectedTags.map(tag => (
+              <span key={tag.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#1B3A72]/10 text-[#1B3A72] dark:bg-blue-900/30 dark:text-blue-400 text-xs font-medium">
+                {tag.name}
+                <button onClick={() => removeTag(tag.id)} className="hover:text-red-500 transition-colors cursor-pointer leading-none">×</button>
+              </span>
+            ))}
+          </div>
+
+          {/* Search input + dropdown */}
+          <div className="relative">
+            <input
+              value={tagInput}
+              onChange={e => setTagInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); showCreate ? handleCreateTag() : filtered[0] && addTag(filtered[0]) } }}
+              placeholder="Найти или создать тег..."
+              className="w-full px-3 py-1.5 text-xs border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] placeholder:text-slate-400"
+            />
+            {tagInput && (filtered.length > 0 || showCreate) && (
+              <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden max-h-36 overflow-y-auto">
+                {filtered.map(tag => (
+                  <button key={tag.id} onMouseDown={() => addTag(tag)} className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer">
+                    {tag.name}
+                  </button>
+                ))}
+                {showCreate && (
+                  <button onMouseDown={handleCreateTag} disabled={creatingTag} className="w-full text-left px-3 py-1.5 text-xs text-[#1B3A72] dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-700 border-t border-slate-100 dark:border-slate-700 cursor-pointer flex gap-1">
+                    <span className="font-medium">+ Создать</span> «{tagInput.trim()}»
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Save / Cancel */}
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={cancelEdit} className="h-6 text-xs px-2 cursor-pointer">Отмена</Button>
+            <Button onClick={() => tagMut.mutate()} disabled={tagMut.isPending} className="h-6 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer">
+              {tagMut.isPending ? 'Сохранение...' : 'Сохранить'}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -540,6 +659,146 @@ function PhotoTile({ photo, onDelete, deleting }: {
       {photo.caption && (
         <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 bg-linear-to-t from-black/60 to-transparent">
           <p className="text-xs text-white truncate">{photo.caption}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Users tab ───────────────────────────────────────────────────────────────
+
+function UsersTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }) {
+  const qc = useQueryClient()
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['cabinet-users', cabinetId],
+    queryFn: () => cabinetsApi.getCabinetUsers(cabinetId),
+  })
+
+  const removeMut = useMutation({
+    mutationFn: ({ userId, reason }: { userId: number; reason: string }) =>
+      cabinetsApi.removeCabinetUser(cabinetId, userId, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cabinet-users', cabinetId] })
+      toast.success('Пользователь откреплён')
+    },
+    onError: () => toast.error('Ошибка при откреплении'),
+  })
+
+  const users = data ?? []
+
+  if (isLoading) {
+    return (
+      <div className="space-y-2 px-6 py-4">
+        {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
+      </div>
+    )
+  }
+
+  if (users.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+        <UsersIcon className="w-8 h-8 mb-2 opacity-40" />
+        <p className="text-sm">Нет привязанных пользователей</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="divide-y divide-slate-50 dark:divide-slate-700/30">
+      {users.map(u => (
+        <UserRow
+          key={u.user_id}
+          user={u}
+          isAdmin={isAdmin}
+          onRemove={(reason) => removeMut.mutate({ userId: u.user_id, reason })}
+          removing={removeMut.isPending}
+        />
+      ))}
+    </div>
+  )
+}
+
+function UserRow({ user, isAdmin, onRemove, removing }: {
+  user: CabinetUser
+  isAdmin: boolean
+  onRemove: (reason: string) => void
+  removing: boolean
+}) {
+  const [showForm, setShowForm] = useState(false)
+  const [reason, setReason] = useState('')
+
+  function fmtDate(d: string) {
+    return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
+  }
+
+  return (
+    <div className="px-6 py-3">
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
+          <UsersIcon className="w-4 h-4 text-slate-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+              {user.full_name ?? user.phone ?? `#${user.user_id}`}
+            </p>
+            {user.is_primary && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 shrink-0">
+                Основной
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+            {user.phone && (
+              <span className="text-xs text-slate-400">{user.phone}</span>
+            )}
+            {user.custom_name && (
+              <span className="text-xs text-slate-400 italic">«{user.custom_name}»</span>
+            )}
+            <span className="text-xs text-slate-400">с {fmtDate(user.added_at)}</span>
+          </div>
+        </div>
+        {isAdmin && !showForm && (
+          <button
+            onClick={() => setShowForm(true)}
+            title="Открепить"
+            className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer shrink-0"
+          >
+            <TrashIcon className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {showForm && (
+        <div className="mt-2 space-y-2 pl-12">
+          <label className="text-xs font-medium text-slate-500 block">
+            Причина открепления <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            placeholder="Укажите причину"
+            rows={2}
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 resize-none focus:outline-none focus:border-[#4A8FE7]"
+          />
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => { setShowForm(false); setReason('') }}
+              disabled={removing}
+              className="h-7 text-xs px-2 cursor-pointer"
+            >
+              Отмена
+            </Button>
+            <Button
+              onClick={() => { onRemove(reason); setShowForm(false); setReason('') }}
+              disabled={!reason.trim() || removing}
+              className="h-7 text-xs px-3 bg-red-500 hover:bg-red-600 cursor-pointer"
+            >
+              {removing ? 'Откреп...' : 'Открепить'}
+            </Button>
+          </div>
         </div>
       )}
     </div>
@@ -734,10 +993,20 @@ function UploadIcon({ className }: { className?: string }) {
     </svg>
   )
 }
+function UsersIcon({ className }: { className?: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
+}
 function DownloadIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+    </svg>
+  )
+}
+function TagIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
     </svg>
   )
 }

@@ -20,6 +20,16 @@ export interface CreateCabinetDto {
   warranty_ends_at?: string | null
 }
 
+export interface CabinetUser {
+  user_id: number
+  full_name: string | null
+  phone: string | null
+  user_type: string | null
+  is_primary: boolean
+  custom_name: string | null
+  added_at: string
+}
+
 export interface UpdateCabinetDto {
   type?: string | null
   object_number?: string | null
@@ -54,6 +64,15 @@ export const cabinetsApi = {
 
   delete: async (id: number): Promise<void> => {
     await apiClient.delete(`/admin/cabinets/${id}`)
+  },
+
+  getCabinetUsers: async (cabinetId: number): Promise<CabinetUser[]> => {
+    const { data } = await apiClient.get(`/admin/cabinets/${cabinetId}/users`)
+    return data
+  },
+
+  removeCabinetUser: async (cabinetId: number, userId: number, reason: string): Promise<void> => {
+    await apiClient.delete(`/admin/cabinets/${cabinetId}/users/${userId}`, { data: { reason } })
   },
 
   getQr: async (id: number): Promise<Blob> => {
