@@ -9,6 +9,7 @@ import { requestsApi } from '@/lib/api/requests'
 import type { ServiceRequest, AdditionRequest, ShareRequest, DocumentRequest } from '@/lib/api/requests'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
+import { Pagination } from '@/components/ui/pagination'
 import { RequestCard, ServiceCardIcon, AdditionCardIcon, ShareCardIcon, StatusPill, TypePill } from './request-card'
 
 type Tab = 'service' | 'additions' | 'shares' | 'docs'
@@ -75,32 +76,34 @@ function toFullUrl(url: string) {
 export function RequestsView() {
   const [tab, setTab] = useState<Tab>('service')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [page, setPage] = useState(1)
   const [selectedService, setSelectedService] = useState<ServiceRequest | null>(null)
   const [selectedAddition, setSelectedAddition] = useState<AdditionRequest | null>(null)
   const [selectedShare, setSelectedShare] = useState<ShareRequest | null>(null)
   const [selectedDocRequest, setSelectedDocRequest] = useState<DocumentRequest | null>(null)
 
-  const handleTabChange = (t: Tab) => { setTab(t); setStatusFilter('all') }
+  const handleTabChange = (t: Tab) => { setTab(t); setStatusFilter('all'); setPage(1) }
+  const handleFilterChange = (f: string) => { setStatusFilter(f); setPage(1) }
   const sp = statusFilter === 'all' ? undefined : statusFilter
 
   const svcQ = useQuery({
-    queryKey: ['service-requests', statusFilter],
-    queryFn: () => requestsApi.getServiceRequests({ status: sp, size: 50 }),
+    queryKey: ['service-requests', statusFilter, page],
+    queryFn: () => requestsApi.getServiceRequests({ status: sp, page, size: 20 }),
     enabled: tab === 'service',
   })
   const addQ = useQuery({
-    queryKey: ['addition-requests', statusFilter],
-    queryFn: () => requestsApi.getAdditions({ status: sp, size: 50 }),
+    queryKey: ['addition-requests', statusFilter, page],
+    queryFn: () => requestsApi.getAdditions({ status: sp, page, size: 20 }),
     enabled: tab === 'additions',
   })
   const shrQ = useQuery({
-    queryKey: ['share-requests', statusFilter],
-    queryFn: () => requestsApi.getShares({ status: sp, size: 50 }),
+    queryKey: ['share-requests', statusFilter, page],
+    queryFn: () => requestsApi.getShares({ status: sp, page, size: 20 }),
     enabled: tab === 'shares',
   })
   const docQ = useQuery({
-    queryKey: ['document-requests', statusFilter],
-    queryFn: () => requestsApi.getDocumentRequests({ status: sp, size: 50 }),
+    queryKey: ['document-requests', statusFilter, page],
+    queryFn: () => requestsApi.getDocumentRequests({ status: sp, page, size: 20 }),
     enabled: tab === 'docs',
   })
 
@@ -137,7 +140,7 @@ export function RequestsView() {
         {filters.map(f => (
           <button
             key={f.value}
-            onClick={() => setStatusFilter(f.value)}
+            onClick={() => handleFilterChange(f.value)}
             className={cn(
               'px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
               statusFilter === f.value
@@ -177,6 +180,10 @@ export function RequestsView() {
           <DocumentRequestList items={docQ.data?.items ?? []} onSelect={setSelectedDocRequest} />
         )}
       </div>
+
+      {curQ.data && curQ.data.pages > 1 && (
+        <Pagination page={page} pages={curQ.data.pages} onPage={setPage} />
+      )}
 
       {selectedService && <ServiceDialog request={selectedService} onClose={() => setSelectedService(null)} />}
       {selectedAddition && <AdditionDialog request={selectedAddition} onClose={() => setSelectedAddition(null)} />}

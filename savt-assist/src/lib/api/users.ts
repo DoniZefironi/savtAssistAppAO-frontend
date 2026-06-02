@@ -34,6 +34,9 @@ export interface UserCabinet {
 interface ListParams {
   search?: string
   is_active?: boolean
+  role?: string
+  sort_by?: string
+  sort_order?: string
   page?: number
   size?: number
 }
@@ -47,6 +50,6 @@ export const usersApi = {
 
   verify: (id: number) => apiClient.post(`/admin/users/${id}/verify`, {}),
   unverify: (id: number) => apiClient.post(`/admin/users/${id}/unverify`, {}),
-  ban: (id: number) => apiClient.post(`/admin/users/${id}/ban`, {}),
+  ban: (id: number, reason: string) => apiClient.post(`/admin/users/${id}/ban`, { reason }),
   unban: (id: number) => apiClient.post(`/admin/users/${id}/unban`, {}),
 }

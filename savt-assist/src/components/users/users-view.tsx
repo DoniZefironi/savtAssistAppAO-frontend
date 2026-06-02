@@ -9,13 +9,28 @@ import type { AdminUser } from '@/lib/api/users'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Pagination } from '@/components/ui/pagination'
 import { RequestCard, StatusPill, TypePill } from '@/components/requests/request-card'
 
-const FILTERS = [
+const STATUS_FILTERS = [
   { value: 'all', label: 'Все' },
   { value: 'active', label: 'Активные' },
   { value: 'banned', label: 'Заблокированные' },
 ]
+
+const ROLE_FILTERS = [
+  { value: 'all', label: 'Все роли' },
+  { value: 'user', label: 'Пользователи' },
+  { value: 'operator', label: 'Операторы' },
+]
+
+const SORT_OPTIONS = [
+  { value: 'created_at', label: 'По дате' },
+  { value: 'full_name', label: 'По имени' },
+  { value: 'role', label: 'По роли' },
+] as const
+
+type SortValue = (typeof SORT_OPTIONS)[number]['value']
 
 function roleLabel(r: string) {
   return r === 'admin' ? 'Администратор' : r === 'operator' ? 'Оператор' : 'Пользователь'
@@ -45,9 +60,13 @@ function userSubtitle(u: AdminUser) {
 }
 
 export function UsersView() {
-  const [filter, setFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [roleFilter, setRoleFilter] = useState('all')
+  const [sortBy, setSortBy] = useState<SortValue>('created_at')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
 
   useEffect(() => {
@@ -55,48 +74,102 @@ export function UsersView() {
     return () => clearTimeout(t)
   }, [searchInput])
 
-  const isActive = filter === 'all' ? undefined : filter === 'active'
+  useEffect(() => { setPage(1) }, [statusFilter, roleFilter, sortBy, sortOrder, search])
+
+  const isActive = statusFilter === 'all' ? undefined : statusFilter === 'active'
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['admin-users', filter, search],
-    queryFn: () => usersApi.getList({ is_active: isActive, search: search || undefined, size: 50 }),
+    queryKey: ['admin-users', statusFilter, roleFilter, sortBy, sortOrder, search, page],
+    queryFn: () => usersApi.getList({
+      is_active: isActive,
+      role: roleFilter === 'all' ? undefined : roleFilter,
+      search: search || undefined,
+      sort_by: sortBy,
+      sort_order: sortOrder,
+      page,
+      size: 20,
+    }),
   })
+
+  const handleSortClick = (val: SortValue) => {
+    if (sortBy === val) setSortOrder(o => o === 'asc' ? 'desc' : 'asc')
+    else { setSortBy(val); setSortOrder('desc') }
+  }
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 pt-6 pb-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60">
+      <div className="px-6 pt-6 pb-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
         <div className="mb-4">
           {data?.total != null && (
             <p className="text-xs text-slate-400 font-medium mb-0.5">{data.total} пользователей</p>
           )}
           <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Пользователи</h1>
         </div>
-        <div className="flex gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-48">
-            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            <input
-              value={searchInput}
-              onChange={e => setSearchInput(e.target.value)}
-              placeholder="Поиск по имени, телефону, логину"
-              className="w-full pl-9 pr-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:border-[#4A8FE7]"
-            />
-          </div>
-          <div className="flex gap-2">
-            {FILTERS.map(f => (
+
+        {/* Search */}
+        <div className="relative mb-3">
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          <input
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            placeholder="Поиск по имени, телефону, логину"
+            className="w-full pl-9 pr-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:border-[#4A8FE7]"
+          />
+        </div>
+
+        {/* Status + Role filters */}
+        <div className="flex flex-wrap gap-2 mb-2">
+          {STATUS_FILTERS.map(f => (
+            <button
+              key={f.value}
+              onClick={() => setStatusFilter(f.value)}
+              className={cn(
+                'px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+                statusFilter === f.value
+                  ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+          <div className="w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+          {ROLE_FILTERS.map(f => (
+            <button
+              key={f.value}
+              onClick={() => setRoleFilter(f.value)}
+              className={cn(
+                'px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+                roleFilter === f.value
+                  ? 'bg-[#4A8FE7] text-white border-[#4A8FE7]'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Sort */}
+        <div className="flex gap-2 flex-wrap">
+          {SORT_OPTIONS.map(opt => {
+            const active = sortBy === opt.value
+            return (
               <button
-                key={f.value}
-                onClick={() => setFilter(f.value)}
+                key={opt.value}
+                onClick={() => handleSortClick(opt.value)}
                 className={cn(
-                  'px-3 py-1.5 rounded-full text-xs font-medium border transition-colors cursor-pointer',
-                  filter === f.value
-                    ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
-                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                  'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+                  active
+                    ? 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600'
+                    : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300'
                 )}
               >
-                {f.label}
+                {opt.label}
+                {active && <span className="text-[10px] opacity-60">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
               </button>
-            ))}
-          </div>
+            )
+          })}
         </div>
       </div>
 
@@ -145,6 +218,10 @@ export function UsersView() {
         )}
       </div>
 
+      {data && data.pages > 1 && (
+        <Pagination page={page} pages={data.pages} onPage={setPage} />
+      )}
+
       {selectedUser && (
         <UserDialog userId={selectedUser.id} onClose={() => setSelectedUser(null)} />
       )}
@@ -154,6 +231,8 @@ export function UsersView() {
 
 function UserDialog({ userId, onClose }: { userId: number; onClose: () => void }) {
   const qc = useQueryClient()
+  const [banStep, setBanStep] = useState(false)
+  const [banReason, setBanReason] = useState('')
 
   const { data: user, isLoading } = useQuery({
     queryKey: ['admin-user', userId],
@@ -177,8 +256,8 @@ function UserDialog({ userId, onClose }: { userId: number; onClose: () => void }
     onError: () => toast.error('Ошибка'),
   })
   const banMut = useMutation({
-    mutationFn: () => usersApi.ban(userId),
-    onSuccess: () => { invalidate(); toast.success('Пользователь заблокирован') },
+    mutationFn: () => usersApi.ban(userId, banReason),
+    onSuccess: () => { invalidate(); toast.success('Пользователь заблокирован'); setBanStep(false); setBanReason(''); onClose() },
     onError: () => toast.error('Ошибка при блокировке'),
   })
   const unbanMut = useMutation({
@@ -224,7 +303,7 @@ function UserDialog({ userId, onClose }: { userId: number; onClose: () => void }
             </div>
           </div>
 
-          <div className="overflow-y-auto">
+          <div className="overflow-y-auto flex-1">
             <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
               <DRow label="Телефон" value={user.phone ?? '—'} />
               <DRow label="Логин" value={user.login ?? '—'} />
@@ -262,41 +341,75 @@ function UserDialog({ userId, onClose }: { userId: number; onClose: () => void }
             )}
           </div>
 
-          <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-2 shrink-0">
-            {user.is_verified ? (
-              <Button
-                variant="outline"
-                onClick={() => unverifyMut.mutate()}
-                disabled={isMutating}
-                className="text-amber-600 border-amber-200 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-800 dark:hover:bg-amber-900/20 cursor-pointer"
-              >
-                Снять верификацию
-              </Button>
+          <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 shrink-0">
+            {banStep ? (
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-slate-500 block">
+                  Причина блокировки <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={banReason}
+                  onChange={e => setBanReason(e.target.value)}
+                  placeholder="Укажите причину блокировки"
+                  rows={2}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 resize-none focus:outline-none focus:border-[#4A8FE7]"
+                />
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="ghost"
+                    onClick={() => { setBanStep(false); setBanReason('') }}
+                    disabled={banMut.isPending}
+                    className="cursor-pointer"
+                  >
+                    Отмена
+                  </Button>
+                  <Button
+                    onClick={() => banMut.mutate()}
+                    disabled={!banReason.trim() || banMut.isPending}
+                    className="bg-red-500 hover:bg-red-600 cursor-pointer"
+                  >
+                    {banMut.isPending ? 'Блокировка...' : 'Подтвердить'}
+                  </Button>
+                </div>
+              </div>
             ) : (
-              <Button
-                onClick={() => verifyMut.mutate()}
-                disabled={isMutating}
-                className="bg-green-600 hover:bg-green-700 cursor-pointer"
-              >
-                Верифицировать
-              </Button>
-            )}
-            {user.is_active ? (
-              <Button
-                onClick={() => banMut.mutate()}
-                disabled={isMutating}
-                className="bg-red-500 hover:bg-red-600 cursor-pointer"
-              >
-                Заблокировать
-              </Button>
-            ) : (
-              <Button
-                onClick={() => unbanMut.mutate()}
-                disabled={isMutating}
-                className="bg-green-600 hover:bg-green-700 cursor-pointer"
-              >
-                Разблокировать
-              </Button>
+              <div className="flex justify-end gap-2">
+                {user.is_verified ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => unverifyMut.mutate()}
+                    disabled={isMutating}
+                    className="text-amber-600 border-amber-200 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-800 dark:hover:bg-amber-900/20 cursor-pointer"
+                  >
+                    Снять верификацию
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => verifyMut.mutate()}
+                    disabled={isMutating}
+                    className="bg-green-600 hover:bg-green-700 cursor-pointer"
+                  >
+                    Верифицировать
+                  </Button>
+                )}
+                {user.is_active ? (
+                  <Button
+                    onClick={() => setBanStep(true)}
+                    disabled={isMutating}
+                    className="bg-red-500 hover:bg-red-600 cursor-pointer"
+                  >
+                    Заблокировать
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => unbanMut.mutate()}
+                    disabled={isMutating}
+                    className="bg-green-600 hover:bg-green-700 cursor-pointer"
+                  >
+                    Разблокировать
+                  </Button>
+                )}
+              </div>
             )}
           </div>
         </div>

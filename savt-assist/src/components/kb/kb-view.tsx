@@ -9,6 +9,7 @@ import type { KbArticleDetail, KbArticleList, KbAttachment, KbCategory } from '@
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Pagination } from '@/components/ui/pagination'
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -24,20 +25,23 @@ export function KbView() {
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null)
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [editArticle, setEditArticle] = useState<KbArticleList | null>(null)
   const [createArticleOpen, setCreateArticleOpen] = useState(false)
   const [createCatOpen, setCreateCatOpen] = useState(false)
   const [editCat, setEditCat] = useState<KbCategory | null>(null)
 
   useEffect(() => {
-    const t = setTimeout(() => setSearch(searchInput), 300)
+    const t = setTimeout(() => { setSearch(searchInput); setPage(1) }, 300)
     return () => clearTimeout(t)
   }, [searchInput])
 
+  const handleCatSelect = (id: number | null) => { setSelectedCatId(id); setPage(1) }
+
   const categoriesQ = useQuery({ queryKey: ['kb-categories'], queryFn: kbApi.listCategories })
   const articlesQ = useQuery({
-    queryKey: ['kb-articles', selectedCatId, search],
-    queryFn: () => kbApi.listArticles({ category_id: selectedCatId ?? undefined, search: search || undefined, size: 50 }),
+    queryKey: ['kb-articles', selectedCatId, search, page],
+    queryFn: () => kbApi.listArticles({ category_id: selectedCatId ?? undefined, search: search || undefined, page, size: 20 }),
   })
 
   const deleteCatMut = useMutation({
@@ -89,7 +93,7 @@ export function KbView() {
         <div className="w-52 shrink-0 border-r border-slate-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 flex flex-col overflow-y-auto">
           <div className="p-3 space-y-0.5">
             <button
-              onClick={() => setSelectedCatId(null)}
+              onClick={() => handleCatSelect(null)}
               className={cn(
                 'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer',
                 selectedCatId === null
@@ -104,7 +108,7 @@ export function KbView() {
                 key={cat.id}
                 cat={cat}
                 selected={selectedCatId === cat.id}
-                onSelect={() => setSelectedCatId(cat.id)}
+                onSelect={() => handleCatSelect(cat.id)}
                 onEdit={() => setEditCat(cat)}
                 onDelete={() => deleteCatMut.mutate(cat.id)}
               />
@@ -122,39 +126,44 @@ export function KbView() {
         </div>
 
         {/* Articles */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 bg-slate-50 dark:bg-slate-900">
-          {articlesQ.isLoading && (
-            <div className="space-y-3">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-28 w-full rounded-xl" />)}
-            </div>
-          )}
-          {!articlesQ.isLoading && articles.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-              <BookIcon className="w-10 h-10 mb-3 opacity-30" />
-              <p className="text-sm">Статей не найдено</p>
-              <button
-                onClick={() => setCreateArticleOpen(true)}
-                className="mt-3 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline cursor-pointer"
-              >
-                Создать первую статью
-              </button>
-            </div>
-          )}
-          {!articlesQ.isLoading && articles.length > 0 && (
-            <div className="space-y-3">
-              {articles.map(article => {
-                const cat = categories.find(c => c.id === article.category_id)
-                return (
-                  <ArticleCard
-                    key={article.id}
-                    article={article}
-                    categoryName={cat?.name}
-                    onEdit={() => setEditArticle(article)}
-                    onDelete={() => deleteArticleMut.mutate(article.id)}
-                  />
-                )
-              })}
-            </div>
+        <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900">
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            {articlesQ.isLoading && (
+              <div className="space-y-3">
+                {[1, 2, 3].map(i => <Skeleton key={i} className="h-28 w-full rounded-xl" />)}
+              </div>
+            )}
+            {!articlesQ.isLoading && articles.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-64 text-slate-400">
+                <BookIcon className="w-10 h-10 mb-3 opacity-30" />
+                <p className="text-sm">Статей не найдено</p>
+                <button
+                  onClick={() => setCreateArticleOpen(true)}
+                  className="mt-3 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline cursor-pointer"
+                >
+                  Создать первую статью
+                </button>
+              </div>
+            )}
+            {!articlesQ.isLoading && articles.length > 0 && (
+              <div className="space-y-3">
+                {articles.map(article => {
+                  const cat = categories.find(c => c.id === article.category_id)
+                  return (
+                    <ArticleCard
+                      key={article.id}
+                      article={article}
+                      categoryName={cat?.name}
+                      onEdit={() => setEditArticle(article)}
+                      onDelete={() => deleteArticleMut.mutate(article.id)}
+                    />
+                  )
+                })}
+              </div>
+            )}
+          </div>
+          {articlesQ.data && articlesQ.data.pages > 1 && (
+            <Pagination page={page} pages={articlesQ.data.pages} onPage={setPage} />
           )}
         </div>
       </div>
@@ -338,7 +347,7 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose }: {
     : [{ id: 'content', label: 'Контент' }]
 
   return (
-    <AppModal open onClose={onClose} className="max-w-2xl">
+    <AppModal open onClose={onClose} className="sm:max-w-2xl">
       <div className="flex flex-col max-h-[85vh]">
         {/* Header */}
         <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-6 py-5 shrink-0">

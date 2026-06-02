@@ -12,6 +12,7 @@ import { CreateCabinetDialog } from './create-cabinet-dialog'
 import { QrDialog } from './qr-dialog'
 import { cabinetsApi } from '@/lib/api/cabinets'
 import { useDebounce } from '@/lib/hooks/use-debounce'
+import { Pagination } from '@/components/ui/pagination'
 import type { Cabinet } from '@/types'
 
 const SORT_OPTIONS = [
@@ -31,6 +32,7 @@ export function CabinetsView({ isAdmin }: Props) {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortValue>('created_at')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [page, setPage] = useState(1)
   const [openId, setOpenId] = useState<number | null>(null)
   const [openMode, setOpenMode] = useState<'view' | 'edit'>('view')
   const [loadingId, setLoadingId] = useState<number | null>(null)
@@ -40,9 +42,9 @@ export function CabinetsView({ isAdmin }: Props) {
   const debouncedSearch = useDebounce(search)
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['cabinets', { search: debouncedSearch, sortBy, sortOrder }],
+    queryKey: ['cabinets', { search: debouncedSearch, sortBy, sortOrder, page }],
     queryFn: () =>
-      cabinetsApi.getAll({ search: debouncedSearch || undefined, sort_by: sortBy, sort_order: sortOrder, size: 50 }),
+      cabinetsApi.getAll({ search: debouncedSearch || undefined, sort_by: sortBy, sort_order: sortOrder, page, size: 10 }),
   })
 
   const deleteMutation = useMutation({
@@ -61,6 +63,12 @@ export function CabinetsView({ isAdmin }: Props) {
       setSortBy(value)
       setSortOrder('asc')
     }
+    setPage(1)
+  }
+
+  const handleSearchChange = (val: string) => {
+    setSearch(val)
+    setPage(1)
   }
 
   const openDialog = (id: number, mode: 'view' | 'edit') => {
@@ -100,13 +108,13 @@ export function CabinetsView({ isAdmin }: Props) {
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
           <Input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Поиск по ШУ..."
             className="pl-9 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 focus-visible:ring-[#4A8FE7]"
           />
           {search && (
             <button
-              onClick={() => setSearch('')}
+              onClick={() => handleSearchChange('')}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
             >
               ✕
@@ -176,6 +184,10 @@ export function CabinetsView({ isAdmin }: Props) {
           </div>
         )}
       </div>
+
+      {data && data.pages > 1 && (
+        <Pagination page={page} pages={data.pages} onPage={setPage} />
+      )}
 
       <CabinetDetailDialog cabinetId={openId} isAdmin={isAdmin} initialMode={openMode} onClose={() => setOpenId(null)} />
       {isAdmin && <CreateCabinetDialog open={showCreate} onClose={() => setShowCreate(false)} />}
