@@ -143,7 +143,7 @@ function DetailContent({ cabinetId, isAdmin, initialMode }: {
             key={t.id}
             onClick={() => handleTabChange(t.id)}
             className={cn(
-              'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors',
+              'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer',
               tab === t.id
                 ? 'border-[#1B3A72] text-[#1B3A72] dark:text-blue-400 dark:border-blue-400'
                 : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
@@ -240,10 +240,18 @@ function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }
     e.target.value = ''
   }
 
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    if (!isAdmin || pending) return
+    const file = e.dataTransfer.files?.[0]
+    if (!file) return
+    setPending({ file, title: file.name.replace(/\.[^.]+$/, ''), requiresApproval: false })
+  }
+
   const docs = data?.items ?? []
 
   return (
-    <div>
+    <div onDragOver={e => e.preventDefault()} onDrop={handleDrop}>
       {isAdmin && (
         <div className="px-6 py-3 border-b border-slate-50 dark:border-slate-700/30">
           <input ref={fileRef} type="file" className="hidden" onChange={handleFileSelect} />
@@ -271,11 +279,11 @@ function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }
                   Требует согласования
                 </label>
                 <div className="flex gap-2">
-                  <Button variant="ghost" onClick={() => setPending(null)} className="h-7 text-xs px-2">Отмена</Button>
+                  <Button variant="ghost" onClick={() => setPending(null)} className="h-7 text-xs px-2 cursor-pointer">Отмена</Button>
                   <Button
                     onClick={() => uploadMut.mutate()}
                     disabled={uploadMut.isPending}
-                    className="h-7 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90"
+                    className="h-7 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
                   >
                     {uploadMut.isPending ? 'Загрузка...' : 'Загрузить'}
                   </Button>
@@ -285,7 +293,7 @@ function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }
           ) : (
             <button
               onClick={() => fileRef.current?.click()}
-              className="flex items-center gap-2 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline"
+              className="flex items-center gap-2 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline cursor-pointer"
             >
               <UploadIcon className="w-4 h-4" />
               Загрузить документ
@@ -363,7 +371,7 @@ function DocRow({ doc, onOpen, onDownload, onDelete, deleting }: {
         <button
           onClick={(e) => { e.stopPropagation(); onDownload() }}
           title="Скачать"
-          className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+          className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
         >
           <DownloadIcon className="w-4 h-4" />
         </button>
@@ -372,7 +380,7 @@ function DocRow({ doc, onOpen, onDownload, onDelete, deleting }: {
             onClick={(e) => { e.stopPropagation(); onDelete() }}
             disabled={deleting}
             title="Удалить"
-            className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors"
+            className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
           >
             <TrashIcon className="w-4 h-4" />
           </button>
@@ -423,12 +431,21 @@ function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean
     e.target.value = ''
   }
 
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    if (!isAdmin || pendingFile) return
+    const file = e.dataTransfer.files?.[0]
+    if (!file || !file.type.startsWith('image/')) return
+    setPendingFile(file)
+    setCaption('')
+  }
+
   const cancelPending = () => { setPendingFile(null); setCaption('') }
 
   const photos = data?.items ?? []
 
   return (
-    <div>
+    <div onDragOver={e => e.preventDefault()} onDrop={handleDrop}>
       {isAdmin && (
         <div className="px-6 py-3 border-b border-slate-50 dark:border-slate-700/30">
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
@@ -446,11 +463,11 @@ function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean
                 className="w-full px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
               />
               <div className="flex justify-end gap-2">
-                <Button variant="ghost" onClick={cancelPending} className="h-7 text-xs px-2">Отмена</Button>
+                <Button variant="ghost" onClick={cancelPending} className="h-7 text-xs px-2 cursor-pointer">Отмена</Button>
                 <Button
                   onClick={() => uploadMut.mutate()}
                   disabled={uploadMut.isPending}
-                  className="h-7 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90"
+                  className="h-7 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
                 >
                   {uploadMut.isPending ? 'Загрузка...' : 'Добавить'}
                 </Button>
@@ -459,7 +476,7 @@ function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean
           ) : (
             <button
               onClick={() => fileRef.current?.click()}
-              className="flex items-center gap-2 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline"
+              className="flex items-center gap-2 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline cursor-pointer"
             >
               <UploadIcon className="w-4 h-4" />
               Добавить фото
@@ -515,7 +532,7 @@ function PhotoTile({ photo, onDelete, deleting }: {
           onClick={onDelete}
           disabled={deleting}
           title="Удалить"
-          className="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/50 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/80"
+          className="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/50 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/80 cursor-pointer"
         >
           <TrashIcon className="w-4 h-4" />
         </button>

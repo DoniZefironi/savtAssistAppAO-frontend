@@ -14,7 +14,7 @@ export function RequestCard({ icon, title, subtitle, meta, statusBadge, date, on
   return (
     <button
       onClick={onClick}
-      className="w-full text-left bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-4 flex items-center gap-4 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-600 transition-all"
+      className="w-full text-left bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-4 flex items-center gap-4 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-600 transition-all cursor-pointer"
     >
       <div className="w-12 h-12 bg-[#1B3A72] rounded-xl flex items-center justify-center shrink-0">
         {icon}

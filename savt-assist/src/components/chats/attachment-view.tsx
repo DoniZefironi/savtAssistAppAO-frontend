@@ -79,14 +79,14 @@ function ImageAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean })
         <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={(e) => { e.stopPropagation(); downloadBlob(url, a.file_name) }}
-            className="w-7 h-7 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/70"
+            className="w-7 h-7 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/70 cursor-pointer"
             title="Скачать"
           >
             <DownloadIcon size={14} />
           </button>
           <button
             onClick={() => setLightbox(true)}
-            className="w-7 h-7 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/70"
+            className="w-7 h-7 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/70 cursor-pointer"
             title="Открыть"
           >
             <ExpandIcon />
@@ -117,7 +117,7 @@ function AudioAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean })
           Ваш браузер не поддерживает аудио
         </audio>
       </div>
-      <button onClick={() => downloadBlob(url, a.file_name)} className={cn('flex-shrink-0', isOwn ? 'text-white/60 hover:text-white' : 'text-slate-400 hover:text-slate-700')} title="Скачать">
+      <button onClick={() => downloadBlob(url, a.file_name)} className={cn('flex-shrink-0 cursor-pointer', isOwn ? 'text-white/60 hover:text-white' : 'text-slate-400 hover:text-slate-700')} title="Скачать">
         <DownloadIcon size={16} />
       </button>
     </div>
@@ -184,7 +184,7 @@ function FileAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean }) 
         <button
           onClick={() => downloadBlob(url, a.file_name)}
           className={cn(
-            'w-7 h-7 rounded-full flex items-center justify-center transition-colors',
+            'w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer',
             isOwn ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
           )}
           title="Скачать"
@@ -207,14 +207,14 @@ function ImageLightbox({ url, name, onClose }: { url: string; name: string; onCl
         <div className="flex items-center gap-2">
           <button
             onClick={(e) => { e.stopPropagation(); downloadBlob(url, name) }}
-            className="flex items-center gap-1.5 text-white/80 hover:text-white text-sm px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 text-white/80 hover:text-white text-sm px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors cursor-pointer"
           >
             <DownloadIcon size={16} />
             Скачать
           </button>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-colors"
+            className="w-8 h-8 flex items-center justify-center text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-colors cursor-pointer"
           >
             ✕
           </button>

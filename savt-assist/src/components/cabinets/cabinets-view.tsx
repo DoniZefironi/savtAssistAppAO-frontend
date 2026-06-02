@@ -88,7 +88,7 @@ export function CabinetsView({ isAdmin }: Props) {
           {isAdmin && (
             <Button
               onClick={() => setShowCreate(true)}
-              className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 gap-2"
+              className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 gap-2 cursor-pointer"
             >
               <PlusIcon />
               Добавить ШУ
@@ -107,7 +107,7 @@ export function CabinetsView({ isAdmin }: Props) {
           {search && (
             <button
               onClick={() => setSearch('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
             >
               ✕
             </button>
@@ -121,7 +121,7 @@ export function CabinetsView({ isAdmin }: Props) {
               <button
                 key={opt.value}
                 onClick={() => handleSortClick(opt.value)}
-                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer ${
                   active
                     ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
                     : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
@@ -148,7 +148,7 @@ export function CabinetsView({ isAdmin }: Props) {
         {isError && (
           <div className="flex flex-col items-center justify-center h-48 gap-3">
             <p className="text-slate-400">Не удалось загрузить список</p>
-            <Button variant="outline" onClick={() => refetch()}>Повторить</Button>
+            <Button variant="outline" onClick={() => refetch()} className="cursor-pointer">Повторить</Button>
           </div>
         )}
 

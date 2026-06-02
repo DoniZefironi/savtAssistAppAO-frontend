@@ -87,7 +87,7 @@ export function UsersView() {
                 key={f.value}
                 onClick={() => setFilter(f.value)}
                 className={cn(
-                  'px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
+                  'px-3 py-1.5 rounded-full text-xs font-medium border transition-colors cursor-pointer',
                   filter === f.value
                     ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
                     : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
@@ -111,7 +111,7 @@ export function UsersView() {
         {isError && (
           <div className="flex flex-col items-center justify-center h-48 gap-3">
             <p className="text-slate-400">Не удалось загрузить пользователей</p>
-            <button onClick={() => refetch()} className="text-sm text-[#1B3A72] hover:underline">
+            <button onClick={() => refetch()} className="text-sm text-[#1B3A72] hover:underline cursor-pointer">
               Повторить
             </button>
           </div>
@@ -268,7 +268,7 @@ function UserDialog({ userId, onClose }: { userId: number; onClose: () => void }
                 variant="outline"
                 onClick={() => unverifyMut.mutate()}
                 disabled={isMutating}
-                className="text-amber-600 border-amber-200 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-800 dark:hover:bg-amber-900/20"
+                className="text-amber-600 border-amber-200 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-800 dark:hover:bg-amber-900/20 cursor-pointer"
               >
                 Снять верификацию
               </Button>
@@ -276,7 +276,7 @@ function UserDialog({ userId, onClose }: { userId: number; onClose: () => void }
               <Button
                 onClick={() => verifyMut.mutate()}
                 disabled={isMutating}
-                className="bg-green-600 hover:bg-green-700"
+                className="bg-green-600 hover:bg-green-700 cursor-pointer"
               >
                 Верифицировать
               </Button>
@@ -285,7 +285,7 @@ function UserDialog({ userId, onClose }: { userId: number; onClose: () => void }
               <Button
                 onClick={() => banMut.mutate()}
                 disabled={isMutating}
-                className="bg-red-500 hover:bg-red-600"
+                className="bg-red-500 hover:bg-red-600 cursor-pointer"
               >
                 Заблокировать
               </Button>
@@ -293,7 +293,7 @@ function UserDialog({ userId, onClose }: { userId: number; onClose: () => void }
               <Button
                 onClick={() => unbanMut.mutate()}
                 disabled={isMutating}
-                className="bg-green-600 hover:bg-green-700"
+                className="bg-green-600 hover:bg-green-700 cursor-pointer"
               >
                 Разблокировать
               </Button>

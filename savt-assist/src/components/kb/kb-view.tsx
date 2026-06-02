@@ -66,7 +66,7 @@ export function KbView() {
           </div>
           <Button
             onClick={() => setCreateArticleOpen(true)}
-            className="bg-[#1B3A72] hover:bg-[#1B3A72]/90"
+            className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
           >
             <PlusIcon className="w-4 h-4 mr-1.5" />
             Новая статья
@@ -91,7 +91,7 @@ export function KbView() {
             <button
               onClick={() => setSelectedCatId(null)}
               className={cn(
-                'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors',
+                'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer',
                 selectedCatId === null
                   ? 'bg-[#1B3A72]/10 text-[#1B3A72] dark:text-blue-400 font-medium'
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
@@ -113,7 +113,7 @@ export function KbView() {
           <div className="p-3 mt-auto border-t border-slate-100 dark:border-slate-700/60">
             <button
               onClick={() => setCreateCatOpen(true)}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             >
               <PlusIcon className="w-3.5 h-3.5" />
               Новая категория
@@ -134,7 +134,7 @@ export function KbView() {
               <p className="text-sm">Статей не найдено</p>
               <button
                 onClick={() => setCreateArticleOpen(true)}
-                className="mt-3 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline"
+                className="mt-3 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline cursor-pointer"
               >
                 Создать первую статью
               </button>
@@ -208,13 +208,13 @@ function CategoryRow({ cat, selected, onSelect, onEdit, onDelete }: {
       <span className="flex-1 truncate">{cat.name}</span>
       <button
         onClick={e => { e.stopPropagation(); onEdit() }}
-        className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded hover:text-slate-700 dark:hover:text-slate-200 transition-all"
+        className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded hover:text-slate-700 dark:hover:text-slate-200 transition-all cursor-pointer"
       >
         <PencilIcon className="w-3 h-3" />
       </button>
       <button
         onClick={e => { e.stopPropagation(); onDelete() }}
-        className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded hover:text-red-500 transition-all"
+        className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded hover:text-red-500 transition-all cursor-pointer"
       >
         <TrashIcon className="w-3 h-3" />
       </button>
@@ -231,7 +231,7 @@ function ArticleCard({ article, categoryName, onEdit, onDelete }: {
   onDelete: () => void
 }) {
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-5 hover:border-slate-200 dark:hover:border-slate-600 hover:shadow-sm transition-all group">
+    <div onClick={onEdit} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-5 hover:border-slate-200 dark:hover:border-slate-600 hover:shadow-sm transition-all group cursor-pointer">
       <div className="flex items-start gap-3">
         <div className="w-9 h-9 bg-[#1B3A72] rounded-lg flex items-center justify-center shrink-0 mt-0.5">
           <BookIcon className="w-4 h-4 text-white" />
@@ -241,14 +241,14 @@ function ArticleCard({ article, categoryName, onEdit, onDelete }: {
             <p className="font-semibold text-slate-800 dark:text-slate-100 leading-snug">{article.title}</p>
             <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
-                onClick={onEdit}
-                className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                onClick={e => { e.stopPropagation(); onEdit() }}
+                className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
               >
                 <PencilIcon className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={onDelete}
-                className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors"
+                onClick={e => { e.stopPropagation(); onDelete() }}
+                className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
               >
                 <TrashIcon className="w-3.5 h-3.5" />
               </button>
@@ -365,7 +365,7 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose }: {
                 key={t.id}
                 onClick={() => setTab(t.id as 'content' | 'attachments')}
                 className={cn(
-                  'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors',
+                  'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer',
                   tab === t.id
                     ? 'border-[#1B3A72] text-[#1B3A72] dark:text-blue-400 dark:border-blue-400'
                     : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
@@ -437,7 +437,7 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose }: {
             <Button
               onClick={() => saveMut.mutate()}
               disabled={!canSave || saveMut.isPending}
-              className="bg-[#1B3A72] hover:bg-[#1B3A72]/90"
+              className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
             >
               {saveMut.isPending ? 'Сохранение...' : isEdit ? 'Сохранить' : 'Создать'}
             </Button>
@@ -479,7 +479,7 @@ function AttachmentsTab({ article }: { article: KbArticleDetail }) {
         <button
           onClick={() => fileRef.current?.click()}
           disabled={uploadMut.isPending}
-          className="flex items-center gap-2 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline disabled:opacity-50"
+          className="flex items-center gap-2 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline disabled:opacity-50 cursor-pointer"
         >
           <UploadIcon className="w-4 h-4" />
           {uploadMut.isPending ? 'Загрузка...' : 'Добавить вложение'}
@@ -540,7 +540,7 @@ function AttachmentRow({ att, articleId, onDelete, deleting }: {
         <button
           onClick={e => { e.stopPropagation(); kbApi.downloadAttachment(articleId, att.id, att.title) }}
           title="Скачать"
-          className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+          className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
         >
           <DownloadIcon className="w-4 h-4" />
         </button>
@@ -548,7 +548,7 @@ function AttachmentRow({ att, articleId, onDelete, deleting }: {
           onClick={e => { e.stopPropagation(); onDelete() }}
           disabled={deleting}
           title="Удалить"
-          className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors"
+          className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
         >
           <TrashIcon className="w-4 h-4" />
         </button>
@@ -616,7 +616,7 @@ function CategoryModal({ cat, onClose }: { cat: KbCategory | null; onClose: () =
           <Button
             onClick={() => saveMut.mutate()}
             disabled={!name.trim() || saveMut.isPending}
-            className="bg-[#1B3A72] hover:bg-[#1B3A72]/90"
+            className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
           >
             {saveMut.isPending ? 'Сохранение...' : isEdit ? 'Сохранить' : 'Создать'}
           </Button>

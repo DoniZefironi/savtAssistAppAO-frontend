@@ -120,7 +120,7 @@ function ActionBtn({ title, onClick, danger, children }: {
       title={title}
       onClick={(e) => { e.stopPropagation(); onClick() }}
       className={cn(
-        'w-7 h-7 flex items-center justify-center rounded-lg transition-colors',
+        'w-7 h-7 flex items-center justify-center rounded-lg transition-colors cursor-pointer',
         danger
           ? 'text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10'
           : 'text-slate-400 dark:text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-600'

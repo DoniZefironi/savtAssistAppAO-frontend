@@ -50,7 +50,7 @@ export function AdminSidebar() {
             <button
               onClick={() => setCollapsed(false)}
               title="Развернуть"
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
             >
               <ChevronRightIcon />
             </button>
@@ -67,7 +67,7 @@ export function AdminSidebar() {
             <button
               onClick={() => setCollapsed(true)}
               title="Свернуть"
-              className="w-7 h-7 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
+              className="w-7 h-7 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
             >
               <ChevronLeftIcon />
             </button>

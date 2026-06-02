@@ -45,8 +45,8 @@ export const usersApi = {
   getOne: (id: number): Promise<AdminUserDetail> =>
     apiClient.get(`/admin/users/${id}`).then(r => r.data),
 
-  verify: (id: number) => apiClient.post(`/admin/users/${id}/verify`),
-  unverify: (id: number) => apiClient.post(`/admin/users/${id}/unverify`),
-  ban: (id: number) => apiClient.post(`/admin/users/${id}/ban`),
-  unban: (id: number) => apiClient.post(`/admin/users/${id}/unban`),
+  verify: (id: number) => apiClient.post(`/admin/users/${id}/verify`, {}),
+  unverify: (id: number) => apiClient.post(`/admin/users/${id}/unverify`, {}),
+  ban: (id: number) => apiClient.post(`/admin/users/${id}/ban`, {}),
+  unban: (id: number) => apiClient.post(`/admin/users/${id}/unban`, {}),
 }

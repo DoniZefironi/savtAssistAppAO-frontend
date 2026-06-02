@@ -256,7 +256,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded }: Props) {
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700/60 flex-shrink-0 shadow-sm">
         {onBack && (
-          <button onClick={onBack} className="md:hidden text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mr-1">
+          <button onClick={onBack} className="md:hidden text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mr-1 cursor-pointer">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
             </svg>
@@ -285,13 +285,13 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded }: Props) {
         <div className="flex items-center gap-2 flex-shrink-0">
           {botActive && (
             <button onClick={() => takeMutation.mutate()} disabled={takeMutation.isPending}
-              className="text-xs bg-[#1B3A72] text-white px-3 py-1.5 rounded-lg hover:bg-[#1B3A72]/90 transition-colors font-medium">
+              className="text-xs bg-[#1B3A72] text-white px-3 py-1.5 rounded-lg hover:bg-[#1B3A72]/90 transition-colors font-medium cursor-pointer">
               {takeMutation.isPending ? '...' : 'Взять чат'}
             </button>
           )}
           {!botActive && (
             <button onClick={() => botMutation.mutate()} disabled={botMutation.isPending}
-              className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-3 py-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+              className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-3 py-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer">
               Вернуть боту
             </button>
           )}
@@ -357,7 +357,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded }: Props) {
               <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">Чтобы ответить самостоятельно — возьмите чат</p>
             </div>
             <button onClick={() => takeMutation.mutate()} disabled={takeMutation.isPending}
-              className="bg-[#1B3A72] text-white text-sm px-4 py-2 rounded-xl hover:bg-[#1B3A72]/90 transition-colors font-medium flex-shrink-0">
+              className="bg-[#1B3A72] text-white text-sm px-4 py-2 rounded-xl hover:bg-[#1B3A72]/90 transition-colors font-medium flex-shrink-0 cursor-pointer">
               {takeMutation.isPending ? 'Загрузка...' : 'Взять чат'}
             </button>
           </div>
@@ -372,7 +372,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded }: Props) {
                 <div key={i} className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-700 dark:text-slate-300">
                   <span>{a.mime_type.startsWith('image/') ? '🖼' : '📎'}</span>
                   <span className="max-w-32 truncate">{a.name}</span>
-                  <button onClick={() => setPendingAttachments((p) => p.filter((_, j) => j !== i))} className="text-slate-400 hover:text-red-500 ml-1">✕</button>
+                  <button onClick={() => setPendingAttachments((p) => p.filter((_, j) => j !== i))} className="text-slate-400 hover:text-red-500 ml-1 cursor-pointer">✕</button>
                 </div>
               ))}
             </div>
@@ -391,7 +391,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded }: Props) {
                     : (replyTo!.text || (replyTo!.attachments?.length ? '📎 Вложение' : ''))}
                 </p>
               </div>
-              <button onClick={cancelContext} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 flex-shrink-0 p-1">
+              <button onClick={cancelContext} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 flex-shrink-0 p-1 cursor-pointer">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -408,16 +408,16 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded }: Props) {
                 <div className="flex-1 flex items-center gap-3 bg-red-50 dark:bg-red-900/20 rounded-2xl px-4 py-2.5 text-sm text-red-600 dark:text-red-400">
                   <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
                   Запись... {voice.seconds}с
-                  <button onClick={voice.cancel} className="ml-auto text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">Отмена</button>
+                  <button onClick={voice.cancel} className="ml-auto text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">Отмена</button>
                 </div>
-                <button onClick={voice.stop} className="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center text-white hover:bg-red-600 flex-shrink-0">
+                <button onClick={voice.stop} className="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center text-white hover:bg-red-600 flex-shrink-0 cursor-pointer">
                   <SendIcon />
                 </button>
               </>
             ) : (
               <>
                 <button onClick={() => fileInputRef.current?.click()} disabled={!canSend || uploadingFile}
-                  className="w-9 h-9 rounded-full text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors flex-shrink-0 disabled:opacity-40"
+                  className="w-9 h-9 rounded-full text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors flex-shrink-0 disabled:opacity-40 cursor-pointer"
                   title="Прикрепить файл">
                   {uploadingFile
                     ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -442,12 +442,12 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded }: Props) {
 
                 {text.trim() || pendingAttachments.length > 0 || editingMessage ? (
                   <button onClick={handleSend} disabled={!canSend}
-                    className="w-10 h-10 rounded-full bg-[#1B3A72] flex items-center justify-center text-white hover:bg-[#1B3A72]/90 disabled:opacity-40 transition-all flex-shrink-0">
+                    className="w-10 h-10 rounded-full bg-[#1B3A72] flex items-center justify-center text-white hover:bg-[#1B3A72]/90 disabled:opacity-40 transition-all flex-shrink-0 cursor-pointer">
                     <SendIcon />
                   </button>
                 ) : (
                   <button onClick={voice.start}
-                    className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-[#1B3A72] hover:text-white transition-all flex-shrink-0"
+                    className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-[#1B3A72] hover:text-white transition-all flex-shrink-0 cursor-pointer"
                     title="Голосовое сообщение">
                     <MicIcon />
                   </button>
@@ -507,7 +507,7 @@ function ForwardDialog({ message, currentChatId, onClose }: {
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
           <p className="font-semibold text-slate-800 dark:text-slate-100">Переслать в чат</p>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -519,7 +519,7 @@ function ForwardDialog({ message, currentChatId, onClose }: {
           )}
           {chats.map((c) => (
             <button key={c.id} disabled={sending} onClick={() => forward(c.id)}
-              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors text-left disabled:opacity-50">
+              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors text-left disabled:opacity-50 cursor-pointer">
               <div className={cn(
                 'w-9 h-9 rounded-full flex items-center justify-center text-sm flex-shrink-0',
                 c.chat_type === 'cabinet' ? 'bg-[#1B3A72] text-white' : 'bg-slate-400 text-white'

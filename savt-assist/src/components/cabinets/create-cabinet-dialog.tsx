@@ -95,10 +95,10 @@ export function CreateCabinetDialog({ open, onClose }: Props) {
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t">
-            <Button type="button" variant="ghost" onClick={onClose} disabled={mutation.isPending}>
+            <Button type="button" variant="ghost" onClick={onClose} disabled={mutation.isPending} className="cursor-pointer">
               Отмена
             </Button>
-            <Button type="submit" disabled={mutation.isPending} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90">
+            <Button type="submit" disabled={mutation.isPending} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer">
               {mutation.isPending ? 'Создание...' : 'Добавить'}
             </Button>
           </div>

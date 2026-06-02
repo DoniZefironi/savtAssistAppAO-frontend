@@ -62,7 +62,7 @@ export function AdminHeader() {
         <button
           onClick={toggleTheme}
           title={theme === 'light' ? 'Тёмная тема' : 'Светлая тема'}
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
         >
           {theme === 'light' ? <MoonIcon /> : <SunIcon />}
         </button>
@@ -70,7 +70,7 @@ export function AdminHeader() {
         <div className="relative ml-1" ref={profileRef}>
           <button
             onClick={() => setProfileOpen(!profileOpen)}
-            className="flex items-center gap-2 pl-2 pr-1.5 py-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="flex items-center gap-2 pl-2 pr-1.5 py-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <div className="w-7 h-7 rounded-full bg-[#1B3A72] flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
               {initials}
@@ -102,7 +102,7 @@ export function AdminHeader() {
               <div className="border-t border-slate-100 dark:border-slate-700 pt-1">
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                  className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer"
                 >
                   <LogoutIcon className="w-4 h-4 flex-shrink-0" />
                   Выйти

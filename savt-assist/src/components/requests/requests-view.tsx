@@ -121,7 +121,7 @@ export function RequestsView() {
               key={t.id}
               onClick={() => handleTabChange(t.id)}
               className={cn(
-                'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors',
+                'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer',
                 tab === t.id
                   ? 'border-[#1B3A72] text-[#1B3A72] dark:text-blue-400 dark:border-blue-400'
                   : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
@@ -139,7 +139,7 @@ export function RequestsView() {
             key={f.value}
             onClick={() => setStatusFilter(f.value)}
             className={cn(
-              'px-3 py-1 rounded-full text-xs font-medium border transition-colors',
+              'px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
               statusFilter === f.value
                 ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
                 : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
@@ -161,7 +161,7 @@ export function RequestsView() {
         {curQ.isError && (
           <div className="flex flex-col items-center justify-center h-48 gap-3">
             <p className="text-slate-400">Не удалось загрузить заявки</p>
-            <button onClick={() => curQ.refetch()} className="text-sm text-[#1B3A72] hover:underline">Повторить</button>
+            <button onClick={() => curQ.refetch()} className="text-sm text-[#1B3A72] hover:underline cursor-pointer">Повторить</button>
           </div>
         )}
         {tab === 'service' && !svcQ.isLoading && !svcQ.isError && (
@@ -356,7 +356,7 @@ function ServiceDialog({ request, onClose }: { request: ServiceRequest; onClose:
               key={s}
               onClick={() => setStatus(s)}
               className={cn(
-                'px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex-1',
+                'px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex-1 cursor-pointer',
                 status === s
                   ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
                   : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-500'
@@ -371,7 +371,7 @@ function ServiceDialog({ request, onClose }: { request: ServiceRequest; onClose:
             <Button
               onClick={() => mutation.mutate()}
               disabled={mutation.isPending}
-              className="bg-[#1B3A72] hover:bg-[#1B3A72]/90"
+              className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
             >
               {mutation.isPending ? 'Сохранение...' : 'Сохранить'}
             </Button>
@@ -453,8 +453,8 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
       <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700">
         {!isPending ? null : action === null ? (
           <div className="flex gap-2 justify-end">
-            <Button onClick={() => setAction('reject')} className="bg-red-500 hover:bg-red-600">Отклонить</Button>
-            <Button onClick={() => setAction('approve')} className="bg-green-600 hover:bg-green-700">Одобрить</Button>
+            <Button onClick={() => setAction('reject')} className="bg-red-500 hover:bg-red-600 cursor-pointer">Отклонить</Button>
+            <Button onClick={() => setAction('approve')} className="bg-green-600 hover:bg-green-700 cursor-pointer">Одобрить</Button>
           </div>
         ) : action === 'approve' ? (
           <div className="space-y-3">
@@ -479,7 +479,7 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
               <Button
                 onClick={() => approveMut.mutate()}
                 disabled={!cabinetId || approveMut.isPending}
-                className="bg-green-600 hover:bg-green-700"
+                className="bg-green-600 hover:bg-green-700 cursor-pointer"
               >
                 {approveMut.isPending ? 'Обработка...' : 'Подтвердить'}
               </Button>
@@ -494,11 +494,11 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
               <ModalTextarea value={rejectNote} onChange={setRejectNote} placeholder="Обязательно укажите причину" rows={3} />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setAction(null)}>Назад</Button>
+              <Button variant="ghost" onClick={() => setAction(null)} className="cursor-pointer">Назад</Button>
               <Button
                 onClick={() => rejectMut.mutate()}
                 disabled={!rejectNote.trim() || rejectMut.isPending}
-                className="bg-red-500 hover:bg-red-600"
+                className="bg-red-500 hover:bg-red-600 cursor-pointer"
               >
                 {rejectMut.isPending ? 'Обработка...' : 'Подтвердить'}
               </Button>
@@ -569,8 +569,8 @@ function ShareDialog({ request, onClose }: { request: ShareRequest; onClose: () 
       <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700">
         {!isPending ? null : action === null ? (
           <div className="flex gap-2 justify-end">
-            <Button onClick={() => setAction('reject')} className="bg-red-500 hover:bg-red-600">Отклонить</Button>
-            <Button onClick={() => setAction('approve')} className="bg-green-600 hover:bg-green-700">Одобрить</Button>
+            <Button onClick={() => setAction('reject')} className="bg-red-500 hover:bg-red-600 cursor-pointer">Отклонить</Button>
+            <Button onClick={() => setAction('approve')} className="bg-green-600 hover:bg-green-700 cursor-pointer">Одобрить</Button>
           </div>
         ) : action === 'approve' ? (
           <div className="space-y-3">
@@ -579,11 +579,11 @@ function ShareDialog({ request, onClose }: { request: ShareRequest; onClose: () 
               <ModalTextarea value={approveNote} onChange={setApproveNote} placeholder="Необязательно" />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setAction(null)}>Назад</Button>
+              <Button variant="ghost" onClick={() => setAction(null)} className="cursor-pointer">Назад</Button>
               <Button
                 onClick={() => approveMut.mutate()}
                 disabled={approveMut.isPending}
-                className="bg-green-600 hover:bg-green-700"
+                className="bg-green-600 hover:bg-green-700 cursor-pointer"
               >
                 {approveMut.isPending ? 'Обработка...' : 'Подтвердить'}
               </Button>
@@ -598,11 +598,11 @@ function ShareDialog({ request, onClose }: { request: ShareRequest; onClose: () 
               <ModalTextarea value={rejectNote} onChange={setRejectNote} placeholder="Обязательно укажите причину" rows={3} />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setAction(null)}>Назад</Button>
+              <Button variant="ghost" onClick={() => setAction(null)} className="cursor-pointer">Назад</Button>
               <Button
                 onClick={() => rejectMut.mutate()}
                 disabled={!rejectNote.trim() || rejectMut.isPending}
-                className="bg-red-500 hover:bg-red-600"
+                className="bg-red-500 hover:bg-red-600 cursor-pointer"
               >
                 {rejectMut.isPending ? 'Обработка...' : 'Подтвердить'}
               </Button>
@@ -691,8 +691,8 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
       <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700">
         {!isPending ? null : action === null ? (
           <div className="flex gap-2 justify-end">
-            <Button onClick={() => setAction('reject')} className="bg-red-500 hover:bg-red-600">Отклонить</Button>
-            <Button onClick={() => setAction('approve')} className="bg-green-600 hover:bg-green-700">Одобрить</Button>
+            <Button onClick={() => setAction('reject')} className="bg-red-500 hover:bg-red-600 cursor-pointer">Отклонить</Button>
+            <Button onClick={() => setAction('approve')} className="bg-green-600 hover:bg-green-700 cursor-pointer">Одобрить</Button>
           </div>
         ) : action === 'approve' ? (
           <div className="space-y-3">
@@ -701,11 +701,11 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
               <ModalTextarea value={approveNote} onChange={setApproveNote} placeholder="Необязательно" />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setAction(null)}>Назад</Button>
+              <Button variant="ghost" onClick={() => setAction(null)} className="cursor-pointer">Назад</Button>
               <Button
                 onClick={() => approveMut.mutate()}
                 disabled={approveMut.isPending}
-                className="bg-green-600 hover:bg-green-700"
+                className="bg-green-600 hover:bg-green-700 cursor-pointer"
               >
                 {approveMut.isPending ? 'Обработка...' : 'Подтвердить'}
               </Button>
@@ -720,11 +720,11 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
               <ModalTextarea value={rejectNote} onChange={setRejectNote} placeholder="Обязательно укажите причину" rows={3} />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setAction(null)}>Назад</Button>
+              <Button variant="ghost" onClick={() => setAction(null)} className="cursor-pointer">Назад</Button>
               <Button
                 onClick={() => rejectMut.mutate()}
                 disabled={!rejectNote.trim() || rejectMut.isPending}
-                className="bg-red-500 hover:bg-red-600"
+                className="bg-red-500 hover:bg-red-600 cursor-pointer"
               >
                 {rejectMut.isPending ? 'Обработка...' : 'Подтвердить'}
               </Button>
