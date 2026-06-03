@@ -168,6 +168,7 @@ function DetailContent({ cabinetId, isAdmin, initialMode }: {
             <DetailRow label="Комментарий" value={fields.admin_comment} editing={editing} onChange={set('admin_comment')} placeholder="Добавить комментарий" multiline />
             <DateRow label="Гарантия с" value={fields.warranty_start} editing={editing} onChange={(v) => setFields((p) => p ? { ...p, warranty_start: v } : p)} />
             <DateRow label="Гарантия до" value={fields.warranty_end} editing={editing} onChange={(v) => setFields((p) => p ? { ...p, warranty_end: v } : p)} />
+            <CabinetTagsRow cabinetId={cabinetId} cabinet={cabinet} isAdmin={isAdmin} />
           </div>
         )}
         {tab === 'docs' && <DocsTab cabinetId={cabinetId} isAdmin={isAdmin} />}
@@ -219,7 +220,7 @@ function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }
     queryFn: () => mediaApi.listDocuments(cabinetId),
   })
 
-  const tagsQ = useQuery({ queryKey: ['tags'], queryFn: kbApi.listTags })
+  const tagsQ = useQuery({ queryKey: ['tags', 'document'], queryFn: () => kbApi.listTags('document') })
   const allTags = tagsQ.data ?? []
 
   const uploadMut = useMutation({
@@ -382,7 +383,7 @@ function DocRow({ doc, allTags, isAdmin, onOpen, onDownload, onDelete, deleting 
     if (!tagInput.trim() || creatingTag) return
     setCreatingTag(true)
     try {
-      const tag = await kbApi.createTag(tagInput.trim())
+      const tag = await kbApi.createTag(tagInput.trim(), 'document')
       qc.invalidateQueries({ queryKey: ['tags'] })
       addTag(tag)
     } catch { toast.error('Не удалось создать тег') }
@@ -937,6 +938,126 @@ function DetailSkeleton() {
             <Skeleton className="h-3 flex-1" />
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Cabinet tags row ─────────────────────────────────────────────────────────
+
+function CabinetTagsRow({ cabinetId, cabinet, isAdmin }: {
+  cabinetId: number
+  cabinet: import('@/types').Cabinet
+  isAdmin: boolean
+}) {
+  const qc = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [selectedTags, setSelectedTags] = useState<Tag[]>((cabinet.tags ?? []) as Tag[])
+  const [input, setInput] = useState('')
+  const [creating, setCreating] = useState(false)
+
+  const tagsQ = useQuery({ queryKey: ['tags', 'cabinet'], queryFn: () => kbApi.listTags('cabinet') })
+  const allTags = tagsQ.data ?? []
+
+  const tagMut = useMutation({
+    mutationFn: () => cabinetsApi.updateCabinetTags(cabinetId, selectedTags.map(t => t.id)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cabinet', cabinetId] })
+      qc.invalidateQueries({ queryKey: ['cabinets'] })
+      toast.success('Теги обновлены')
+      setEditing(false)
+      setInput('')
+    },
+    onError: () => toast.error('Ошибка при обновлении тегов'),
+  })
+
+  const available = allTags.filter(t => !selectedTags.some(s => s.id === t.id))
+  const filtered = available.filter(t => t.name.toLowerCase().includes(input.toLowerCase()))
+  const exactMatch = allTags.some(t => t.name.toLowerCase() === input.trim().toLowerCase())
+  const showCreate = input.trim().length > 0 && !exactMatch
+
+  const addTag = (tag: Tag) => { setSelectedTags(p => [...p, tag]); setInput('') }
+  const removeTag = (id: number) => setSelectedTags(p => p.filter(t => t.id !== id))
+
+  const handleCreate = async () => {
+    if (!input.trim() || creating) return
+    setCreating(true)
+    try {
+      const tag = await kbApi.createTag(input.trim(), 'cabinet')
+      qc.invalidateQueries({ queryKey: ['tags', 'cabinet'] })
+      addTag(tag)
+    } catch { toast.error('Не удалось создать тег') }
+    finally { setCreating(false) }
+  }
+
+  const cancel = () => {
+    setSelectedTags((cabinet.tags ?? []) as Tag[])
+    setInput('')
+    setEditing(false)
+  }
+
+  const currentTags = editing ? selectedTags : (cabinet.tags ?? []) as Tag[]
+
+  return (
+    <div className="flex gap-4 px-6 py-3">
+      <span className="text-xs text-slate-400 w-28 shrink-0 pt-0.5">Теги</span>
+      <div className="flex-1 min-w-0">
+        {/* Tags display */}
+        <div className="flex flex-wrap gap-1.5 mb-1">
+          {currentTags.length === 0 && !editing && (
+            <span className="text-sm text-slate-300 italic">Нет тегов</span>
+          )}
+          {currentTags.map(tag => (
+            <span key={tag.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#1B3A72]/10 text-[#1B3A72] dark:bg-blue-900/30 dark:text-blue-400 text-xs font-medium">
+              {tag.name}
+              {editing && (
+                <button onClick={() => removeTag(tag.id)} className="hover:text-red-500 transition-colors cursor-pointer leading-none">×</button>
+              )}
+            </span>
+          ))}
+        </div>
+
+        {/* Editor */}
+        {editing && (
+          <div className="space-y-2 mt-2">
+            <div className="relative">
+              <input
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); showCreate ? handleCreate() : filtered[0] && addTag(filtered[0]) } }}
+                placeholder="Найти или создать тег..."
+                className="w-full px-3 py-1.5 text-xs border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] placeholder:text-slate-400"
+              />
+              {input && (filtered.length > 0 || showCreate) && (
+                <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden max-h-36 overflow-y-auto">
+                  {filtered.map(tag => (
+                    <button key={tag.id} onMouseDown={() => addTag(tag)} className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer">
+                      {tag.name}
+                    </button>
+                  ))}
+                  {showCreate && (
+                    <button onMouseDown={handleCreate} disabled={creating} className="w-full text-left px-3 py-1.5 text-xs text-[#1B3A72] dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-700 border-t border-slate-100 dark:border-slate-700 cursor-pointer flex gap-1">
+                      <span className="font-medium">+ Создать</span> «{input.trim()}»
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={cancel} className="h-6 text-xs px-2 cursor-pointer">Отмена</Button>
+              <Button onClick={() => tagMut.mutate()} disabled={tagMut.isPending} className="h-6 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer">
+                {tagMut.isPending ? 'Сохранение...' : 'Сохранить'}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Edit button */}
+        {!editing && isAdmin && (
+          <button onClick={() => setEditing(true)} className="text-xs text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 transition-colors cursor-pointer mt-0.5">
+            + редактировать теги
+          </button>
+        )}
       </div>
     </div>
   )

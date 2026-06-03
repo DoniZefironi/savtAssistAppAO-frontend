@@ -49,6 +49,7 @@ export interface KbAttachment {
 export interface Tag {
   id: number
   name: string
+  scope: 'document' | 'cabinet'
 }
 
 async function multipartPost<T>(path: string, form: FormData): Promise<T> {
@@ -119,11 +120,11 @@ export const kbApi = {
   },
 
   // Tags
-  listTags: (): Promise<Tag[]> =>
-    apiClient.get('/tags').then(r => r.data),
+  listTags: (scope?: 'document' | 'cabinet'): Promise<Tag[]> =>
+    apiClient.get('/tags', { params: scope ? { scope } : undefined }).then(r => r.data),
 
-  createTag: (name: string): Promise<Tag> =>
-    apiClient.post('/admin/tags', { name }).then(r => r.data),
+  createTag: (name: string, scope: 'document' | 'cabinet' = 'document'): Promise<Tag> =>
+    apiClient.post('/admin/tags', { name, scope }).then(r => r.data),
 
   deleteTag: (id: number) => apiClient.delete(`/admin/tags/${id}`),
 

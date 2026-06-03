@@ -1,13 +1,12 @@
 'use client'
 
-'use client'
-
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { usersApi } from '@/lib/api/users'
 import type { AdminUser } from '@/lib/api/users'
+import { useAuthStore } from '@/lib/store/auth'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -24,6 +23,7 @@ const ROLE_FILTERS = [
   { value: 'all', label: 'Все роли' },
   { value: 'user', label: 'Пользователи' },
   { value: 'operator', label: 'Операторы' },
+  { value: 'admin', label: 'Администраторы' },
 ]
 
 const SORT_OPTIONS = [
@@ -35,10 +35,15 @@ const SORT_OPTIONS = [
 type SortValue = (typeof SORT_OPTIONS)[number]['value']
 
 function roleLabel(r: string) {
-  return r === 'admin' ? 'Администратор' : r === 'operator' ? 'Оператор' : 'Пользователь'
+  return r === 'superadmin' ? 'Суперадмин'
+    : r === 'admin' ? 'Администратор'
+    : r === 'operator' ? 'Оператор'
+    : 'Пользователь'
 }
 function roleCls(r: string) {
-  return r === 'admin'
+  return r === 'superadmin'
+    ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+    : r === 'admin'
     ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
     : r === 'operator'
     ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
@@ -62,6 +67,9 @@ function userSubtitle(u: AdminUser) {
 }
 
 export function UsersView() {
+  const currentUser = useAuthStore(s => s.user)
+  const isSuperadmin = currentUser?.role === 'superadmin'
+
   const [statusFilter, setStatusFilter] = useState('all')
   const [roleFilter, setRoleFilter] = useState('all')
   const [sortBy, setSortBy] = useState<SortValue>('created_at')
@@ -71,6 +79,7 @@ export function UsersView() {
   const [page, setPage] = useState(1)
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
   const [createOperatorOpen, setCreateOperatorOpen] = useState(false)
+  const [createAdminOpen, setCreateAdminOpen] = useState(false)
 
   useEffect(() => {
     const t = setTimeout(() => setSearch(searchInput), 300)
@@ -109,13 +118,24 @@ export function UsersView() {
             )}
             <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Пользователи</h1>
           </div>
-          <Button
-            onClick={() => setCreateOperatorOpen(true)}
-            className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
-          >
-            <PlusIcon className="w-4 h-4 mr-1.5" />
-            Создать оператора
-          </Button>
+          <div className="flex gap-2">
+            {isSuperadmin && (
+              <Button
+                onClick={() => setCreateAdminOpen(true)}
+                className="bg-purple-600 hover:bg-purple-700 cursor-pointer"
+              >
+                <PlusIcon className="w-4 h-4 mr-1.5" />
+                Создать администратора
+              </Button>
+            )}
+            <Button
+              onClick={() => setCreateOperatorOpen(true)}
+              className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
+            >
+              <PlusIcon className="w-4 h-4 mr-1.5" />
+              Создать оператора
+            </Button>
+          </div>
         </div>
 
         {/* Search */}
@@ -240,6 +260,9 @@ export function UsersView() {
       {createOperatorOpen && (
         <CreateOperatorModal onClose={() => setCreateOperatorOpen(false)} />
       )}
+      {createAdminOpen && (
+        <CreateStaffModal onClose={() => setCreateAdminOpen(false)} />
+      )}
     </div>
   )
 }
@@ -248,6 +271,7 @@ function UserDialog({ userId, onClose }: { userId: number; onClose: () => void }
   const qc = useQueryClient()
   const [banStep, setBanStep] = useState(false)
   const [banReason, setBanReason] = useState('')
+  const [deleteStep, setDeleteStep] = useState(false)
 
   const { data: user, isLoading } = useQuery({
     queryKey: ['admin-user', userId],
@@ -280,8 +304,13 @@ function UserDialog({ userId, onClose }: { userId: number; onClose: () => void }
     onSuccess: () => { invalidate(); toast.success('Пользователь разблокирован') },
     onError: () => toast.error('Ошибка при разблокировке'),
   })
+  const deleteOperatorMut = useMutation({
+    mutationFn: () => usersApi.deleteOperator(userId),
+    onSuccess: () => { invalidate(); toast.success('Оператор удалён'); onClose() },
+    onError: () => toast.error('Ошибка при удалении'),
+  })
 
-  const isMutating = verifyMut.isPending || unverifyMut.isPending || banMut.isPending || unbanMut.isPending
+  const isMutating = verifyMut.isPending || unverifyMut.isPending || banMut.isPending || unbanMut.isPending || deleteOperatorMut.isPending
 
   return (
     <AppModal open onClose={onClose}>
@@ -357,7 +386,25 @@ function UserDialog({ userId, onClose }: { userId: number; onClose: () => void }
           </div>
 
           <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 shrink-0">
-            {banStep ? (
+            {deleteStep ? (
+              <div className="space-y-2">
+                <p className="text-sm text-slate-600 dark:text-slate-300">
+                  Удалить оператора <strong>{user.full_name ?? user.login}</strong>? Все сессии будут отозваны, аккаунт деактивирован. Переписка сохранится.
+                </p>
+                <div className="flex justify-end gap-2">
+                  <Button variant="ghost" onClick={() => setDeleteStep(false)} disabled={deleteOperatorMut.isPending} className="cursor-pointer">
+                    Отмена
+                  </Button>
+                  <Button
+                    onClick={() => deleteOperatorMut.mutate()}
+                    disabled={deleteOperatorMut.isPending}
+                    className="bg-red-600 hover:bg-red-700 cursor-pointer"
+                  >
+                    {deleteOperatorMut.isPending ? 'Удаление...' : 'Удалить'}
+                  </Button>
+                </div>
+              </div>
+            ) : banStep ? (
               <div className="space-y-2">
                 <label className="text-xs font-medium text-slate-500 block">
                   Причина блокировки <span className="text-red-500">*</span>
@@ -370,12 +417,7 @@ function UserDialog({ userId, onClose }: { userId: number; onClose: () => void }
                   className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 resize-none focus:outline-none focus:border-[#4A8FE7]"
                 />
                 <div className="flex justify-end gap-2">
-                  <Button
-                    variant="ghost"
-                    onClick={() => { setBanStep(false); setBanReason('') }}
-                    disabled={banMut.isPending}
-                    className="cursor-pointer"
-                  >
+                  <Button variant="ghost" onClick={() => { setBanStep(false); setBanReason('') }} disabled={banMut.isPending} className="cursor-pointer">
                     Отмена
                   </Button>
                   <Button
@@ -388,7 +430,17 @@ function UserDialog({ userId, onClose }: { userId: number; onClose: () => void }
                 </div>
               </div>
             ) : (
-              <div className="flex justify-end gap-2">
+              <div className="flex justify-end gap-2 flex-wrap">
+                {user.role === 'operator' && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setDeleteStep(true)}
+                    disabled={isMutating}
+                    className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/20 cursor-pointer mr-auto"
+                  >
+                    Удалить оператора
+                  </Button>
+                )}
                 {user.is_verified ? (
                   <Button
                     variant="outline"
@@ -592,6 +644,98 @@ function CreateOperatorModal({ onClose }: { onClose: () => void }) {
             disabled={!canSave}
             className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
           >
+            {createMut.isPending ? 'Создание...' : 'Создать'}
+          </Button>
+        </div>
+      </div>
+    </AppModal>
+  )
+}
+
+function CreateStaffModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient()
+  const [login, setLogin] = useState('')
+  const [password, setPassword] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+
+  const createMut = useMutation({
+    mutationFn: () => usersApi.createAdmin({ login: login.trim(), password, full_name: fullName.trim() || null }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-users'] })
+      toast.success('Администратор создан')
+      onClose()
+    },
+    onError: () => toast.error('Не удалось создать администратора'),
+  })
+
+  const loginValid = login.trim().length >= 3 && !/\s/.test(login)
+  const passwordValid = password.length >= 8
+  const canSave = loginValid && passwordValid && !createMut.isPending
+
+  return (
+    <AppModal open onClose={onClose}>
+      <div className="flex flex-col">
+        <div className="bg-linear-to-r from-[#7C3AED] to-[#4C1D95] px-6 py-5 shrink-0">
+          <div className="flex items-start gap-4 pr-8">
+            <div className="w-12 h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0">
+              <UserIcon />
+            </div>
+            <div>
+              <p className="font-bold text-lg text-white">Новый администратор</p>
+              <p className="text-sm text-white/60 mt-0.5">Создание аккаунта администратора</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 space-y-4">
+          <div>
+            <label className="text-xs font-medium text-slate-500 block mb-1.5">
+              Логин <span className="text-red-500">*</span>
+              <span className="text-slate-400 font-normal ml-1">(мин. 3 символа, без пробелов)</span>
+            </label>
+            <input
+              value={login}
+              onChange={e => setLogin(e.target.value)}
+              placeholder="admin2"
+              autoComplete="off"
+              className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+            />
+            {login && !loginValid && <p className="text-xs text-red-500 mt-1">Мин. 3 символа, без пробелов</p>}
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-500 block mb-1.5">
+              Пароль <span className="text-red-500">*</span>
+              <span className="text-slate-400 font-normal ml-1">(мин. 8 символов)</span>
+            </label>
+            <div className="relative">
+              <input
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                autoComplete="new-password"
+                className="w-full px-3 py-2 pr-10 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+              />
+              <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer">
+                {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </div>
+            {password && !passwordValid && <p className="text-xs text-red-500 mt-1">Минимум 8 символов</p>}
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-500 block mb-1.5">ФИО</label>
+            <input
+              value={fullName}
+              onChange={e => setFullName(e.target.value)}
+              placeholder="Иванов Иван Иванович"
+              className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+            />
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end shrink-0">
+          <Button onClick={() => createMut.mutate()} disabled={!canSave} className="bg-purple-600 hover:bg-purple-700 cursor-pointer">
             {createMut.isPending ? 'Создание...' : 'Создать'}
           </Button>
         </div>

@@ -5,6 +5,7 @@ export type { ServiceRequest, AdditionRequest, ShareRequest, DocumentRequest }
 
 interface ListParams {
   status?: string
+  search?: string
   page?: number
   size?: number
 }

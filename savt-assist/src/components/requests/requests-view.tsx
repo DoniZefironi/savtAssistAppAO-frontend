@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -77,14 +77,22 @@ export function RequestsView() {
   const [tab, setTab] = useState<Tab>('service')
   const [statusFilter, setStatusFilter] = useState('all')
   const [page, setPage] = useState(1)
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
   const [selectedService, setSelectedService] = useState<ServiceRequest | null>(null)
   const [selectedAddition, setSelectedAddition] = useState<AdditionRequest | null>(null)
   const [selectedShare, setSelectedShare] = useState<ShareRequest | null>(null)
   const [selectedDocRequest, setSelectedDocRequest] = useState<DocumentRequest | null>(null)
 
-  const handleTabChange = (t: Tab) => { setTab(t); setStatusFilter('all'); setPage(1) }
+  useEffect(() => {
+    const t = setTimeout(() => { setSearch(searchInput); setPage(1) }, 300)
+    return () => clearTimeout(t)
+  }, [searchInput])
+
+  const handleTabChange = (t: Tab) => { setTab(t); setStatusFilter('all'); setPage(1); setSearchInput(''); setSearch('') }
   const handleFilterChange = (f: string) => { setStatusFilter(f); setPage(1) }
   const sp = statusFilter === 'all' ? undefined : statusFilter
+  const sq = search || undefined
 
   const svcQ = useQuery({
     queryKey: ['service-requests', statusFilter, page],
@@ -92,13 +100,13 @@ export function RequestsView() {
     enabled: tab === 'service',
   })
   const addQ = useQuery({
-    queryKey: ['addition-requests', statusFilter, page],
-    queryFn: () => requestsApi.getAdditions({ status: sp, page, size: 20 }),
+    queryKey: ['addition-requests', statusFilter, search, page],
+    queryFn: () => requestsApi.getAdditions({ status: sp, search: sq, page, size: 20 }),
     enabled: tab === 'additions',
   })
   const shrQ = useQuery({
-    queryKey: ['share-requests', statusFilter, page],
-    queryFn: () => requestsApi.getShares({ status: sp, page, size: 20 }),
+    queryKey: ['share-requests', statusFilter, search, page],
+    queryFn: () => requestsApi.getShares({ status: sp, search: sq, page, size: 20 }),
     enabled: tab === 'shares',
   })
   const docQ = useQuery({
@@ -136,7 +144,18 @@ export function RequestsView() {
         </div>
       </div>
 
-      <div className="px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 flex gap-2 flex-wrap">
+      <div className="px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
+        {(tab === 'additions' || tab === 'shares') && (
+          <div className="relative mr-2">
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            <input
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              placeholder="Поиск по ФИО, телефону..."
+              className="pl-8 pr-3 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:border-[#4A8FE7] w-52"
+            />
+          </div>
+        )}
         {filters.map(f => (
           <button
             key={f.value}

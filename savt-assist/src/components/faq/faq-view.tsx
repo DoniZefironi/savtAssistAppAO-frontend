@@ -17,6 +17,7 @@ function fmtDate(d: string) {
 
 export function FaqView() {
   const qc = useQueryClient()
+  const [catCollapsed, setCatCollapsed] = useState(false)
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null)
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
@@ -86,7 +87,10 @@ export function FaqView() {
       {/* Body */}
       <div className="flex flex-1 overflow-hidden">
         {/* Category panel */}
-        <div className="w-52 shrink-0 border-r border-slate-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 flex flex-col overflow-y-auto">
+        <div className={cn(
+          'shrink-0 border-r border-slate-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 flex flex-col overflow-hidden transition-[width] duration-200',
+          catCollapsed ? 'w-0 border-r-0' : 'w-52'
+        )}>
           <div className="p-3 space-y-0.5">
             <button
               onClick={() => handleCatSelect(null)}
@@ -120,6 +124,15 @@ export function FaqView() {
             </button>
           </div>
         </div>
+
+        {/* Toggle button */}
+        <button
+          onClick={() => setCatCollapsed(v => !v)}
+          title={catCollapsed ? 'Показать категории' : 'Скрыть категории'}
+          className="shrink-0 w-5 flex items-center justify-center bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-700/60 text-slate-300 hover:text-slate-500 dark:hover:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+        >
+          {catCollapsed ? <ChevronRightIcon className="w-3 h-3" /> : <ChevronLeftIcon className="w-3 h-3" />}
+        </button>
 
         {/* Entries list */}
         <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900">
@@ -472,4 +485,10 @@ function TrashIcon({ className }: { className?: string }) {
 }
 function SearchIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+}
+function ChevronLeftIcon({ className }: { className?: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+}
+function ChevronRightIcon({ className }: { className?: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
 }

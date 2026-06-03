@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'operator' | 'user'
+export type UserRole = 'superadmin' | 'admin' | 'operator' | 'user'
 
 export interface User {
   id: number
@@ -29,6 +29,7 @@ export interface Cabinet {
   warranty_status: 'active' | 'expiring_soon' | 'expired' | null
   warranty_starts_at: string | null
   warranty_ends_at: string | null
+  tags?: { id: number; name: string; scope: string }[]
   created_at: string
 }
 

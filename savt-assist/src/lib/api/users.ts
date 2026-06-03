@@ -49,7 +49,13 @@ export const usersApi = {
     apiClient.get(`/admin/users/${id}`).then(r => r.data),
 
   createOperator: (data: { login: string; password: string; full_name?: string | null }): Promise<AdminUser> =>
-    apiClient.post('/admin/users/operators', data).then(r => r.data),
+    apiClient.post('/admin/operators', data).then(r => r.data),
+
+  deleteOperator: (id: number): Promise<void> =>
+    apiClient.delete(`/admin/operators/${id}`).then(() => undefined),
+
+  createAdmin: (data: { login: string; password: string; full_name?: string | null }): Promise<AdminUser> =>
+    apiClient.post('/admin/admins', data).then(r => r.data),
 
   verify: (id: number) => apiClient.post(`/admin/users/${id}/verify`, {}),
   unverify: (id: number) => apiClient.post(`/admin/users/${id}/unverify`, {}),

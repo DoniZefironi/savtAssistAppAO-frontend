@@ -66,6 +66,9 @@ export const cabinetsApi = {
     await apiClient.delete(`/admin/cabinets/${id}`)
   },
 
+  updateCabinetTags: (cabinetId: number, tagIds: number[]): Promise<void> =>
+    apiClient.put(`/admin/cabinets/${cabinetId}/tags`, { tag_ids: tagIds }).then(() => undefined),
+
   getCabinetUsers: async (cabinetId: number): Promise<CabinetUser[]> => {
     const { data } = await apiClient.get(`/admin/cabinets/${cabinetId}/users`)
     return data

@@ -58,11 +58,14 @@ docker exec -it savt-backend-db-1 psql -U postgres -d savt
 
 API для управления пользователями, шкафами управления (ШУ), документацией, QR-кодами, чатами, сервисными заявками, уведомлениями, базой знаний и FAQ.
 
-**Роли:**
+**Роли (иерархия от низшей к высшей):**
 1. **Пользователь** (`user`) — добавляет ШУ, пользуется чатом поддержки, просматривает/запрашивает документацию, создаёт сервисные заявки.
-2. **Оператор** (`operator`) — отвечает в чате, обрабатывает заявки. Создаётся через `POST /admin/users/operators` или CLI.
-3. **Администратор** (`admin`) — полное управление всеми данными. Создаётся только через CLI.
-4. **Бот** (`bot`) — системная роль для Аси, не отображается в списках пользователей.
+2. **Оператор** (`operator`) — отвечает в чате, просматривает все данные. Создаётся через `POST /admin/users/operators` или CLI.
+3. **Администратор** (`admin`) — полное управление данными, создаёт операторов. Создаётся суперадмином через API или CLI.
+4. **Суперадмин** (`superadmin`) — управляет администраторами, имеет все права. Создаётся **только через CLI**.
+5. **Бот** (`bot`) — системная роль для Аси, не отображается в списках пользователей.
+
+> Иерархия: каждая роль выше автоматически имеет все права более низкой роли.
 
 ---
 
@@ -700,7 +703,7 @@ POST /upload/voice (multipart/form-data, поле: file)
 Создание нового ШУ. `unique_code` генерируется автоматически (64-бит случайный код).
 ```json
 {
-  "type": "Вентиляционная установка",
+  "type": "вентиляционная установка",
   "object_number": "29_099",
   "description": "Описание",
   "warranty_starts_at": "2025-01-01T00:00:00Z",
@@ -710,33 +713,47 @@ POST /upload/voice (multipart/form-data, поле: file)
   "purpose": "Вентиляция"
 }
 ```
-Ответ — полная информация о созданном ШУ включая `unique_code`.
+
+**Поле `type`:**
+- Приводится к нижнему регистру автоматически (`"Вентиляция"` = `"вентиляция"`)
+- Если тип новый — создаётся тег `scope="cabinet_type"` автоматически
+- На фронте: получить список готовых типов через `GET /tags?scope=cabinet_type` и показать выпадающий список
+
+Ответ — полная информация о созданном ШУ включая `unique_code` и `tags`.
 
 ---
 
 ### GET `/admin/cabinets`
-Список всех ШУ. Параметры:
-- `search` — поиск по типу, номеру объекта, названию
-- `sort_by` — `type`, `warranty_ends_at`, `object_number`, `created_at`
+Список всех ШУ. Доступно оператору и администратору. Параметры:
+- `search` — поиск по типу, номеру объекта, названию, назначению, описанию, комментарию
+- `tag_ids` — фильтр по тегам (`?tag_ids=1&tag_ids=2`)
+- `sort_by` — `type`, `warranty_ends_at`, `object_number`, `admin_internal_name`, `created_at`
 - `sort_order` — `asc`, `desc`
-- `page` — номер страницы (по умолчанию `1`)
-- `size` — элементов на странице (по умолчанию `20`, максимум `100`)
+- `page`, `size` — пагинация (по умолч. `1` / `20`, максимум `100`)
 
-Ответ:
+Каждый элемент содержит:
 ```json
 {
-  "items": [...],
-  "total": 150,
-  "page": 1,
-  "size": 20,
-  "pages": 8
+  "id": 1,
+  "unique_code": "A3F7BC12",
+  "type": "Вентиляционная установка",
+  "object_number": "29_099",
+  "purpose": "Вентиляция",
+  "warranty_starts_at": "2025-01-01T00:00:00Z",
+  "warranty_ends_at": "2027-01-01T00:00:00Z",
+  "warranty_status": "active",
+  "admin_internal_name": "ШУ-18К",
+  "admin_comment": "Внутренний комментарий",
+  "tags": [{ "id": 2, "name": "Электрика", "scope": "cabinet" }],
+  "created_at": "2026-05-01T10:00:00Z"
 }
 ```
+`warranty_status`: `active`, `expiring_soon` (≤30 дней), `expired`.
 
 ---
 
 ### GET `/admin/cabinets/{cabinet_id}`
-Детальная информация о ШУ.
+Детальная информация о ШУ с тегами.
 
 ---
 
@@ -750,7 +767,16 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ---
 
 ### PATCH `/admin/cabinets/{cabinet_id}`
-Обновление данных ШУ (все поля опциональны).
+Обновление данных ШУ (все поля опциональны). Возвращает обновлённый ШУ с тегами.
+
+---
+
+### PUT `/admin/cabinets/{cabinet_id}/tags`
+Привязать теги к ШУ (полная замена). Только для администратора. Теги должны иметь `scope="cabinet"`.
+```json
+{ "tag_ids": [1, 2] }
+```
+Пустой список снимает все теги. `204 No Content`.
 
 ---
 
@@ -786,10 +812,15 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 
 ---
 
-## Рут `admin: cabinet requests` — заявки по ШУ (админ/оператор)
+## Рут `admin: cabinet requests` — заявки по ШУ (просмотр — оператор/админ, одобрение/отклонение — только админ)
 
 ### GET `/admin/cabinet-requests/additions`
-Заявки на добавление ШУ через фото. Параметры: `status=pending|approved|rejected`, `page`, `size`
+Заявки на добавление ШУ через фото. Параметры:
+- `status` — `pending` / `approved` / `rejected`
+- `search` — поиск по ФИО, телефону, организации пользователя
+- `sort_by` — `created_at` (по умолч.), `status`, `user_full_name`
+- `sort_order` — `asc` / `desc`
+- `page`, `size`
 
 ```json
 [
@@ -798,6 +829,10 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
     "user_id": 8,
     "user_full_name": "Иванов Иван",
     "user_phone": "+375291234567",
+    "user_type": "individual",
+    "organization_name": null,
+    "user_is_verified": false,
+    "user_registered_at": "2026-04-01T10:00:00Z",
     "photo_url": "/static/photos/abc.jpg",
     "user_comment": "Шкаф на заводе",
     "status": "pending",
@@ -834,7 +869,12 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ---
 
 ### GET `/admin/cabinet-requests/shares`
-Заявки на доступ к уже существующему ШУ (сканирован QR, но ШУ уже занят). Параметры: `status=pending|approved|rejected`, `page`, `size`
+Заявки на доступ к уже существующему ШУ (сканирован QR, но ШУ уже занят). Параметры:
+- `status` — `pending` / `approved` / `rejected`
+- `search` — поиск по ФИО/телефону пользователя, типу/номеру/названию ШУ
+- `sort_by` — `created_at` (по умолч.), `status`, `user_full_name`, `cabinet_object_number`
+- `sort_order` — `asc` / `desc`
+- `page`, `size`
 
 ```json
 [
@@ -843,6 +883,10 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
     "user_id": 10,
     "user_full_name": "Петров Пётр",
     "user_phone": "+375291111111",
+    "user_type": "organization",
+    "organization_name": "ООО Ромашка",
+    "user_is_verified": true,
+    "user_registered_at": "2026-03-15T08:00:00Z",
     "cabinet_id": 5,
     "cabinet_type": "Вентиляционная установка",
     "cabinet_object_number": "29_099",
@@ -879,6 +923,19 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 
 > Список **не показывает** пользователей с ролями `admin` и `bot` (системные аккаунты). Только `user` и `operator`.
 
+### POST `/admin/users/admins`
+Создать администратора. Только для **суперадмина**. Логируется в `audit_log`.
+```json
+{
+  "login": "admin2",
+  "password": "securePass8",
+  "full_name": "Сидоров Сидор"
+}
+```
+Ответ: созданный пользователь (`AdminUserListOut`), `201 Created`.
+
+---
+
 ### POST `/admin/users/operators`
 Создать оператора. Только для администратора. Логируется в `audit_log`.
 ```json
@@ -894,24 +951,47 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 
 Ответ: созданный пользователь (`AdminUserListOut`), `201 Created`.
 
-> Создание **администратора** — только через CLI:
+> Создание **администратора** — через API (только суперадмин) или CLI:
 > ```bash
 > docker exec savt-backend-api-1 python -m app.cli create-admin <login> <password> [full_name]
 > ```
 
 ---
 
+### DELETE `/admin/users/operators/{user_id}`
+Удалить оператора. Только для администратора. Логируется в `audit_log`.
+
+Что происходит:
+- Все сессии оператора немедленно отзываются (принудительный logout)
+- Аккаунт деактивируется и анонимизируется
+- Переписка в чатах сохраняется
+- Оператор исчезает из всех списков
+
+Ответ: `204 No Content`.
+
+---
+
 ### GET `/admin/users`
-Список пользователей с ролями `user` и `operator`. Параметры:
-- `search` — поиск по ФИО, телефону, организации
+Только пользователи (`role=user`). Параметры:
+- `search` — поиск по ФИО, телефону, логину, email, организации
 - `is_active` — `true` / `false`
-- `role` — фильтр по роли: `user` / `operator`
-- `sort_by` — сортировка: `created_at` (по умолч.), `full_name`, `role`
-- `sort_order` — `asc` / `desc` (по умолч. `desc`)
+- `sort_by` — `created_at` (по умолч.), `full_name`, `phone`, `email`
+- `sort_order` — `asc` / `desc`
 - `page`, `size` — пагинация (по умолч. `page=1`, `size=20`, максимум `100`)
 
-При `sort_by=role` операторы показываются первыми.
+---
 
+### GET `/admin/operators`
+Только операторы (`role=operator`). Параметры: аналогично `/admin/users`.
+
+---
+
+### GET `/admin/admins`
+Только администраторы (`role=admin`). **Только для суперадмина.** Параметры: аналогично `/admin/users`.
+
+---
+
+Все три эндпоинта возвращают `PageOut[AdminUserListOut]`:
 ```json
 {
   "items": [
@@ -1255,19 +1335,33 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 
 ## Рут `tags` — теги
 
+Теги разделены по области видимости (`scope`):
+- `document` — теги для документов и статей базы знаний
+- `cabinet` — теги для ШУ
+- `cabinet_type` — типы ШУ (создаются автоматически при вводе нового типа)
+
 ### GET `/tags`
-Список всех тегов (все авторизованные пользователи).
+Список тегов. Параметры:
+- `scope` — фильтр: `document` / `cabinet` / `cabinet_type`. Без фильтра — все теги.
+
 ```json
-[{ "id": 1, "name": "паспорт" }, { "id": 2, "name": "схема" }]
+[
+  { "id": 1, "name": "паспорт", "scope": "document" },
+  { "id": 2, "name": "электрика", "scope": "cabinet_type" }
+]
 ```
+
+> Для автодополнения типа ШУ на фронте: `GET /tags?scope=cabinet_type`
 
 ---
 
 ### POST `/admin/tags`
-Создать тег.
+Создать тег вручную.
 ```json
-{ "name": "паспорт" }
+{ "name": "паспорт", "scope": "document" }
 ```
+- `scope`: `document` / `cabinet` / `cabinet_type`
+- Имя тега уникально в рамках одной области (сравнение без учёта регистра)
 
 ---
 
@@ -1330,6 +1424,7 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
     "chat_type": "cabinet",
     "cabinet_id": 5,
     "cabinet_name": "ШУ-18К",
+    "cabinet_object_number": "29_099",
     "last_message_text": "Здравствуйте, помогите",
     "last_message_at": "2026-05-15T10:00:00Z",
     "unread_count": 2,
@@ -1351,6 +1446,7 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 История сообщений. Параметры:
 - `before_id` — ID сообщения, загрузить более старые (cursor pagination для бесконечного скролла)
 - `limit` — количество (по умолчанию `30`, максимум `100`)
+- `search` — поиск по тексту сообщений
 
 Сообщения возвращаются от новых к старым.
 ```json
@@ -1423,12 +1519,19 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ## Рут `operator` — операторский интерфейс
 
 ### GET `/operator/chats`
-Все `cabinet` и `support` чаты. Сортировка: сначала ожидающие оператора (`operator_requested=true`).
+Все `cabinet` и `support` чаты. Параметры:
+- `search` — поиск по имени/телефону пользователя, номеру/типу/названию ШУ
+
+Сортировка: сначала ожидающие оператора (`operator_requested=true`), затем по последнему сообщению.
+
+Каждый чат содержит `user_id`, `user_name`, `cabinet_object_number`.
 
 ---
 
 ### GET `/operator/chats/{chat_id}/messages`
-История сообщений чата (аналогично пользовательскому, но без ограничения владельца).
+История сообщений чата. Параметры:
+- `before_id`, `limit` — cursor pagination
+- `search` — поиск по тексту сообщений
 
 ---
 
@@ -1707,7 +1810,9 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 Список записей. Параметры:
 - `category_id` — фильтр по категории
 - `tag_ids` — фильтр по тегам (`?tag_ids=1&tag_ids=2`)
-- `search` — поиск по заголовку
+- `search` — поиск по заголовку **и содержимому**
+- `sort_by` — `created_at` (по умолч.), `updated_at`, `title`
+- `sort_order` — `asc` / `desc`
 - `page`, `size` — пагинация
 
 ```json
@@ -1720,7 +1825,7 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
       "slug": "pasport-shu-a1b2c3",
       "description": "Техническая документация для ВУ-100",
       "created_at": "2026-05-15T10:00:00Z",
-      "tags": [{ "id": 1, "name": "паспорт" }],
+      "tags": [{ "id": 1, "name": "паспорт", "scope": "document" }],
       "attachment_count": 3
     }
   ],
@@ -1842,7 +1947,9 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ### GET `/faq/entries`
 Список вопросов. Параметры:
 - `category_id` — фильтр по категории
-- `search` — поиск по тексту вопроса
+- `search` — поиск по тексту **вопроса и ответа**
+- `sort_by` — `created_at` (по умолч.), `updated_at`, `question`
+- `sort_order` — `asc` / `desc`
 - `page`, `size` — пагинация
 
 ```json
@@ -2046,11 +2153,18 @@ gunzip -c backups/savt_backup_2026-05-18_03-00-00.sql.gz \
 ## Управление через CLI
 
 ```bash
-# Создать администратора (только через CLI — API не предусмотрен намеренно)
+# Создать суперадмина (только через CLI — намеренно нет API)
+docker exec savt-backend-api-1 python -m app.cli create-superadmin <login> <password> [full_name]
+
+# Создать администратора через CLI (альтернатива API POST /admin/users/admins, доступна суперадмину)
 docker exec savt-backend-api-1 python -m app.cli create-admin <login> <password> [full_name]
 
 # Создать оператора через CLI (альтернатива API POST /admin/users/operators)
 docker exec savt-backend-api-1 python -m app.cli create-operator <login> <password> [full_name]
 ```
 
-> Операторов можно создавать и через API (`POST /admin/users/operators`), и через CLI — результат одинаковый. Администратора — только CLI.
+| Кто создаёт | Через CLI | Через API |
+|---|---|---|
+| Суперадмин | ✅ | ❌ только CLI |
+| Администратор | ✅ | ✅ `POST /admin/users/admins` (суперадмин) |
+| Оператор | ✅ | ✅ `POST /admin/users/operators` (администратор) |
