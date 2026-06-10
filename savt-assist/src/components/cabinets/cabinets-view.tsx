@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState, useEffect, useRef } from 'react'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -12,8 +12,9 @@ import { CreateCabinetDialog } from './create-cabinet-dialog'
 import { QrDialog } from './qr-dialog'
 import { cabinetsApi } from '@/lib/api/cabinets'
 import { useDebounce } from '@/lib/hooks/use-debounce'
-import { Pagination } from '@/components/ui/pagination'
 import type { Cabinet } from '@/types'
+
+const PAGE_SIZE = 20
 
 const SORT_OPTIONS = [
   { label: 'По типу', value: 'type' },
@@ -22,6 +23,7 @@ const SORT_OPTIONS = [
 ] as const
 
 type SortValue = (typeof SORT_OPTIONS)[number]['value']
+type ViewMode = 'list' | 'grid'
 
 interface Props {
   isAdmin: boolean
@@ -32,20 +34,53 @@ export function CabinetsView({ isAdmin }: Props) {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortValue>('created_at')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
-  const [page, setPage] = useState(1)
+  const [view, setView] = useState<ViewMode>('list')
   const [openId, setOpenId] = useState<number | null>(null)
   const [openMode, setOpenMode] = useState<'view' | 'edit'>('view')
-  const [loadingId, setLoadingId] = useState<number | null>(null)
   const [qrCabinet, setQrCabinet] = useState<Cabinet | null>(null)
   const [showCreate, setShowCreate] = useState(false)
 
   const debouncedSearch = useDebounce(search)
+  const sentinelRef = useRef<HTMLDivElement>(null)
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['cabinets', { search: debouncedSearch, sortBy, sortOrder, page }],
-    queryFn: () =>
-      cabinetsApi.getAll({ search: debouncedSearch || undefined, sort_by: sortBy, sort_order: sortOrder, page, size: 10 }),
+  const {
+    data,
+    isLoading,
+    isError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetch,
+  } = useInfiniteQuery({
+    queryKey: ['cabinets', { search: debouncedSearch, sortBy, sortOrder }],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }: { pageParam: number }) =>
+      cabinetsApi.getAll({
+        search: debouncedSearch || undefined,
+        sort_by: sortBy,
+        sort_order: sortOrder,
+        page: pageParam,
+        size: PAGE_SIZE,
+      }),
+    getNextPageParam: (lastPage) =>
+      lastPage.page < lastPage.pages ? lastPage.page + 1 : undefined,
   })
+
+  // Infinite scroll — trigger next page when sentinel enters viewport
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage()
+        }
+      },
+      { rootMargin: '200px' }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => cabinetsApi.delete(id),
@@ -63,13 +98,9 @@ export function CabinetsView({ isAdmin }: Props) {
       setSortBy(value)
       setSortOrder('asc')
     }
-    setPage(1)
   }
 
-  const handleSearchChange = (val: string) => {
-    setSearch(val)
-    setPage(1)
-  }
+  const handleSearchChange = (val: string) => setSearch(val)
 
   const openDialog = (id: number, mode: 'view' | 'edit') => {
     setOpenMode(mode)
@@ -81,27 +112,57 @@ export function CabinetsView({ isAdmin }: Props) {
     deleteMutation.mutate(id)
   }
 
-  const items = data?.items ?? []
+  const allItems = data?.pages.flatMap((p) => p.items) ?? []
+  const total = data?.pages[0]?.total ?? 0
 
   return (
     <div className="flex flex-col h-full">
+      {/* ── Header ── */}
       <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
         <div className="flex items-end justify-between mb-4">
           <div>
             {data && (
-              <p className="text-xs text-slate-400 font-medium mb-0.5">{data.total} устройств</p>
+              <p className="text-xs text-slate-400 font-medium mb-0.5">{total} устройств</p>
             )}
             <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Шкафы управления</h1>
           </div>
-          {isAdmin && (
-            <Button
-              onClick={() => setShowCreate(true)}
-              className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 gap-2 cursor-pointer"
-            >
-              <PlusIcon />
-              Добавить ШУ
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {/* View toggle */}
+            <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setView('list')}
+                title="Список"
+                className={`p-2 transition-colors cursor-pointer ${
+                  view === 'list'
+                    ? 'bg-[#1B3A72] text-white'
+                    : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+                }`}
+              >
+                <ListIcon />
+              </button>
+              <button
+                onClick={() => setView('grid')}
+                title="Сетка"
+                className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${
+                  view === 'grid'
+                    ? 'bg-[#1B3A72] text-white'
+                    : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+                }`}
+              >
+                <GridIcon />
+              </button>
+            </div>
+
+            {isAdmin && (
+              <Button
+                onClick={() => setShowCreate(true)}
+                className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 gap-2 cursor-pointer"
+              >
+                <PlusIcon />
+                Добавить ШУ
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="relative">
@@ -122,7 +183,7 @@ export function CabinetsView({ isAdmin }: Props) {
           )}
         </div>
 
-        <div className="flex gap-2 mt-3">
+        <div className="flex gap-2 mt-3 flex-wrap">
           {SORT_OPTIONS.map((opt) => {
             const active = sortBy === opt.value
             return (
@@ -144,11 +205,12 @@ export function CabinetsView({ isAdmin }: Props) {
         </div>
       </div>
 
+      {/* ── Content ── */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
         {isLoading && (
-          <div className="space-y-3">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <Skeleton key={i} className="h-20 w-full rounded-xl" />
+          <div className={view === 'grid' ? 'grid grid-cols-2 gap-3' : 'space-y-3'}>
+            {Array.from({ length: view === 'grid' ? 6 : 5 }).map((_, i) => (
+              <Skeleton key={i} className={view === 'grid' ? 'h-36 w-full rounded-xl' : 'h-20 w-full rounded-xl'} />
             ))}
           </div>
         )}
@@ -160,21 +222,22 @@ export function CabinetsView({ isAdmin }: Props) {
           </div>
         )}
 
-        {!isLoading && !isError && items.length === 0 && (
+        {!isLoading && !isError && allItems.length === 0 && (
           <div className="flex flex-col items-center justify-center h-48 text-slate-400">
             <p className="text-lg">📦</p>
             <p className="mt-2">{search ? 'Ничего не найдено' : 'Нет шкафов управления'}</p>
           </div>
         )}
 
-        {!isLoading && items.length > 0 && (
-          <div className="space-y-3">
-            {items.map((cabinet) => (
+        {allItems.length > 0 && (
+          <div className={view === 'grid' ? 'grid grid-cols-2 gap-3' : 'space-y-3'}>
+            {allItems.map((cabinet) => (
               <CabinetCard
                 key={cabinet.id}
                 cabinet={cabinet}
                 isAdmin={isAdmin}
-                loading={loadingId === cabinet.id}
+                view={view}
+                loading={false}
                 onOpen={() => openDialog(cabinet.id, 'view')}
                 onEdit={() => openDialog(cabinet.id, 'edit')}
                 onQr={() => setQrCabinet(cabinet)}
@@ -183,11 +246,25 @@ export function CabinetsView({ isAdmin }: Props) {
             ))}
           </div>
         )}
-      </div>
 
-      {data && data.pages > 1 && (
-        <Pagination page={page} pages={data.pages} onPage={setPage} />
-      )}
+        {/* Infinite scroll sentinel */}
+        <div ref={sentinelRef} className="h-1 mt-2" />
+
+        {isFetchingNextPage && (
+          <div className="flex justify-center py-4">
+            <svg className="w-5 h-5 text-slate-400 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+          </div>
+        )}
+
+        {!hasNextPage && allItems.length > 0 && (
+          <p className="text-center text-xs text-slate-300 dark:text-slate-600 py-4">
+            Все {total} записей загружены
+          </p>
+        )}
+      </div>
 
       <CabinetDetailDialog cabinetId={openId} isAdmin={isAdmin} initialMode={openMode} onClose={() => setOpenId(null)} />
       {isAdmin && <CreateCabinetDialog open={showCreate} onClose={() => setShowCreate(false)} />}
@@ -207,6 +284,20 @@ function PlusIcon() {
   return (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    </svg>
+  )
+}
+function ListIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+    </svg>
+  )
+}
+function GridIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
     </svg>
   )
 }

@@ -45,9 +45,6 @@ export function AdminSidebar() {
       <div className="border-b border-white/10 px-3 py-5">
         {collapsed ? (
           <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 bg-white/15 rounded-lg flex items-center justify-center">
-              <ShieldIcon className="w-5 h-5 text-white" />
-            </div>
             <button
               onClick={() => setCollapsed(false)}
               title="Развернуть"
@@ -99,14 +96,19 @@ export function AdminSidebar() {
         })}
       </nav>
 
-      <div className='pb-4 pl-4'>
-        <Image 
-        src='/logo-small.png'
-        width={225}
-        height={225}
-        alt='savt'
-        />
-      </div>
+      {collapsed ? (
+        <div>
+        </div>
+      ) : (
+        <div className='pb-4 pl-4'>
+          <Image 
+          src='/logo-small.png'
+          width={225}
+          height={225}
+          alt='savt'
+          />
+        </div>
+      )}
     </aside>
   )
 }

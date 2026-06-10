@@ -6,6 +6,9 @@ export type { ServiceRequest, AdditionRequest, ShareRequest, DocumentRequest }
 interface ListParams {
   status?: string
   search?: string
+  cabinet_id?: number
+  sort_by?: string
+  sort_order?: 'asc' | 'desc'
   page?: number
   size?: number
 }

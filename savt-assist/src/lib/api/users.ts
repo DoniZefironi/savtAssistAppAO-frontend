@@ -42,6 +42,16 @@ interface ListParams {
 }
 
 export const usersApi = {
+  getUserList: (params?: ListParams): Promise<PaginatedResponse<AdminUser>> =>
+    apiClient.get('/admin/users', { params }).then(r => r.data),
+
+  getOperatorList: (params?: ListParams): Promise<PaginatedResponse<AdminUser>> =>
+    apiClient.get('/admin/operators', { params }).then(r => r.data),
+
+  getAdminList: (params?: ListParams): Promise<PaginatedResponse<AdminUser>> =>
+    apiClient.get('/admin/admins', { params }).then(r => r.data),
+
+  /** @deprecated use getUserList / getOperatorList / getAdminList */
   getList: (params?: ListParams): Promise<PaginatedResponse<AdminUser>> =>
     apiClient.get('/admin/users', { params }).then(r => r.data),
 

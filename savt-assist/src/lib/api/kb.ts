@@ -77,7 +77,15 @@ export const kbApi = {
   deleteCategory: (id: number) => apiClient.delete(`/admin/kb/categories/${id}`),
 
   // Articles
-  listArticles: (params?: { category_id?: number; search?: string; page?: number; size?: number }): Promise<PaginatedResponse<KbArticleList>> =>
+  listArticles: (params?: {
+    category_id?: number
+    search?: string
+    sort_by?: string
+    sort_order?: string
+    tag_ids?: number[]
+    page?: number
+    size?: number
+  }): Promise<PaginatedResponse<KbArticleList>> =>
     apiClient.get('/kb/articles', { params }).then(r => r.data),
 
   getArticle: (id: number): Promise<KbArticleDetail> =>
@@ -102,9 +110,13 @@ export const kbApi = {
     apiClient.delete(`/admin/kb/articles/${articleId}/attachments/${attId}`),
 
   downloadAttachment: async (articleId: number, attId: number, filename: string) => {
+    const token = Cookies.get('access_token')
     const url = `${API_URL}/kb/articles/${articleId}/attachments/${attId}/download`
     try {
-      const res = await fetch(url)
+      const res = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!res.ok) throw new Error('Download failed')
       const blob = await res.blob()
       const blobUrl = URL.createObjectURL(blob)
       const a = document.createElement('a')

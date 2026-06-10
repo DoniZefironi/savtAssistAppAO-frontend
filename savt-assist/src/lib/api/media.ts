@@ -91,6 +91,9 @@ export const mediaApi = {
 
   deletePhoto: (photoId: number) => apiClient.delete(`/admin/photos/${photoId}`),
 
+  updatePhoto: (photoId: number, caption: string | null, sort_order: number): Promise<CabinetPhoto> =>
+    apiClient.patch(`/admin/photos/${photoId}`, { caption, sort_order }).then(r => r.data),
+
   updateDocumentTags: (docId: number, tagIds: number[]): Promise<void> =>
     apiClient.put(`/admin/documents/${docId}/tags`, { tag_ids: tagIds }).then(() => undefined),
 

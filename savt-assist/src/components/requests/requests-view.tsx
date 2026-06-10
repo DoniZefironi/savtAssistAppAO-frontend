@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState, useEffect, useRef } from 'react'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { API_URL } from '@/lib/api/client'
@@ -9,7 +9,6 @@ import { requestsApi } from '@/lib/api/requests'
 import type { ServiceRequest, AdditionRequest, ShareRequest, DocumentRequest } from '@/lib/api/requests'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
-import { Pagination } from '@/components/ui/pagination'
 import { RequestCard, ServiceCardIcon, AdditionCardIcon, ShareCardIcon, StatusPill, TypePill } from './request-card'
 
 type Tab = 'service' | 'additions' | 'shares' | 'docs'
@@ -27,12 +26,36 @@ const SVC_FILTERS = [
   { value: 'in_progress', label: 'В работе' },
   { value: 'closed', label: 'Закрытые' },
 ]
-
 const REQ_FILTERS = [
   { value: 'all', label: 'Все' },
   { value: 'pending', label: 'Ожидают' },
   { value: 'approved', label: 'Одобренные' },
   { value: 'rejected', label: 'Отклонённые' },
+]
+
+const SVC_SORT = [
+  { value: 'created_at', label: 'По дате' },
+  { value: 'status', label: 'По статусу' },
+  { value: 'user_full_name', label: 'По имени' },
+  { value: 'cabinet_object_number', label: 'По ШУ' },
+  { value: 'request_type', label: 'По типу' },
+]
+const ADDITIONS_SORT = [
+  { value: 'created_at', label: 'По дате' },
+  { value: 'status', label: 'По статусу' },
+  { value: 'user_full_name', label: 'По имени' },
+]
+const SHARES_SORT = [
+  { value: 'created_at', label: 'По дате' },
+  { value: 'status', label: 'По статусу' },
+  { value: 'user_full_name', label: 'По имени' },
+  { value: 'cabinet_object_number', label: 'По ШУ' },
+]
+const DOC_SORT = [
+  { value: 'created_at', label: 'По дате' },
+  { value: 'status', label: 'По статусу' },
+  { value: 'user_full_name', label: 'По имени' },
+  { value: 'doc_type', label: 'По типу' },
 ]
 
 function svcStatusCls(s: string) {
@@ -56,14 +79,19 @@ function reqStatusLabel(s: string) {
   return s === 'pending' ? 'Ожидает' : s === 'approved' ? 'Одобрена' : 'Отклонена'
 }
 function reqTypeCls(t: string) {
-  return t === 'maintenance'
-    ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-    : t === 'inspection'
-    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-    : 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+  if (t === 'maintenance') return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+  if (t === 'inspection') return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+  if (t === 'other') return 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
+  return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
 }
 function reqTypeLabel(t: string) {
-  return t === 'maintenance' ? 'Обслуживание' : t === 'inspection' ? 'Осмотр' : 'Ремонт'
+  if (t === 'maintenance') return 'Обслуживание'
+  if (t === 'inspection') return 'Осмотр'
+  if (t === 'other') return 'Другое'
+  return 'Ремонт'
+}
+function userTypeLabel(t: string | null) {
+  return t === 'organization' ? 'Организация' : 'Физ. лицо'
 }
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -76,51 +104,106 @@ function toFullUrl(url: string) {
 export function RequestsView() {
   const [tab, setTab] = useState<Tab>('service')
   const [statusFilter, setStatusFilter] = useState('all')
-  const [page, setPage] = useState(1)
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
+  const [sortBy, setSortBy] = useState('created_at')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [selectedService, setSelectedService] = useState<ServiceRequest | null>(null)
   const [selectedAddition, setSelectedAddition] = useState<AdditionRequest | null>(null)
   const [selectedShare, setSelectedShare] = useState<ShareRequest | null>(null)
   const [selectedDocRequest, setSelectedDocRequest] = useState<DocumentRequest | null>(null)
 
+  const sentinelRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
-    const t = setTimeout(() => { setSearch(searchInput); setPage(1) }, 300)
+    const t = setTimeout(() => setSearch(searchInput), 300)
     return () => clearTimeout(t)
   }, [searchInput])
 
-  const handleTabChange = (t: Tab) => { setTab(t); setStatusFilter('all'); setPage(1); setSearchInput(''); setSearch('') }
-  const handleFilterChange = (f: string) => { setStatusFilter(f); setPage(1) }
+  const handleTabChange = (t: Tab) => {
+    setTab(t)
+    setStatusFilter('all')
+    setSearchInput('')
+    setSearch('')
+    setSortBy('created_at')
+    setSortOrder('desc')
+  }
+  const handleFilterChange = (f: string) => setStatusFilter(f)
+  const handleSortClick = (value: string) => {
+    if (sortBy === value) setSortOrder(o => o === 'asc' ? 'desc' : 'asc')
+    else { setSortBy(value); setSortOrder('asc') }
+  }
+
   const sp = statusFilter === 'all' ? undefined : statusFilter
   const sq = search || undefined
 
-  const svcQ = useQuery({
-    queryKey: ['service-requests', statusFilter, page],
-    queryFn: () => requestsApi.getServiceRequests({ status: sp, page, size: 20 }),
+  const svcQ = useInfiniteQuery({
+    queryKey: ['service-requests', sp, sq, sortBy, sortOrder],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }: { pageParam: number }) =>
+      requestsApi.getServiceRequests({ status: sp, search: sq, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
+    getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
     enabled: tab === 'service',
   })
-  const addQ = useQuery({
-    queryKey: ['addition-requests', statusFilter, search, page],
-    queryFn: () => requestsApi.getAdditions({ status: sp, search: sq, page, size: 20 }),
+  const addQ = useInfiniteQuery({
+    queryKey: ['addition-requests', sp, sq, sortBy, sortOrder],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }: { pageParam: number }) =>
+      requestsApi.getAdditions({ status: sp, search: sq, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
+    getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
     enabled: tab === 'additions',
   })
-  const shrQ = useQuery({
-    queryKey: ['share-requests', statusFilter, search, page],
-    queryFn: () => requestsApi.getShares({ status: sp, search: sq, page, size: 20 }),
+  const shrQ = useInfiniteQuery({
+    queryKey: ['share-requests', sp, sq, sortBy, sortOrder],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }: { pageParam: number }) =>
+      requestsApi.getShares({ status: sp, search: sq, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
+    getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
     enabled: tab === 'shares',
   })
-  const docQ = useQuery({
-    queryKey: ['document-requests', statusFilter, page],
-    queryFn: () => requestsApi.getDocumentRequests({ status: sp, page, size: 20 }),
+  const docQ = useInfiniteQuery({
+    queryKey: ['document-requests', sp, sq, sortBy, sortOrder],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }: { pageParam: number }) =>
+      requestsApi.getDocumentRequests({ status: sp, search: sq, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
+    getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
     enabled: tab === 'docs',
   })
 
   const curQ = tab === 'service' ? svcQ : tab === 'additions' ? addQ : tab === 'shares' ? shrQ : docQ
-  const total = curQ.data?.total
+  const total = curQ.data?.pages[0]?.total
+
+  // Infinite scroll sentinel
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && curQ.hasNextPage && !curQ.isFetchingNextPage) {
+          curQ.fetchNextPage()
+        }
+      },
+      { rootMargin: '200px' }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [curQ.hasNextPage, curQ.isFetchingNextPage, curQ.fetchNextPage, tab])
+
+  const svcItems = svcQ.data?.pages.flatMap(p => p.items) ?? []
+  const addItems = addQ.data?.pages.flatMap(p => p.items) ?? []
+  const shrItems = shrQ.data?.pages.flatMap(p => p.items) ?? []
+  const docItems = docQ.data?.pages.flatMap(p => p.items) ?? []
+
   const filters = tab === 'service' ? SVC_FILTERS : REQ_FILTERS
+  const sortOptions =
+    tab === 'service' ? SVC_SORT :
+    tab === 'additions' ? ADDITIONS_SORT :
+    tab === 'shares' ? SHARES_SORT :
+    DOC_SORT
 
   return (
     <div className="flex flex-col h-full">
+      {/* ── Header ── */}
       <div className="px-6 pt-6 pb-0 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60">
         <div className="mb-4">
           {total != null && <p className="text-xs text-slate-400 font-medium mb-0.5">{total} заявок</p>}
@@ -144,18 +227,18 @@ export function RequestsView() {
         </div>
       </div>
 
+      {/* ── Filters / search / sort ── */}
       <div className="px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
-        {(tab === 'additions' || tab === 'shares') && (
-          <div className="relative mr-2">
-            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-            <input
-              value={searchInput}
-              onChange={e => setSearchInput(e.target.value)}
-              placeholder="Поиск по ФИО, телефону..."
-              className="pl-8 pr-3 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:border-[#4A8FE7] w-52"
-            />
-          </div>
-        )}
+        <div className="relative mr-1">
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+          <input
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            placeholder="Поиск..."
+            className="pl-8 pr-3 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:border-[#4A8FE7] w-52"
+          />
+        </div>
+
         {filters.map(f => (
           <button
             key={f.value}
@@ -170,8 +253,33 @@ export function RequestsView() {
             {f.label}
           </button>
         ))}
+
+        {sortOptions.length > 0 && (
+          <>
+            <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />
+            {sortOptions.map(opt => {
+              const active = sortBy === opt.value
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => handleSortClick(opt.value)}
+                  className={cn(
+                    'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+                    active
+                      ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
+                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                  )}
+                >
+                  {opt.label}
+                  {active && <span className="opacity-70">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
+                </button>
+              )
+            })}
+          </>
+        )}
       </div>
 
+      {/* ── Content ── */}
       <div className="flex-1 overflow-y-auto px-6 py-4 bg-slate-50 dark:bg-slate-900">
         {curQ.isLoading && (
           <div className="space-y-2">
@@ -186,23 +294,36 @@ export function RequestsView() {
             <button onClick={() => curQ.refetch()} className="text-sm text-[#1B3A72] hover:underline cursor-pointer">Повторить</button>
           </div>
         )}
+
         {tab === 'service' && !svcQ.isLoading && !svcQ.isError && (
-          <ServiceList items={svcQ.data?.items ?? []} onSelect={setSelectedService} />
+          <ServiceList items={svcItems} onSelect={setSelectedService} />
         )}
         {tab === 'additions' && !addQ.isLoading && !addQ.isError && (
-          <AdditionsList items={addQ.data?.items ?? []} onSelect={setSelectedAddition} />
+          <AdditionsList items={addItems} onSelect={setSelectedAddition} />
         )}
         {tab === 'shares' && !shrQ.isLoading && !shrQ.isError && (
-          <SharesList items={shrQ.data?.items ?? []} onSelect={setSelectedShare} />
+          <SharesList items={shrItems} onSelect={setSelectedShare} />
         )}
         {tab === 'docs' && !docQ.isLoading && !docQ.isError && (
-          <DocumentRequestList items={docQ.data?.items ?? []} onSelect={setSelectedDocRequest} />
+          <DocumentRequestList items={docItems} onSelect={setSelectedDocRequest} />
+        )}
+
+        {/* Infinite scroll sentinel */}
+        <div ref={sentinelRef} className="h-1 mt-2" />
+        {curQ.isFetchingNextPage && (
+          <div className="flex justify-center py-4">
+            <svg className="w-5 h-5 text-slate-400 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+          </div>
+        )}
+        {!curQ.hasNextPage && (total ?? 0) > 0 && (
+          <p className="text-center text-xs text-slate-300 dark:text-slate-600 py-4">
+            Все {total} записей загружены
+          </p>
         )}
       </div>
-
-      {curQ.data && curQ.data.pages > 1 && (
-        <Pagination page={page} pages={curQ.data.pages} onPage={setPage} />
-      )}
 
       {selectedService && <ServiceDialog request={selectedService} onClose={() => setSelectedService(null)} />}
       {selectedAddition && <AdditionDialog request={selectedAddition} onClose={() => setSelectedAddition(null)} />}
@@ -253,6 +374,9 @@ function AdditionsList({ items, onSelect }: { items: AdditionRequest[]; onSelect
           icon={<AdditionCardIcon />}
           title={item.user_full_name ?? '—'}
           subtitle={item.user_phone ?? '—'}
+          meta={item.organization_name
+            ? <TypePill label={item.organization_name} cls="bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400" />
+            : undefined}
           statusBadge={<StatusPill label={reqStatusLabel(item.status)} cls={reqStatusCls(item.status)} />}
           date={fmtDate(item.created_at)}
           onClick={() => onSelect(item)}
@@ -272,6 +396,34 @@ function SharesList({ items, onSelect }: { items: ShareRequest[]; onSelect: (r: 
           icon={<ShareCardIcon />}
           title={item.user_full_name ?? '—'}
           subtitle={`ШУ ${item.cabinet_object_number}`}
+          meta={item.organization_name
+            ? <TypePill label={item.organization_name} cls="bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400" />
+            : undefined}
+          statusBadge={<StatusPill label={reqStatusLabel(item.status)} cls={reqStatusCls(item.status)} />}
+          date={fmtDate(item.created_at)}
+          onClick={() => onSelect(item)}
+        />
+      ))}
+    </div>
+  )
+}
+
+function DocumentRequestList({ items, onSelect }: { items: DocumentRequest[]; onSelect: (r: DocumentRequest) => void }) {
+  if (!items.length) return <Empty text="Нет заявок на документы" />
+  return (
+    <div className="space-y-2">
+      {items.map(item => (
+        <RequestCard
+          key={item.id}
+          icon={<DocRequestCardIcon />}
+          title={item.user_full_name ?? '—'}
+          subtitle={item.cabinet_id ? `ШУ #${item.cabinet_id}` : '—'}
+          meta={
+            <TypePill
+              label={item.doc_type ? item.doc_type.toUpperCase() : `Документ #${item.document_id}`}
+              cls="bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400"
+            />
+          }
           statusBadge={<StatusPill label={reqStatusLabel(item.status)} cls={reqStatusCls(item.status)} />}
           date={fmtDate(item.created_at)}
           onClick={() => onSelect(item)}
@@ -286,7 +438,7 @@ function SharesList({ items, onSelect }: { items: ShareRequest[]; onSelect: (r: 
 function DRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex gap-4 px-6 py-3">
-      <span className="text-xs text-slate-400 w-28 shrink-0 pt-0.5">{label}</span>
+      <span className="text-xs text-slate-400 w-32 shrink-0 pt-0.5">{label}</span>
       <div className="flex-1 text-sm font-medium text-slate-700 dark:text-slate-200">{value}</div>
     </div>
   )
@@ -307,10 +459,7 @@ function ModalTextarea({ value, onChange, placeholder, rows = 2 }: {
 }
 
 function DialogHeader({ icon, title, subtitle, badge }: {
-  icon: React.ReactNode
-  title: string
-  subtitle: string
-  badge?: React.ReactNode
+  icon: React.ReactNode; title: string; subtitle: string; badge?: React.ReactNode
 }) {
   return (
     <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-6 py-5">
@@ -325,6 +474,19 @@ function DialogHeader({ icon, title, subtitle, badge }: {
         </div>
       </div>
     </div>
+  )
+}
+
+function VerifiedBadge({ verified }: { verified: boolean }) {
+  return (
+    <span className={cn(
+      'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
+      verified
+        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+        : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
+    )}>
+      {verified ? '✓ Подтверждён' : 'Не подтверждён'}
+    </span>
   )
 }
 
@@ -360,20 +522,18 @@ function ServiceDialog({ request, onClose }: { request: ServiceRequest; onClose:
           </div>
         }
       />
-
       <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
         <DRow label="Пользователь" value={request.user_full_name ?? '—'} />
         <DRow label="Телефон" value={request.user_phone ?? '—'} />
         <DRow label="Создана" value={fmtDate(request.created_at)} />
         <DRow label="Закрыта" value={request.closed_at ? fmtDate(request.closed_at) : '—'} />
         <div className="flex gap-4 px-6 py-3">
-          <span className="text-xs text-slate-400 w-28 shrink-0 pt-0.5">Описание</span>
+          <span className="text-xs text-slate-400 w-32 shrink-0 pt-0.5">Описание</span>
           <p className="flex-1 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
             {request.description}
           </p>
         </div>
       </div>
-
       <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700">
         <p className="text-xs text-slate-400 mb-2">Изменить статус</p>
         <div className="flex gap-2 mb-4">
@@ -440,26 +600,29 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
         title={`Заявка на добавление #${request.id}`}
         subtitle={request.user_full_name ?? '—'}
         badge={
-          <span className={cn('inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white')}>
+          <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white">
             {reqStatusLabel(request.status)}
           </span>
         }
       />
-
       <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
         <DRow label="Пользователь" value={request.user_full_name ?? '—'} />
         <DRow label="Телефон" value={request.user_phone ?? '—'} />
-        <DRow label="Создана" value={fmtDate(request.created_at)} />
+        <DRow label="Тип" value={userTypeLabel(request.user_type)} />
+        {request.organization_name && <DRow label="Организация" value={request.organization_name} />}
+        <DRow label="Статус аккаунта" value={<VerifiedBadge verified={request.user_is_verified} />} />
+        {request.user_registered_at && <DRow label="Зарегистрирован" value={fmtDate(request.user_registered_at)} />}
+        <DRow label="Заявка создана" value={fmtDate(request.created_at)} />
         {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
         {request.cabinet_id && <DRow label="Связанный ШУ" value={`#${request.cabinet_id}`} />}
         {request.user_comment && (
           <DRow label="Комментарий" value={
-            <span className="text-slate-600 dark:text-slate-300 font-normal">{request.user_comment}</span>
+            <span className="font-normal text-slate-600 dark:text-slate-300">{request.user_comment}</span>
           } />
         )}
         {request.admin_response && (
-          <DRow label="Ответ админа" value={
-            <span className="text-slate-600 dark:text-slate-300 font-normal">{request.admin_response}</span>
+          <DRow label="Ответ" value={
+            <span className="font-normal text-slate-600 dark:text-slate-300">{request.admin_response}</span>
           } />
         )}
       </div>
@@ -501,7 +664,7 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
               <ModalTextarea value={approveNote} onChange={setApproveNote} placeholder="Необязательно" />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setAction(null)}>Назад</Button>
+              <Button variant="ghost" onClick={() => setAction(null)} className="cursor-pointer">Назад</Button>
               <Button
                 onClick={() => approveMut.mutate()}
                 disabled={!cabinetId || approveMut.isPending}
@@ -572,22 +735,25 @@ function ShareDialog({ request, onClose }: { request: ShareRequest; onClose: () 
           </span>
         }
       />
-
       <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
         <DRow label="Пользователь" value={request.user_full_name ?? '—'} />
         <DRow label="Телефон" value={request.user_phone ?? '—'} />
+        <DRow label="Тип" value={userTypeLabel(request.user_type)} />
+        {request.organization_name && <DRow label="Организация" value={request.organization_name} />}
+        <DRow label="Статус аккаунта" value={<VerifiedBadge verified={request.user_is_verified} />} />
+        {request.user_registered_at && <DRow label="Зарегистрирован" value={fmtDate(request.user_registered_at)} />}
         <DRow label="Шкаф" value={`ШУ ${request.cabinet_object_number}`} />
         <DRow label="Тип ШУ" value={request.cabinet_type} />
-        <DRow label="Создана" value={fmtDate(request.created_at)} />
+        <DRow label="Заявка создана" value={fmtDate(request.created_at)} />
         {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
         {request.user_comment && (
           <DRow label="Комментарий" value={
-            <span className="text-slate-600 dark:text-slate-300 font-normal">{request.user_comment}</span>
+            <span className="font-normal text-slate-600 dark:text-slate-300">{request.user_comment}</span>
           } />
         )}
         {request.admin_response && (
-          <DRow label="Ответ админа" value={
-            <span className="text-slate-600 dark:text-slate-300 font-normal">{request.admin_response}</span>
+          <DRow label="Ответ" value={
+            <span className="font-normal text-slate-600 dark:text-slate-300">{request.admin_response}</span>
           } />
         )}
       </div>
@@ -640,35 +806,13 @@ function ShareDialog({ request, onClose }: { request: ShareRequest; onClose: () 
   )
 }
 
-function DocumentRequestList({ items, onSelect }: { items: DocumentRequest[]; onSelect: (r: DocumentRequest) => void }) {
-  if (!items.length) return <Empty text="Нет заявок на документы" />
-  return (
-    <div className="space-y-2">
-      {items.map(item => (
-        <RequestCard
-          key={item.id}
-          icon={<DocRequestCardIcon />}
-          title={item.doc_type || `Документ #${item.document_id}`}
-          subtitle={item.user_full_name ?? '—'}
-          meta={item.cabinet_id ? <TypePill label={`ШУ #${item.cabinet_id}`} cls="bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400" /> : undefined}
-          statusBadge={<StatusPill label={reqStatusLabel(item.status)} cls={reqStatusCls(item.status)} />}
-          date={fmtDate(item.created_at)}
-          onClick={() => onSelect(item)}
-        />
-      ))}
-    </div>
-  )
-}
-
 function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest; onClose: () => void }) {
   const qc = useQueryClient()
   const [action, setAction] = useState<'approve' | 'reject' | null>(null)
   const [approveNote, setApproveNote] = useState('')
   const [rejectNote, setRejectNote] = useState('')
 
-  const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ['document-requests'] })
-  }
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['document-requests'] })
 
   const approveMut = useMutation({
     mutationFn: () => requestsApi.approveDocumentRequest(request.id, approveNote || null),
@@ -688,28 +832,38 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
       <DialogHeader
         icon={<DocRequestModalIcon />}
         title={`Заявка на документ #${request.id}`}
-        subtitle={request.doc_type || '—'}
+        subtitle={request.user_full_name ?? '—'}
         badge={
           <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white">
             {reqStatusLabel(request.status)}
           </span>
         }
       />
-
       <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
         <DRow label="Пользователь" value={request.user_full_name ?? '—'} />
-        {request.cabinet_id && <DRow label="Шкаф" value={`#${request.cabinet_id}`} />}
-        {request.document_id && <DRow label="Документ" value={`#${request.document_id}`} />}
+        {request.document_id && (
+          <DRow label="Документ" value={
+            <span>
+              #{request.document_id}
+              {request.doc_type && (
+                <span className="ml-2 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-xs text-slate-500 dark:text-slate-400 font-normal">
+                  {request.doc_type.toUpperCase()}
+                </span>
+              )}
+            </span>
+          } />
+        )}
+        {request.cabinet_id && <DRow label="Шкаф" value={`ШУ #${request.cabinet_id}`} />}
         <DRow label="Создана" value={fmtDate(request.created_at)} />
         {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
         {request.user_message && (
           <DRow label="Сообщение" value={
-            <span className="text-slate-600 dark:text-slate-300 font-normal">{request.user_message}</span>
+            <span className="font-normal text-slate-600 dark:text-slate-300">{request.user_message}</span>
           } />
         )}
         {request.admin_response && (
           <DRow label="Ответ" value={
-            <span className="text-slate-600 dark:text-slate-300 font-normal">{request.admin_response}</span>
+            <span className="font-normal text-slate-600 dark:text-slate-300">{request.admin_response}</span>
           } />
         )}
       </div>
@@ -762,8 +916,15 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
   )
 }
 
-// ─── Icons for dialogs ───────────────────────────────────────────────────────
+// ─── Icons ───────────────────────────────────────────────────────────────────
 
+function SearchIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+    </svg>
+  )
+}
 function WrenchModalIcon() {
   return <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" /></svg>
 }

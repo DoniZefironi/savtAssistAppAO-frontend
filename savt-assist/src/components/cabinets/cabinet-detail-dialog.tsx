@@ -13,11 +13,12 @@ import { mediaApi } from '@/lib/api/media'
 import type { CabinetDocument, CabinetPhoto } from '@/lib/api/media'
 import { kbApi } from '@/lib/api/kb'
 import type { Tag } from '@/lib/api/kb'
+import { requestsApi } from '@/lib/api/requests'
 import { formatDate } from '@/lib/warranty'
 import { cn } from '@/lib/utils'
-import type { Cabinet } from '@/types'
+import type { Cabinet, ServiceRequest } from '@/types'
 
-type Tab = 'info' | 'docs' | 'photos' | 'users'
+type Tab = 'info' | 'docs' | 'photos' | 'users' | 'requests'
 
 interface Props {
   cabinetId: number | null
@@ -99,6 +100,7 @@ function DetailContent({ cabinetId, isAdmin, initialMode }: {
     { id: 'docs', label: 'Документы' },
     { id: 'photos', label: 'Фото' },
     { id: 'users', label: 'Пользователи' },
+    { id: 'requests', label: 'Заявки' },
   ]
 
   return (
@@ -168,12 +170,12 @@ function DetailContent({ cabinetId, isAdmin, initialMode }: {
             <DetailRow label="Комментарий" value={fields.admin_comment} editing={editing} onChange={set('admin_comment')} placeholder="Добавить комментарий" multiline />
             <DateRow label="Гарантия с" value={fields.warranty_start} editing={editing} onChange={(v) => setFields((p) => p ? { ...p, warranty_start: v } : p)} />
             <DateRow label="Гарантия до" value={fields.warranty_end} editing={editing} onChange={(v) => setFields((p) => p ? { ...p, warranty_end: v } : p)} />
-            <CabinetTagsRow cabinetId={cabinetId} cabinet={cabinet} isAdmin={isAdmin} />
           </div>
         )}
         {tab === 'docs' && <DocsTab cabinetId={cabinetId} isAdmin={isAdmin} />}
         {tab === 'photos' && <PhotosTab cabinetId={cabinetId} isAdmin={isAdmin} />}
         {tab === 'users' && <UsersTab cabinetId={cabinetId} isAdmin={isAdmin} />}
+        {tab === 'requests' && <ServiceRequestsTab cabinetId={cabinetId} />}
       </div>
 
       {/* Footer — only for info tab */}
@@ -517,6 +519,7 @@ function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean
   const fileRef = useRef<HTMLInputElement>(null)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [caption, setCaption] = useState('')
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['cabinet-photos', cabinetId],
@@ -541,6 +544,16 @@ function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean
       toast.success('Фото удалено')
     },
     onError: () => toast.error('Ошибка при удалении'),
+  })
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, caption, sort_order }: { id: number; caption: string | null; sort_order: number }) =>
+      mediaApi.updatePhoto(id, caption, sort_order),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cabinet-photos', cabinetId] })
+      toast.success('Фото обновлено')
+    },
+    onError: () => toast.error('Ошибка при обновлении'),
   })
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -620,48 +633,193 @@ function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean
 
       {!isLoading && photos.length > 0 && (
         <div className="grid grid-cols-2 gap-2 px-6 py-4">
-          {photos.map(photo => (
+          {photos.map((photo, idx) => (
             <PhotoTile
               key={photo.id}
               photo={photo}
+              onOpen={() => setLightboxIdx(idx)}
               onDelete={isAdmin ? () => deleteMut.mutate(photo.id) : undefined}
+              onUpdate={isAdmin ? (cap, order) => updateMut.mutate({ id: photo.id, caption: cap, sort_order: order }) : undefined}
               deleting={deleteMut.isPending}
+              updating={updateMut.isPending}
             />
           ))}
+        </div>
+      )}
+
+      {lightboxIdx !== null && (
+        <PhotoLightbox
+          photos={photos}
+          initialIdx={lightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function PhotoTile({ photo, onOpen, onDelete, onUpdate, deleting, updating }: {
+  photo: CabinetPhoto
+  onOpen: () => void
+  onDelete?: () => void
+  onUpdate?: (caption: string | null, sortOrder: number) => void
+  deleting: boolean
+  updating: boolean
+}) {
+  const [editing, setEditing] = useState(false)
+  const [editCaption, setEditCaption] = useState(photo.caption ?? '')
+  const [editOrder, setEditOrder] = useState(String(photo.sort_order))
+
+  const handleSave = () => {
+    onUpdate?.(editCaption.trim() || null, parseInt(editOrder) || 0)
+    setEditing(false)
+  }
+
+  const handleCancel = () => {
+    setEditCaption(photo.caption ?? '')
+    setEditOrder(String(photo.sort_order))
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <div className="relative rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700 aspect-square">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={mediaApi.toFullUrl(photo.url)} alt="" className="w-full h-full object-cover opacity-30" />
+        <div className="absolute inset-0 bg-black/60 flex flex-col gap-2 p-3">
+          <textarea
+            value={editCaption}
+            onChange={e => setEditCaption(e.target.value)}
+            placeholder="Подпись..."
+            rows={2}
+            className="w-full text-xs px-2 py-1 rounded-lg bg-white/90 text-slate-800 resize-none outline-none"
+          />
+          <div className="flex items-center gap-2">
+            <span className="text-white/70 text-xs shrink-0">Порядок</span>
+            <input
+              type="number"
+              value={editOrder}
+              onChange={e => setEditOrder(e.target.value)}
+              className="w-16 text-xs px-2 py-0.5 rounded bg-white/90 text-slate-800 outline-none"
+            />
+          </div>
+          <div className="flex gap-1.5 mt-auto">
+            <button onClick={handleCancel} className="flex-1 text-xs py-1 rounded-lg bg-white/20 text-white hover:bg-white/30 cursor-pointer transition-colors">
+              Отмена
+            </button>
+            <button onClick={handleSave} disabled={updating} className="flex-1 text-xs py-1 rounded-lg bg-[#1B3A72] text-white hover:bg-[#1B3A72]/80 cursor-pointer transition-colors disabled:opacity-50">
+              {updating ? '...' : 'Сохранить'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative group rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700 aspect-square cursor-pointer" onClick={onOpen}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={mediaApi.toFullUrl(photo.url)}
+        alt={photo.caption ?? ''}
+        className="w-full h-full object-cover transition-transform group-hover:scale-105"
+      />
+      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {onUpdate && (
+          <button
+            onClick={e => { e.stopPropagation(); setEditing(true) }}
+            title="Редактировать"
+            className="w-7 h-7 rounded-lg bg-black/50 flex items-center justify-center text-white hover:bg-[#1B3A72]/80 cursor-pointer"
+          >
+            <PencilIcon className="w-3.5 h-3.5" />
+          </button>
+        )}
+        {onDelete && (
+          <button
+            onClick={e => { e.stopPropagation(); onDelete() }}
+            disabled={deleting}
+            title="Удалить"
+            className="w-7 h-7 rounded-lg bg-black/50 flex items-center justify-center text-white hover:bg-red-500/80 cursor-pointer"
+          >
+            <TrashIcon className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+      {photo.caption && (
+        <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 bg-linear-to-t from-black/60 to-transparent">
+          <p className="text-xs text-white truncate">{photo.caption}</p>
         </div>
       )}
     </div>
   )
 }
 
-function PhotoTile({ photo, onDelete, deleting }: {
-  photo: CabinetPhoto
-  onDelete?: () => void
-  deleting: boolean
+function PhotoLightbox({ photos, initialIdx, onClose }: {
+  photos: CabinetPhoto[]
+  initialIdx: number
+  onClose: () => void
 }) {
+  const [idx, setIdx] = useState(initialIdx)
+  const photo = photos[idx]
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+      if (e.key === 'ArrowLeft') setIdx(i => Math.max(0, i - 1))
+      if (e.key === 'ArrowRight') setIdx(i => Math.min(photos.length - 1, i + 1))
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose, photos.length])
+
   return (
-    <div className="relative group rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700 aspect-square">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={mediaApi.toFullUrl(photo.url)}
-        alt={photo.caption ?? ''}
-        className="w-full h-full object-cover"
-      />
-      {onDelete && (
+    <div
+      className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
+      onClick={onClose}
+    >
+      {/* Close */}
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer z-10"
+      >
+        <XIcon className="w-5 h-5" />
+      </button>
+
+      <div className="flex items-center gap-4 px-4 max-w-5xl w-full" onClick={e => e.stopPropagation()}>
+        {/* Prev */}
         <button
-          onClick={onDelete}
-          disabled={deleting}
-          title="Удалить"
-          className="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/50 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/80 cursor-pointer"
+          onClick={() => setIdx(i => Math.max(0, i - 1))}
+          disabled={idx === 0}
+          className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white shrink-0 transition-colors cursor-pointer disabled:opacity-20"
         >
-          <TrashIcon className="w-4 h-4" />
+          <ChevronLeftIcon className="w-5 h-5" />
         </button>
-      )}
-      {photo.caption && (
-        <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 bg-linear-to-t from-black/60 to-transparent">
-          <p className="text-xs text-white truncate">{photo.caption}</p>
+
+        {/* Image */}
+        <div className="flex-1 flex flex-col items-center gap-3 min-w-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={mediaApi.toFullUrl(photo.url)}
+            alt={photo.caption ?? ''}
+            className="max-h-[75vh] max-w-full object-contain rounded-xl"
+          />
+          {photo.caption && (
+            <p className="text-white/70 text-sm text-center">{photo.caption}</p>
+          )}
+          {photos.length > 1 && (
+            <p className="text-white/40 text-xs">{idx + 1} / {photos.length}</p>
+          )}
         </div>
-      )}
+
+        {/* Next */}
+        <button
+          onClick={() => setIdx(i => Math.min(photos.length - 1, i + 1))}
+          disabled={idx === photos.length - 1}
+          className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white shrink-0 transition-colors cursor-pointer disabled:opacity-20"
+        >
+          <ChevronRightIcon className="w-5 h-5" />
+        </button>
+      </div>
     </div>
   )
 }
@@ -1063,6 +1221,143 @@ function CabinetTagsRow({ cabinetId, cabinet, isAdmin }: {
   )
 }
 
+// ─── Service requests tab ────────────────────────────────────────────────────
+
+const REQUEST_TYPE_LABELS: Record<string, string> = {
+  repair: 'Ремонт',
+  maintenance: 'Обслуживание',
+  inspection: 'Осмотр',
+  other: 'Другое',
+}
+
+const REQUEST_STATUS_LABELS: Record<string, string> = {
+  open: 'Открыта',
+  in_progress: 'В работе',
+  closed: 'Закрыта',
+}
+
+const REQUEST_STATUS_NEXT: Record<string, string> = {
+  open: 'in_progress',
+  in_progress: 'closed',
+}
+
+function ServiceRequestsTab({ cabinetId }: { cabinetId: number }) {
+  const qc = useQueryClient()
+  const [status, setStatus] = useState('open')
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['cabinet-service-requests', cabinetId, status],
+    queryFn: () => requestsApi.getServiceRequests({ cabinet_id: cabinetId, status, size: 50 }),
+  })
+
+  const statusMut = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      requestsApi.updateServiceRequestStatus(id, status),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cabinet-service-requests', cabinetId] })
+      toast.success('Статус обновлён')
+    },
+    onError: () => toast.error('Не удалось обновить статус'),
+  })
+
+  const STATUS_TABS = [
+    { value: 'open', label: 'Открытые' },
+    { value: 'in_progress', label: 'В работе' },
+    { value: 'closed', label: 'Закрытые' },
+  ]
+
+  const requests = data?.items ?? []
+
+  return (
+    <div>
+      <div className="flex border-b border-slate-100 dark:border-slate-700/30 shrink-0">
+        {STATUS_TABS.map(t => (
+          <button
+            key={t.value}
+            onClick={() => setStatus(t.value)}
+            className={cn(
+              'px-4 py-2.5 text-sm transition-colors cursor-pointer border-b-2',
+              status === t.value
+                ? 'border-[#1B3A72] text-[#1B3A72] dark:text-blue-400 dark:border-blue-400 font-medium'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {isLoading && (
+        <div className="space-y-2 px-6 py-3">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
+        </div>
+      )}
+
+      {!isLoading && requests.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-10 text-slate-400">
+          <ToolIcon className="w-8 h-8 mb-2 opacity-40" />
+          <p className="text-sm">Нет заявок</p>
+        </div>
+      )}
+
+      {!isLoading && requests.length > 0 && (
+        <div className="divide-y divide-slate-50 dark:divide-slate-700/30">
+          {requests.map(req => (
+            <ServiceRequestRow
+              key={req.id}
+              req={req}
+              onStatusChange={next => statusMut.mutate({ id: req.id, status: next })}
+              pending={statusMut.isPending}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ServiceRequestRow({ req, onStatusChange, pending }: {
+  req: ServiceRequest
+  onStatusChange: (next: string) => void
+  pending: boolean
+}) {
+  const next = REQUEST_STATUS_NEXT[req.status]
+
+  return (
+    <div className="px-6 py-3 flex items-start gap-3">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium">
+            {REQUEST_TYPE_LABELS[req.request_type] ?? req.request_type}
+          </span>
+          <span className={cn(
+            'text-xs px-2 py-0.5 rounded font-medium',
+            req.status === 'open' && 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400',
+            req.status === 'in_progress' && 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
+            req.status === 'closed' && 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+          )}>
+            {REQUEST_STATUS_LABELS[req.status]}
+          </span>
+        </div>
+        <p className="text-sm text-slate-700 dark:text-slate-200 mt-1 line-clamp-2">{req.description}</p>
+        <div className="flex items-center gap-2 mt-1 flex-wrap">
+          {req.user_full_name && <span className="text-xs text-slate-400">{req.user_full_name}</span>}
+          <span className="text-xs text-slate-400">{formatDate(req.created_at)}</span>
+        </div>
+      </div>
+      {next && (
+        <button
+          onClick={() => onStatusChange(next)}
+          disabled={pending}
+          className="shrink-0 text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-[#1B3A72] hover:text-[#1B3A72] dark:hover:border-blue-400 dark:hover:text-blue-400 transition-colors cursor-pointer disabled:opacity-50"
+        >
+          {next === 'in_progress' ? 'В работу' : 'Закрыть'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
 function BoardIcon({ className }: { className?: string }) {
@@ -1128,6 +1423,34 @@ function TagIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
+    </svg>
+  )
+}
+function XIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  )
+}
+function ChevronLeftIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+    </svg>
+  )
+}
+function ChevronRightIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+    </svg>
+  )
+}
+function ToolIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l5.653-4.655m5.657-5.657l3.123-3.123a.5.5 0 00-.707-.707l-3.122 3.122m-5.657 5.657l1.795-1.795" />
     </svg>
   )
 }

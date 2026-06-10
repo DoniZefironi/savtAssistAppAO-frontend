@@ -107,6 +107,10 @@ export interface AdditionRequest {
   user_id: number
   user_full_name: string | null
   user_phone: string | null
+  user_type: 'individual' | 'organization' | null
+  organization_name: string | null
+  user_is_verified: boolean
+  user_registered_at: string | null
   photo_url: string
   user_comment: string | null
   status: 'pending' | 'approved' | 'rejected'
@@ -135,6 +139,10 @@ export interface ShareRequest {
   user_id: number
   user_full_name: string | null
   user_phone: string | null
+  user_type: 'individual' | 'organization' | null
+  organization_name: string | null
+  user_is_verified: boolean
+  user_registered_at: string | null
   cabinet_id: number
   cabinet_type: string
   cabinet_object_number: string

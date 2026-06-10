@@ -30,7 +30,14 @@ export const faqApi = {
 
   deleteCategory: (id: number) => apiClient.delete(`/admin/faq/categories/${id}`),
 
-  listEntries: (params?: { category_id?: number; search?: string; page?: number; size?: number }): Promise<PaginatedResponse<FaqEntry>> =>
+  listEntries: (params?: {
+    category_id?: number
+    search?: string
+    sort_by?: string
+    sort_order?: string
+    page?: number
+    size?: number
+  }): Promise<PaginatedResponse<FaqEntry>> =>
     apiClient.get('/admin/faq/entries', { params }).then(r => r.data),
 
   createEntry: (data: { category_id: number; question: string; answer: string }): Promise<FaqEntry> =>
