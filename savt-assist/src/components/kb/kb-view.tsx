@@ -94,6 +94,7 @@ export function KbView() {
 
   const expandPanel = () => { setIsSnapping(true); setPanelWidth(CAT_DEFAULT); setTimeout(() => setIsSnapping(false), 200) }
 
+  const [view, setView] = useState<'list' | 'grid'>('list')
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null)
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
@@ -204,10 +205,16 @@ export function KbView() {
             {total != null && <p className="text-xs text-slate-400 font-medium mb-0.5">{total} статей</p>}
             <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">База знаний</h1>
           </div>
-          <Button onClick={() => setCreateArticleOpen(true)} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer">
-            <PlusIcon className="w-4 h-4 mr-1.5" />
-            Новая статья
-          </Button>
+          <div className="flex items-center gap-2">
+            <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+              <button onClick={() => setView('list')} title="Список" className={`p-1.5 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon className="w-4 h-4" /></button>
+              <button onClick={() => setView('grid')} title="Сетка" className={`p-1.5 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon className="w-4 h-4" /></button>
+            </div>
+            <Button onClick={() => setCreateArticleOpen(true)} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer">
+              <PlusIcon className="w-4 h-4 mr-1.5" />
+              Новая статья
+            </Button>
+          </div>
         </div>
 
         {/* Search */}
@@ -363,8 +370,8 @@ export function KbView() {
         <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900">
           <div className="flex-1 overflow-y-auto px-6 py-4">
             {articlesQ.isLoading && (
-              <div className="space-y-3">
-                {[1, 2, 3].map(i => <Skeleton key={i} className="h-28 w-full rounded-xl" />)}
+              <div className={view === 'grid' ? 'grid grid-cols-2 gap-3' : 'space-y-3'}>
+                {[1, 2, 3, 4].map(i => <Skeleton key={i} className={`w-full rounded-xl ${view === 'grid' ? 'h-40' : 'h-28'}`} />)}
               </div>
             )}
             {!articlesQ.isLoading && allArticles.length === 0 && (
@@ -377,7 +384,7 @@ export function KbView() {
               </div>
             )}
             {allArticles.length > 0 && (
-              <div className="space-y-3">
+              <div className={view === 'grid' ? 'grid grid-cols-2 gap-3' : 'space-y-3'}>
                 {allArticles.map(article => {
                   const cat = categories.find(c => c.id === article.category_id)
                   return (
@@ -385,6 +392,7 @@ export function KbView() {
                       key={article.id}
                       article={article}
                       categoryName={cat?.name}
+                      view={view}
                       onEdit={() => setEditArticle(article)}
                       onDelete={() => setDeleteConfirm({ type: 'article', id: article.id, name: article.title })}
                     />
@@ -496,12 +504,46 @@ function CategoryRow({ cat, selected, indent, onSelect, onEdit, onDelete }: {
 
 // ─── Article card ─────────────────────────────────────────────────────────────
 
-function ArticleCard({ article, categoryName, onEdit, onDelete }: {
+function ArticleCard({ article, categoryName, view = 'list', onEdit, onDelete }: {
   article: KbArticleList
   categoryName?: string
+  view?: 'list' | 'grid'
   onEdit: () => void
   onDelete: () => void
 }) {
+  if (view === 'grid') {
+    return (
+      <div onClick={onEdit} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-4 hover:border-slate-200 dark:hover:border-slate-600 hover:shadow-sm transition-all group cursor-pointer flex flex-col">
+        <div className="flex items-start justify-between mb-2.5">
+          <div className="w-9 h-9 bg-[#1B3A72] rounded-lg flex items-center justify-center shrink-0">
+            <BookIcon className="w-4 h-4 text-white" />
+          </div>
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onClick={e => { e.stopPropagation(); onEdit() }} className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer">
+              <PencilIcon className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={e => { e.stopPropagation(); onDelete() }} className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer">
+              <TrashIcon className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+        <p className="font-semibold text-slate-800 dark:text-slate-100 leading-snug line-clamp-2">{article.title}</p>
+        {article.description && (
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">{article.description}</p>
+        )}
+        <div className="flex flex-wrap gap-1 mt-auto pt-2.5">
+          {categoryName && (
+            <span className="text-xs px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">{categoryName}</span>
+          )}
+          {article.tags.slice(0, 2).map(tag => (
+            <span key={tag.id} className="text-xs px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400">{tag.name}</span>
+          ))}
+          <span className="text-xs text-slate-400 ml-auto">{fmtDate(article.created_at)}</span>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div onClick={onEdit} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-5 hover:border-slate-200 dark:hover:border-slate-600 hover:shadow-sm transition-all group cursor-pointer">
       <div className="flex items-start gap-3">
@@ -512,35 +554,23 @@ function ArticleCard({ article, categoryName, onEdit, onDelete }: {
           <div className="flex items-start justify-between gap-2">
             <p className="font-semibold text-slate-800 dark:text-slate-100 leading-snug">{article.title}</p>
             <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                onClick={e => { e.stopPropagation(); onEdit() }}
-                className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
-              >
+              <button onClick={e => { e.stopPropagation(); onEdit() }} className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer">
                 <PencilIcon className="w-3.5 h-3.5" />
               </button>
-              <button
-                onClick={e => { e.stopPropagation(); onDelete() }}
-                className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
-              >
+              <button onClick={e => { e.stopPropagation(); onDelete() }} className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer">
                 <TrashIcon className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
           {article.description && (
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-              {article.description}
-            </p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">{article.description}</p>
           )}
           <div className="flex items-center gap-2 mt-2.5 flex-wrap">
             {categoryName && (
-              <span className="text-xs px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">
-                {categoryName}
-              </span>
+              <span className="text-xs px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">{categoryName}</span>
             )}
             {article.tags.map(tag => (
-              <span key={tag.id} className="text-xs px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400">
-                {tag.name}
-              </span>
+              <span key={tag.id} className="text-xs px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400">{tag.name}</span>
             ))}
             {article.attachment_count > 0 && (
               <span className="flex items-center gap-1 text-xs text-slate-400">
@@ -1032,4 +1062,10 @@ function ChevronLeftIcon({ className }: { className?: string }) {
 }
 function ChevronRightIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+}
+function ListIcon({ className }: { className?: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+}
+function GridIcon({ className }: { className?: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" /></svg>
 }

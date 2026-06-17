@@ -9,6 +9,7 @@ import { requestsApi } from '@/lib/api/requests'
 import type { ServiceRequest, AdditionRequest, ShareRequest, DocumentRequest } from '@/lib/api/requests'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { RequestCard, ServiceCardIcon, AdditionCardIcon, ShareCardIcon, StatusPill, TypePill } from './request-card'
 
 type Tab = 'service' | 'additions' | 'shares' | 'docs'
@@ -101,6 +102,8 @@ function toFullUrl(url: string) {
   return url.startsWith('http') ? url : `${API_URL}${url}`
 }
 
+type ViewMode = 'list' | 'grid'
+
 export function RequestsView() {
   const [tab, setTab] = useState<Tab>('service')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -108,6 +111,7 @@ export function RequestsView() {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState('created_at')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [view, setView] = useState<ViewMode>('list')
   const [selectedService, setSelectedService] = useState<ServiceRequest | null>(null)
   const [selectedAddition, setSelectedAddition] = useState<AdditionRequest | null>(null)
   const [selectedShare, setSelectedShare] = useState<ShareRequest | null>(null)
@@ -205,9 +209,15 @@ export function RequestsView() {
     <div className="flex flex-col h-full">
       {/* ── Header ── */}
       <div className="px-6 pt-6 pb-0 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60">
-        <div className="mb-4">
-          {total != null && <p className="text-xs text-slate-400 font-medium mb-0.5">{total} заявок</p>}
-          <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Заявки</h1>
+        <div className="flex items-end justify-between mb-4">
+          <div>
+            {total != null && <p className="text-xs text-slate-400 font-medium mb-0.5">{total} заявок</p>}
+            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Заявки</h1>
+          </div>
+          <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+            <button onClick={() => setView('list')} title="Список" className={`p-2 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon /></button>
+            <button onClick={() => setView('grid')} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon /></button>
+          </div>
         </div>
         <div className="flex gap-0 -mb-px">
           {TABS.map(t => (
@@ -227,18 +237,24 @@ export function RequestsView() {
         </div>
       </div>
 
-      {/* ── Filters / search / sort ── */}
-      <div className="px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
-        <div className="relative mr-1">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-          <input
+      {/* ── Search ── */}
+      <div className="px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60">
+        <div className="relative">
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+          <Input
             value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
-            placeholder="Поиск..."
-            className="pl-8 pr-3 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:border-[#4A8FE7] w-52"
+            placeholder="Поиск по заявкам..."
+            className="pl-9 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 focus-visible:ring-[#4A8FE7]"
           />
+          {searchInput && (
+            <button onClick={() => setSearchInput('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">✕</button>
+          )}
         </div>
+      </div>
 
+      {/* ── Filters / sort ── */}
+      <div className="px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
         {filters.map(f => (
           <button
             key={f.value}
@@ -282,9 +298,9 @@ export function RequestsView() {
       {/* ── Content ── */}
       <div className="flex-1 overflow-y-auto px-6 py-4 bg-slate-50 dark:bg-slate-900">
         {curQ.isLoading && (
-          <div className="space-y-2">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="h-16 bg-white dark:bg-slate-800 rounded-xl animate-pulse" />
+          <div className={view === 'grid' ? 'grid grid-cols-2 gap-3' : 'space-y-2'}>
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className={`bg-white dark:bg-slate-800 rounded-xl animate-pulse ${view === 'grid' ? 'h-36' : 'h-16'}`} />
             ))}
           </div>
         )}
@@ -296,16 +312,16 @@ export function RequestsView() {
         )}
 
         {tab === 'service' && !svcQ.isLoading && !svcQ.isError && (
-          <ServiceList items={svcItems} onSelect={setSelectedService} />
+          <ServiceList items={svcItems} onSelect={setSelectedService} view={view} />
         )}
         {tab === 'additions' && !addQ.isLoading && !addQ.isError && (
-          <AdditionsList items={addItems} onSelect={setSelectedAddition} />
+          <AdditionsList items={addItems} onSelect={setSelectedAddition} view={view} />
         )}
         {tab === 'shares' && !shrQ.isLoading && !shrQ.isError && (
-          <SharesList items={shrItems} onSelect={setSelectedShare} />
+          <SharesList items={shrItems} onSelect={setSelectedShare} view={view} />
         )}
         {tab === 'docs' && !docQ.isLoading && !docQ.isError && (
-          <DocumentRequestList items={docItems} onSelect={setSelectedDocRequest} />
+          <DocumentRequestList items={docItems} onSelect={setSelectedDocRequest} view={view} />
         )}
 
         {/* Infinite scroll sentinel */}
@@ -344,13 +360,18 @@ function Empty({ text }: { text: string }) {
   )
 }
 
-function ServiceList({ items, onSelect }: { items: ServiceRequest[]; onSelect: (r: ServiceRequest) => void }) {
+function gridCls(view: ViewMode) {
+  return view === 'grid' ? 'grid grid-cols-2 gap-3' : 'space-y-2'
+}
+
+function ServiceList({ items, onSelect, view }: { items: ServiceRequest[]; onSelect: (r: ServiceRequest) => void; view: ViewMode }) {
   if (!items.length) return <Empty text="Нет сервисных заявок" />
   return (
-    <div className="space-y-2">
+    <div className={gridCls(view)}>
       {items.map(item => (
         <RequestCard
           key={item.id}
+          view={view}
           icon={<ServiceCardIcon />}
           title={`ШУ ${item.cabinet_object_number}`}
           subtitle={item.user_full_name ?? '—'}
@@ -364,13 +385,14 @@ function ServiceList({ items, onSelect }: { items: ServiceRequest[]; onSelect: (
   )
 }
 
-function AdditionsList({ items, onSelect }: { items: AdditionRequest[]; onSelect: (r: AdditionRequest) => void }) {
+function AdditionsList({ items, onSelect, view }: { items: AdditionRequest[]; onSelect: (r: AdditionRequest) => void; view: ViewMode }) {
   if (!items.length) return <Empty text="Нет заявок на добавление" />
   return (
-    <div className="space-y-2">
+    <div className={gridCls(view)}>
       {items.map(item => (
         <RequestCard
           key={item.id}
+          view={view}
           icon={<AdditionCardIcon />}
           title={item.user_full_name ?? '—'}
           subtitle={item.user_phone ?? '—'}
@@ -386,13 +408,14 @@ function AdditionsList({ items, onSelect }: { items: AdditionRequest[]; onSelect
   )
 }
 
-function SharesList({ items, onSelect }: { items: ShareRequest[]; onSelect: (r: ShareRequest) => void }) {
+function SharesList({ items, onSelect, view }: { items: ShareRequest[]; onSelect: (r: ShareRequest) => void; view: ViewMode }) {
   if (!items.length) return <Empty text="Нет заявок на доступ" />
   return (
-    <div className="space-y-2">
+    <div className={gridCls(view)}>
       {items.map(item => (
         <RequestCard
           key={item.id}
+          view={view}
           icon={<ShareCardIcon />}
           title={item.user_full_name ?? '—'}
           subtitle={`ШУ ${item.cabinet_object_number}`}
@@ -408,13 +431,14 @@ function SharesList({ items, onSelect }: { items: ShareRequest[]; onSelect: (r: 
   )
 }
 
-function DocumentRequestList({ items, onSelect }: { items: DocumentRequest[]; onSelect: (r: DocumentRequest) => void }) {
+function DocumentRequestList({ items, onSelect, view }: { items: DocumentRequest[]; onSelect: (r: DocumentRequest) => void; view: ViewMode }) {
   if (!items.length) return <Empty text="Нет заявок на документы" />
   return (
-    <div className="space-y-2">
+    <div className={gridCls(view)}>
       {items.map(item => (
         <RequestCard
           key={item.id}
+          view={view}
           icon={<DocRequestCardIcon />}
           title={item.user_full_name ?? '—'}
           subtitle={item.cabinet_id ? `ШУ #${item.cabinet_id}` : '—'}
@@ -918,6 +942,12 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
+function ListIcon() {
+  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+}
+function GridIcon() {
+  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" /></svg>
+}
 function SearchIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

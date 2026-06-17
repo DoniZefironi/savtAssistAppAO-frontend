@@ -9,6 +9,7 @@ import type { AdminUser } from '@/lib/api/users'
 import { useAuthStore } from '@/lib/store/auth'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { RequestCard, StatusPill, TypePill } from '@/components/requests/request-card'
 
@@ -76,6 +77,7 @@ export function UsersView() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
+  const [view, setView] = useState<'list' | 'grid'>('list')
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
   const [createOperatorOpen, setCreateOperatorOpen] = useState(false)
   const [createAdminOpen, setCreateAdminOpen] = useState(false)
@@ -152,7 +154,11 @@ export function UsersView() {
             )}
             <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Пользователи</h1>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+              <button onClick={() => setView('list')} title="Список" className={`p-2 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon /></button>
+              <button onClick={() => setView('grid')} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon /></button>
+            </div>
             {isSuperadmin && (
               <Button onClick={() => setCreateAdminOpen(true)} className="bg-purple-600 hover:bg-purple-700 cursor-pointer">
                 <PlusIcon className="w-4 h-4 mr-1.5" />
@@ -185,19 +191,24 @@ export function UsersView() {
         </div>
       </div>
 
-      {/* ── Filters bar ── */}
-      <div className="px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0 flex flex-wrap items-center gap-2">
-        {/* Search */}
-        <div className="relative mr-1">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-          <input
+      {/* ── Search ── */}
+      <div className="px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
+        <div className="relative">
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+          <Input
             value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
-            placeholder="Поиск по имени, телефону, логину"
-            className="pl-8 pr-3 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:border-[#4A8FE7] w-56"
+            placeholder="Поиск по имени, телефону, логину..."
+            className="pl-9 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 focus-visible:ring-[#4A8FE7]"
           />
+          {searchInput && (
+            <button onClick={() => setSearchInput('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">✕</button>
+          )}
         </div>
+      </div>
 
+      {/* ── Filters bar ── */}
+      <div className="px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0 flex flex-wrap items-center gap-2">
         {/* Status filter */}
         {STATUS_FILTERS.map(f => (
           <button
@@ -240,8 +251,8 @@ export function UsersView() {
       {/* ── List ── */}
       <div className="flex-1 overflow-y-auto px-6 py-4 bg-slate-50 dark:bg-slate-900">
         {isLoading && (
-          <div className="space-y-2">
-            {[1, 2, 3].map(i => <div key={i} className="h-20 bg-white dark:bg-slate-800 rounded-xl animate-pulse" />)}
+          <div className={view === 'grid' ? 'grid grid-cols-2 gap-3' : 'space-y-2'}>
+            {[1, 2, 3, 4].map(i => <div key={i} className={`bg-white dark:bg-slate-800 rounded-xl animate-pulse ${view === 'grid' ? 'h-36' : 'h-20'}`} />)}
           </div>
         )}
         {isError && (
@@ -257,10 +268,11 @@ export function UsersView() {
           </div>
         )}
         {allItems.length > 0 && (
-          <div className="space-y-2">
+          <div className={view === 'grid' ? 'grid grid-cols-2 gap-3' : 'space-y-2'}>
             {allItems.map(user => (
               <RequestCard
                 key={user.id}
+                view={view}
                 icon={<UserIcon />}
                 title={userName(user)}
                 subtitle={userSubtitle(user)}
@@ -700,6 +712,12 @@ function PasswordField({ label, hint, value, onChange, show, onToggle, error }: 
 
 // ─── Icons ────────────────────────────────────────────────────────────────
 
+function ListIcon() {
+  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+}
+function GridIcon() {
+  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" /></svg>
+}
 function UserIcon() {
   return <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
 }

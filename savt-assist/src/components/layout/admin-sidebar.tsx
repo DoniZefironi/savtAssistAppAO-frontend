@@ -101,12 +101,14 @@ export function AdminSidebar() {
         </div>
       ) : (
         <div className='pb-4 pl-4'>
-          <Image 
-          src='/logo-small.png'
-          width={225}
-          height={225}
-          alt='savt'
-          />
+          <Link href='/admin/dashboard' className='cursor-pointer'>
+            <Image 
+            src='/logo-small.png'
+            width={225}
+            height={225}
+            alt='savt'
+            />
+          </Link>
         </div>
       )}
     </aside>
