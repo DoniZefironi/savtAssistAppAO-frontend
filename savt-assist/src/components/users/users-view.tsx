@@ -78,6 +78,10 @@ export function UsersView() {
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [view, setView] = useState<'list' | 'grid'>('list')
+  useEffect(() => {
+    const saved = localStorage.getItem('view-mode-users')
+    if (saved === 'list' || saved === 'grid') setView(saved)
+  }, [])
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
   const [createOperatorOpen, setCreateOperatorOpen] = useState(false)
   const [createAdminOpen, setCreateAdminOpen] = useState(false)
@@ -156,8 +160,8 @@ export function UsersView() {
           </div>
           <div className="flex items-center gap-2">
             <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-              <button onClick={() => setView('list')} title="Список" className={`p-2 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon /></button>
-              <button onClick={() => setView('grid')} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon /></button>
+              <button onClick={() => { setView('list'); localStorage.setItem('view-mode-users', 'list') }} title="Список" className={`p-2 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon /></button>
+              <button onClick={() => { setView('grid'); localStorage.setItem('view-mode-users', 'grid') }} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon /></button>
             </div>
             {isSuperadmin && (
               <Button onClick={() => setCreateAdminOpen(true)} className="bg-purple-600 hover:bg-purple-700 cursor-pointer">

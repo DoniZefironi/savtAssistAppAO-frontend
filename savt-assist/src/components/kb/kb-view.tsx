@@ -95,6 +95,10 @@ export function KbView() {
   const expandPanel = () => { setIsSnapping(true); setPanelWidth(CAT_DEFAULT); setTimeout(() => setIsSnapping(false), 200) }
 
   const [view, setView] = useState<'list' | 'grid'>('list')
+  useEffect(() => {
+    const saved = localStorage.getItem('view-mode-kb')
+    if (saved === 'list' || saved === 'grid') setView(saved)
+  }, [])
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null)
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
@@ -207,8 +211,8 @@ export function KbView() {
           </div>
           <div className="flex items-center gap-2">
             <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-              <button onClick={() => setView('list')} title="Список" className={`p-1.5 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon className="w-4 h-4" /></button>
-              <button onClick={() => setView('grid')} title="Сетка" className={`p-1.5 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon className="w-4 h-4" /></button>
+              <button onClick={() => { setView('list'); localStorage.setItem('view-mode-kb', 'list') }} title="Список" className={`p-1.5 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon className="w-4 h-4" /></button>
+              <button onClick={() => { setView('grid'); localStorage.setItem('view-mode-kb', 'grid') }} title="Сетка" className={`p-1.5 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon className="w-4 h-4" /></button>
             </div>
             <Button onClick={() => setCreateArticleOpen(true)} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer">
               <PlusIcon className="w-4 h-4 mr-1.5" />

@@ -5,12 +5,12 @@ import { API_URL } from '@/lib/api/client'
 import { cn } from '@/lib/utils'
 import type { MessageAttachment } from '@/types'
 
-function toFullUrl(url: string): string {
+export function toFullUrl(url: string): string {
   if (!url) return ''
   return url.startsWith('http') ? url : `${API_URL}${url}`
 }
 
-async function downloadBlob(url: string, filename: string) {
+export async function downloadBlob(url: string, filename: string) {
   try {
     const res = await fetch(url, { credentials: 'include' })
     const blob = await res.blob()
@@ -51,12 +51,15 @@ function fileIcon(mime: string): string {
 interface Props {
   attachment: MessageAttachment
   isOwn: boolean
+  transcription?: string
+  transcribing?: boolean
+  onTranscribe?: () => void
 }
 
-export function AttachmentView({ attachment, isOwn }: Props) {
+export function AttachmentView({ attachment, isOwn, transcription, transcribing, onTranscribe }: Props) {
   const { mime_type } = attachment
   if (mime_type.startsWith('image/')) return <ImageAttachment a={attachment} isOwn={isOwn} />
-  if (mime_type.startsWith('audio/')) return <AudioAttachment a={attachment} isOwn={isOwn} />
+  if (mime_type.startsWith('audio/')) return <AudioAttachment a={attachment} isOwn={isOwn} transcription={transcription} transcribing={transcribing} onTranscribe={onTranscribe} />
   if (mime_type.startsWith('video/')) return <VideoAttachment a={attachment} isOwn={isOwn} />
   return <FileAttachment a={attachment} isOwn={isOwn} />
 }
@@ -98,28 +101,62 @@ function ImageAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean })
   )
 }
 
-function AudioAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean }) {
+function AudioAttachment({ a, isOwn, transcription, transcribing, onTranscribe }: {
+  a: MessageAttachment
+  isOwn: boolean
+  transcription?: string
+  transcribing?: boolean
+  onTranscribe?: () => void
+}) {
   const url = toFullUrl(a.file_url)
   const isVoice = a.file_name === 'Голосовое сообщение' || a.mime_type.includes('ogg')
 
   return (
     <div className={cn(
-      'mt-1 rounded-xl px-3 py-2 flex items-center gap-2 min-w-[220px]',
+      'mt-1 rounded-xl px-3 py-2 min-w-55',
       isOwn ? 'bg-white/15' : 'bg-slate-100'
     )}>
-      <span className="text-lg flex-shrink-0">{isVoice ? '🎙' : '🎵'}</span>
-      <div className="flex-1 min-w-0">
-        <p className={cn('text-xs mb-1 truncate', isOwn ? 'text-white/70' : 'text-slate-500')}>
-          {isVoice ? 'Голосовое сообщение' : a.file_name}
-          {a.duration_seconds != null && <span className="ml-1">{formatDuration(a.duration_seconds)}</span>}
-        </p>
-        <audio controls src={url} className="h-7 w-full" style={{ colorScheme: isOwn ? 'dark' : 'light' }}>
-          Ваш браузер не поддерживает аудио
-        </audio>
+      <div className="flex items-center gap-2">
+        <span className="text-lg shrink-0">{isVoice ? '🎙' : '🎵'}</span>
+        <div className="flex-1 min-w-0">
+          <p className={cn('text-xs mb-1 truncate', isOwn ? 'text-white/70' : 'text-slate-500')}>
+            {isVoice ? 'Голосовое сообщение' : a.file_name}
+            {a.duration_seconds != null && <span className="ml-1">{formatDuration(a.duration_seconds)}</span>}
+          </p>
+          <audio controls src={url} className="h-7 w-full" style={{ colorScheme: isOwn ? 'dark' : 'light' }}>
+            Ваш браузер не поддерживает аудио
+          </audio>
+        </div>
+        <div className="flex flex-col gap-1 shrink-0">
+          <button onClick={() => downloadBlob(url, a.file_name)} className={cn('cursor-pointer', isOwn ? 'text-white/60 hover:text-white' : 'text-slate-400 hover:text-slate-700')} title="Скачать">
+            <DownloadIcon size={16} />
+          </button>
+          {isVoice && onTranscribe && !transcription && (
+            <button
+              onClick={onTranscribe}
+              disabled={transcribing}
+              title="Распознать текст"
+              className={cn(
+                'w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors cursor-pointer',
+                isOwn
+                  ? 'bg-white/20 hover:bg-white/30 text-white disabled:opacity-50'
+                  : 'bg-slate-200 hover:bg-slate-300 text-slate-600 disabled:opacity-50'
+              )}
+            >
+              {transcribing ? (
+                <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+              ) : (
+                'T'
+              )}
+            </button>
+          )}
+        </div>
       </div>
-      <button onClick={() => downloadBlob(url, a.file_name)} className={cn('flex-shrink-0 cursor-pointer', isOwn ? 'text-white/60 hover:text-white' : 'text-slate-400 hover:text-slate-700')} title="Скачать">
-        <DownloadIcon size={16} />
-      </button>
+      {transcription && (
+        <p className={cn('text-xs mt-2 pt-2 border-t leading-relaxed', isOwn ? 'border-white/20 text-white/80' : 'border-slate-200 text-slate-600')}>
+          {transcription}
+        </p>
+      )}
     </div>
   )
 }

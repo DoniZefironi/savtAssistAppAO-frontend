@@ -35,6 +35,10 @@ export function CabinetsView({ isAdmin }: Props) {
   const [sortBy, setSortBy] = useState<SortValue>('created_at')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [view, setView] = useState<ViewMode>('list')
+  useEffect(() => {
+    const saved = localStorage.getItem('view-mode-cabinets')
+    if (saved === 'list' || saved === 'grid') setView(saved)
+  }, [])
   const [openId, setOpenId] = useState<number | null>(null)
   const [openMode, setOpenMode] = useState<'view' | 'edit'>('view')
   const [qrCabinet, setQrCabinet] = useState<Cabinet | null>(null)
@@ -130,7 +134,7 @@ export function CabinetsView({ isAdmin }: Props) {
             {/* View toggle */}
             <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
               <button
-                onClick={() => setView('list')}
+                onClick={() => { setView('list'); localStorage.setItem('view-mode-cabinets', 'list') }}
                 title="Список"
                 className={`p-2 transition-colors cursor-pointer ${
                   view === 'list'
@@ -141,7 +145,7 @@ export function CabinetsView({ isAdmin }: Props) {
                 <ListIcon />
               </button>
               <button
-                onClick={() => setView('grid')}
+                onClick={() => { setView('grid'); localStorage.setItem('view-mode-cabinets', 'grid') }}
                 title="Сетка"
                 className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${
                   view === 'grid'

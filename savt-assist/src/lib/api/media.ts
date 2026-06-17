@@ -12,7 +12,7 @@ export interface CabinetDocument {
   mime_type: string
   requires_approval: boolean
   version: number
-  tags: { id: number; name: string }[]
+  tags: { id: number; name: string; scope: string }[]
   created_at: string
   updated_at: string
 }

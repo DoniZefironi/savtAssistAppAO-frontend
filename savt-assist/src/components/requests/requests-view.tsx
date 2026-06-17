@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -112,6 +112,10 @@ export function RequestsView() {
   const [sortBy, setSortBy] = useState('created_at')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [view, setView] = useState<ViewMode>('list')
+  useEffect(() => {
+    const saved = localStorage.getItem('view-mode-requests')
+    if (saved === 'list' || saved === 'grid') setView(saved)
+  }, [])
   const [selectedService, setSelectedService] = useState<ServiceRequest | null>(null)
   const [selectedAddition, setSelectedAddition] = useState<AdditionRequest | null>(null)
   const [selectedShare, setSelectedShare] = useState<ShareRequest | null>(null)
@@ -215,8 +219,8 @@ export function RequestsView() {
             <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Заявки</h1>
           </div>
           <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-            <button onClick={() => setView('list')} title="Список" className={`p-2 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon /></button>
-            <button onClick={() => setView('grid')} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon /></button>
+            <button onClick={() => { setView('list'); localStorage.setItem('view-mode-requests', 'list') }} title="Список" className={`p-2 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon /></button>
+            <button onClick={() => { setView('grid'); localStorage.setItem('view-mode-requests', 'grid') }} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon /></button>
           </div>
         </div>
         <div className="flex gap-0 -mb-px">
@@ -514,6 +518,60 @@ function VerifiedBadge({ verified }: { verified: boolean }) {
   )
 }
 
+const SVC_STEPS = [
+  { value: 'open' as const, label: 'Открыта' },
+  { value: 'in_progress' as const, label: 'В работе' },
+  { value: 'closed' as const, label: 'Закрыта' },
+]
+
+function StatusStepper({ status, onChange }: {
+  status: 'open' | 'in_progress' | 'closed'
+  onChange: (s: 'open' | 'in_progress' | 'closed') => void
+}) {
+  const currentIndex = SVC_STEPS.findIndex(s => s.value === status)
+  return (
+    <div className="flex items-start w-full">
+      {SVC_STEPS.map((step, i) => {
+        const isActive = step.value === status
+        const isDone = i < currentIndex
+        return (
+          <Fragment key={step.value}>
+            <button
+              onClick={() => onChange(step.value)}
+              className="flex flex-col items-center gap-1.5 flex-1 cursor-pointer group"
+            >
+              <div className={cn(
+                'w-9 h-9 rounded-full flex items-center justify-center border-2 text-sm font-bold transition-all',
+                isActive
+                  ? 'bg-[#1B3A72] border-[#1B3A72] text-white scale-110 shadow-md shadow-[#1B3A72]/25'
+                  : isDone
+                  ? 'bg-green-500 border-green-500 text-white'
+                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-400 group-hover:border-[#4A8FE7] group-hover:text-[#4A8FE7]'
+              )}>
+                {isDone ? <CheckIcon className="w-4 h-4" /> : i + 1}
+              </div>
+              <span className={cn(
+                'text-xs font-medium text-center leading-tight',
+                isActive ? 'text-[#1B3A72] dark:text-blue-400' :
+                isDone ? 'text-green-600 dark:text-green-400' :
+                'text-slate-400 dark:text-slate-500'
+              )}>
+                {step.label}
+              </span>
+            </button>
+            {i < SVC_STEPS.length - 1 && (
+              <div className={cn(
+                'flex-1 h-0.5 mt-4.5 mx-1 transition-colors',
+                i < currentIndex ? 'bg-green-400' : 'bg-slate-200 dark:bg-slate-700'
+              )} />
+            )}
+          </Fragment>
+        )
+      })}
+    </div>
+  )
+}
+
 function ServiceDialog({ request, onClose }: { request: ServiceRequest; onClose: () => void }) {
   const qc = useQueryClient()
   const [status, setStatus] = useState(request.status)
@@ -559,22 +617,9 @@ function ServiceDialog({ request, onClose }: { request: ServiceRequest; onClose:
         </div>
       </div>
       <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700">
-        <p className="text-xs text-slate-400 mb-2">Изменить статус</p>
-        <div className="flex gap-2 mb-4">
-          {(['open', 'in_progress', 'closed'] as const).map(s => (
-            <button
-              key={s}
-              onClick={() => setStatus(s)}
-              className={cn(
-                'px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors flex-1 cursor-pointer',
-                status === s
-                  ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
-                  : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-500'
-              )}
-            >
-              {svcStatusLabel(s)}
-            </button>
-          ))}
+        <p className="text-xs text-slate-400 mb-4">Изменить статус <b className='font-extrabold animate-pulse bg-gradient-to-r bg-clip-text  text-transparent from-indigo-500 via-purple-500 to-indigo-500 animate-text'>(кликабельно!)</b></p>
+        <div className="mb-4">
+          <StatusStepper status={status} onChange={setStatus} />
         </div>
         {status !== request.status && (
           <div className="flex justify-end">
@@ -942,6 +987,9 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
+function CheckIcon({ className }: { className?: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+}
 function ListIcon() {
   return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
 }

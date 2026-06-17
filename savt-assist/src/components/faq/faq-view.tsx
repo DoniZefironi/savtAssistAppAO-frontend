@@ -83,6 +83,10 @@ export function FaqView() {
   const expandPanel = () => { setIsSnapping(true); setPanelWidth(CAT_DEFAULT); setTimeout(() => setIsSnapping(false), 200) }
 
   const [view, setView] = useState<'list' | 'grid'>('list')
+  useEffect(() => {
+    const saved = localStorage.getItem('view-mode-faq')
+    if (saved === 'list' || saved === 'grid') setView(saved)
+  }, [])
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null)
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
@@ -173,9 +177,23 @@ export function FaqView() {
   const allEntries = entriesQ.data?.pages.flatMap(p => p.items) ?? []
   const total = entriesQ.data?.pages[0]?.total
 
-  // Build category tree (2 levels)
+  // Build flat ordered list: roots first, each followed by their children.
+  // Orphaned cats (parent deleted) are appended so nothing is lost.
   const rootCats = categories.filter(c => !c.parent_id)
   const childrenOf = (parentId: number) => categories.filter(c => c.parent_id === parentId)
+  const shownIds = new Set<number>()
+  const orderedCats: { cat: FaqCategory; indent: number }[] = []
+  for (const root of rootCats) {
+    orderedCats.push({ cat: root, indent: 0 })
+    shownIds.add(root.id)
+    for (const child of childrenOf(root.id)) {
+      orderedCats.push({ cat: child, indent: 1 })
+      shownIds.add(child.id)
+    }
+  }
+  for (const cat of categories) {
+    if (!shownIds.has(cat.id)) orderedCats.push({ cat, indent: cat.parent_id ? 1 : 0 })
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -188,8 +206,8 @@ export function FaqView() {
           </div>
           <div className="flex items-center gap-2">
             <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-              <button onClick={() => setView('list')} title="Список" className={`p-1.5 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon className="w-4 h-4" /></button>
-              <button onClick={() => setView('grid')} title="Сетка" className={`p-1.5 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon className="w-4 h-4" /></button>
+              <button onClick={() => { setView('list'); localStorage.setItem('view-mode-faq', 'list') }} title="Список" className={`p-1.5 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon className="w-4 h-4" /></button>
+              <button onClick={() => { setView('grid'); localStorage.setItem('view-mode-faq', 'grid') }} title="Сетка" className={`p-1.5 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon className="w-4 h-4" /></button>
             </div>
             <Button onClick={() => setCreateEntryOpen(true)} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer">
               <PlusIcon className="w-4 h-4 mr-1.5" />
@@ -253,32 +271,17 @@ export function FaqView() {
               Все вопросы
             </button>
 
-            {rootCats.map(root => {
-              const children = childrenOf(root.id)
-              return (
-                <div key={root.id}>
-                  <CategoryRow
-                    cat={root}
-                    selected={selectedCatId === root.id}
-                    indent={0}
-                    onSelect={() => handleCatSelect(root.id)}
-                    onEdit={() => setEditCat(root)}
-                    onDelete={() => setDeleteConfirm({ type: 'category', id: root.id, name: root.name })}
-                  />
-                  {children.map(child => (
-                    <CategoryRow
-                      key={child.id}
-                      cat={child}
-                      selected={selectedCatId === child.id}
-                      indent={1}
-                      onSelect={() => handleCatSelect(child.id)}
-                      onEdit={() => setEditCat(child)}
-                      onDelete={() => setDeleteConfirm({ type: 'category', id: child.id, name: child.name })}
-                    />
-                  ))}
-                </div>
-              )
-            })}
+            {orderedCats.map(({ cat, indent }) => (
+              <CategoryRow
+                key={cat.id}
+                cat={cat}
+                selected={selectedCatId === cat.id}
+                indent={indent}
+                onSelect={() => handleCatSelect(cat.id)}
+                onEdit={() => setEditCat(cat)}
+                onDelete={() => setDeleteConfirm({ type: 'category', id: cat.id, name: cat.name })}
+              />
+            ))}
           </div>
 
           <div className="p-2 border-t border-slate-100 dark:border-slate-700/60">

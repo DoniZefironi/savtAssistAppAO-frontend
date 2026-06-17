@@ -2,9 +2,12 @@ import { apiClient } from './client'
 import type { Chat, ChatMessage, MessageAttachment } from '@/types'
 
 export const chatsApi = {
-  getChats: async (search?: string): Promise<Chat[]> => {
+  getChats: async (search?: string, inMessages?: boolean): Promise<Chat[]> => {
     const { data } = await apiClient.get<Chat[]>('/operator/chats', {
-      params: search ? { search } : {},
+      params: {
+        ...(search ? { search } : {}),
+        ...(search && inMessages ? { search_in_messages: true } : {}),
+      },
     })
     return data
   },
@@ -66,6 +69,36 @@ export const chatsApi = {
     const { data } = await apiClient.post('/upload/voice', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
+    return data
+  },
+
+  pinMessage: async (chatId: number, messageId: number): Promise<void> => {
+    await apiClient.post(`/operator/chats/${chatId}/messages/${messageId}/pin`)
+  },
+
+  unpinMessage: async (chatId: number): Promise<void> => {
+    await apiClient.delete(`/operator/chats/${chatId}/pin`)
+  },
+
+  getPinnedMessage: async (chatId: number): Promise<ChatMessage | null> => {
+    try {
+      const { data } = await apiClient.get<ChatMessage>(`/operator/chats/${chatId}/pinned`)
+      return data
+    } catch {
+      return null
+    }
+  },
+
+  clearHistory: async (chatId: number): Promise<void> => {
+    await apiClient.delete(`/operator/chats/${chatId}/messages`)
+  },
+
+  deleteChat: async (chatId: number): Promise<void> => {
+    await apiClient.delete(`/operator/chats/${chatId}`)
+  },
+
+  transcribeVoice: async (audioUrl: string): Promise<{ text: string }> => {
+    const { data } = await apiClient.post<{ text: string }>('/operator/transcribe', { audio_url: audioUrl })
     return data
   },
 

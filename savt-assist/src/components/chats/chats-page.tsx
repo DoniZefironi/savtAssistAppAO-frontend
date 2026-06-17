@@ -19,6 +19,7 @@ export function ChatsPage() {
   const [showConversation, setShowConversation] = useState(false)
   const [chatSearchInput, setChatSearchInput] = useState('')
   const [chatSearch, setChatSearch] = useState('')
+  const [searchInMessages, setSearchInMessages] = useState(false)
 
   // ─── Panel width & drag ────────────────────────────────────────────────────
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH)
@@ -85,8 +86,8 @@ export function ChatsPage() {
 
   // ─── Data ──────────────────────────────────────────────────────────────────
   const { data: rawChats = [], isLoading } = useQuery({
-    queryKey: ['operator-chats', chatSearch],
-    queryFn: () => chatsApi.getChats(chatSearch || undefined),
+    queryKey: ['operator-chats', chatSearch, searchInMessages],
+    queryFn: () => chatsApi.getChats(chatSearch || undefined, searchInMessages),
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
   })
@@ -99,7 +100,7 @@ export function ChatsPage() {
 
   const cabinetNameMap = useMemo(() => {
     const map = new Map<number, string>()
-    cabinetsData?.items.forEach((c) => map.set(c.id, c.admin_internal_name ?? c.object_number))
+    cabinetsData?.items.forEach((c) => map.set(c.id, c.object_number))
     return map
   }, [cabinetsData])
 
@@ -143,6 +144,8 @@ export function ChatsPage() {
           compact={isCompact && isDesktop}
           searchValue={chatSearchInput}
           onSearchChange={setChatSearchInput}
+          searchInMessages={searchInMessages}
+          onSearchInMessagesChange={setSearchInMessages}
         />
       </div>
 
@@ -169,6 +172,7 @@ export function ChatsPage() {
             onMessagesLoaded={() => {
               qc.invalidateQueries({ queryKey: ['operator-chats'], refetchType: 'none' })
             }}
+            onChatDeleted={() => { setSelectedChat(null); setShowConversation(false) }}
           />
         ) : (
           <EmptyState />
