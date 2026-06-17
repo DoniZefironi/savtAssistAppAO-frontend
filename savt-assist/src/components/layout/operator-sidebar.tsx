@@ -9,6 +9,7 @@ import Image from 'next/image'
 const navItems = [
   { href: '/operator/dashboard', label: 'Главная', icon: HomeIcon },
   { href: '/operator/cabinets', label: 'Шкафы управления', icon: BoardIcon },
+  { href: '/operator/requests', label: 'Заявки', icon: ClipboardIcon },
   { href: '/operator/chats', label: 'Чаты', icon: ChatIcon },
 ]
 
@@ -30,7 +31,7 @@ export function OperatorSidebar() {
             <button
               onClick={() => setCollapsed(false)}
               title="Развернуть"
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
             >
               <ChevronRightIcon />
             </button>
@@ -47,7 +48,7 @@ export function OperatorSidebar() {
             <button
               onClick={() => setCollapsed(true)}
               title="Свернуть"
-              className="w-7 h-7 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
+              className="w-7 h-7 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
             >
               <ChevronLeftIcon />
             </button>
@@ -107,4 +108,7 @@ function BoardIcon({ className }: { className?: string }) {
 }
 function ChatIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8.625 9.75a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375m-13.5 3.01c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.184-4.183a1.14 1.14 0 01.778-.332 48.294 48.294 0 005.83-.498c1.585-.233 2.708-1.626 2.708-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" /></svg>
+}
+function ClipboardIcon({ className }: { className?: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
 }

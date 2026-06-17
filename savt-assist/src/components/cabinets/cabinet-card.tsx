@@ -1,27 +1,94 @@
 import { Cabinet } from '@/types'
 import { WarrantyBadge } from './warranty-badge'
+import { formatDate } from '@/lib/warranty'
 import { Button } from '@/components/ui/button'
 
 interface Props {
   cabinet: Cabinet
   isAdmin: boolean
   loading?: boolean
-  onOpen: () => void  
-  onEdit: () => void   
+  view?: 'list' | 'grid'
+  onOpen: () => void
+  onEdit: () => void
   onQr: () => void
   onDelete?: () => void
 }
 
-export function CabinetCard({ cabinet, isAdmin, loading, onOpen, onEdit, onQr, onDelete }: Props) {
+export function CabinetCard({ cabinet, isAdmin, loading, view = 'list', onOpen, onEdit, onQr, onDelete }: Props) {
   const displayName = cabinet.admin_internal_name ?? cabinet.object_number
 
+  if (view === 'grid') {
+    return (
+      <div className="group relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-4 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-600 transition-all flex flex-col gap-2 cursor-pointer" onClick={onOpen}>
+
+        {/* Top: name + QR */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="font-semibold text-slate-800 dark:text-slate-100 truncate leading-tight">{displayName}</p>
+            <p className="text-xs text-slate-400 mt-0.5">{cabinet.object_number}</p>
+          </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); onQr() }}
+            title="Показать QR-код"
+            className="w-8 h-8 bg-[#1B3A72] rounded-lg flex items-center justify-center shrink-0 hover:bg-[#1B3A72]/80 transition-colors cursor-pointer"
+          >
+            {loading ? (
+              <svg className="w-3.5 h-3.5 text-white animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+            ) : (
+              <QrIcon className="w-4 h-4 text-white" />
+            )}
+          </button>
+        </div>
+
+        {/* Middle: type, purpose, comment */}
+        {(cabinet.type || cabinet.purpose) && (
+          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+            {[cabinet.type, cabinet.purpose].filter(Boolean).join(' · ')}
+          </p>
+        )}
+        {cabinet.admin_comment && (
+          <p className="text-xs text-slate-400 italic truncate">{cabinet.admin_comment}</p>
+        )}
+
+        {/* Bottom: warranty */}
+        <div className="mt-auto pt-1 flex items-center gap-2 flex-wrap">
+          <WarrantyBadge warrantyEndsAt={cabinet.warranty_ends_at} warrantyStatus={cabinet.warranty_status} />
+          {(cabinet.warranty_starts_at || cabinet.warranty_ends_at) && (
+            <span className="text-xs text-slate-400">
+              {formatDate(cabinet.warranty_starts_at)} — {formatDate(cabinet.warranty_ends_at)}
+            </span>
+          )}
+        </div>
+
+        {/* Admin actions — hover overlay bottom-right */}
+        {isAdmin && (
+          <div
+            className="absolute bottom-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-[#1B3A72] cursor-pointer" title="Редактировать" onClick={onEdit}>
+              <EditIcon />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-500 cursor-pointer" title="Удалить" onClick={onDelete}>
+              <TrashIcon />
+            </Button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ─── List view ───────────────────────────────────────────────────────────────
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-4 flex items-center gap-4 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-600 transition-all group">
 
       <button
         onClick={onQr}
         title="Показать QR-код"
-        className="w-12 h-12 bg-[#1B3A72] rounded-xl flex items-center justify-center flex-shrink-0 hover:bg-[#1B3A72]/80 transition-colors relative cursor-pointer"
+        className="w-12 h-12 bg-[#1B3A72] rounded-xl flex items-center justify-center shrink-0 hover:bg-[#1B3A72]/80 transition-colors relative cursor-pointer"
       >
         {loading ? (
           <svg className="w-5 h-5 text-white animate-spin" fill="none" viewBox="0 0 24 24">
@@ -29,23 +96,30 @@ export function CabinetCard({ cabinet, isAdmin, loading, onOpen, onEdit, onQr, o
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
           </svg>
         ) : (
-          <>
-            <BoardIcon />
-            <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/0 opacity-0 hover:opacity-100 rounded-xl transition-opacity">
-              <QrIcon className="w-5 h-5 text-white" />
-            </span>
-          </>
+          <QrIcon className="w-5 h-5 text-white" />
         )}
       </button>
 
       <div className="flex-1 min-w-0 cursor-pointer" onClick={onOpen}>
         <p className="font-semibold text-slate-800 dark:text-slate-100 truncate">{displayName}</p>
-        <p className="text-sm text-slate-400 mt-0.5">{cabinet.object_number}</p>
-        <div className="mt-1.5">
-          <WarrantyBadge
-            warrantyEndsAt={cabinet.warranty_ends_at}
-            warrantyStatus={cabinet.warranty_status}
-          />
+        <p className="text-xs text-slate-400 mt-0.5">{cabinet.object_number}</p>
+
+        {(cabinet.type || cabinet.purpose) && (
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
+            {[cabinet.type, cabinet.purpose].filter(Boolean).join(' · ')}
+          </p>
+        )}
+        {cabinet.admin_comment && (
+          <p className="text-xs text-slate-400 italic mt-0.5 truncate">{cabinet.admin_comment}</p>
+        )}
+
+        <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+          <WarrantyBadge warrantyEndsAt={cabinet.warranty_ends_at} warrantyStatus={cabinet.warranty_status} />
+          {(cabinet.warranty_starts_at || cabinet.warranty_ends_at) && (
+            <span className="text-xs text-slate-400">
+              {formatDate(cabinet.warranty_starts_at)} — {formatDate(cabinet.warranty_ends_at)}
+            </span>
+          )}
         </div>
       </div>
 
@@ -54,22 +128,10 @@ export function CabinetCard({ cabinet, isAdmin, loading, onOpen, onEdit, onQr, o
           className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
           onClick={(e) => e.stopPropagation()}
         >
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-slate-400 hover:text-[#1B3A72] cursor-pointer"
-            title="Редактировать"
-            onClick={onEdit}
-          >
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-[#1B3A72] cursor-pointer" title="Редактировать" onClick={onEdit}>
             <EditIcon />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-slate-400 hover:text-red-500 cursor-pointer"
-            title="Удалить"
-            onClick={onDelete}
-          >
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-500 cursor-pointer" title="Удалить" onClick={onDelete}>
             <TrashIcon />
           </Button>
         </div>
@@ -78,13 +140,7 @@ export function CabinetCard({ cabinet, isAdmin, loading, onOpen, onEdit, onQr, o
   )
 }
 
-function BoardIcon() {
-  return (
-    <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m18 0h-1.5M8.25 19.5V21M12 3v1.5m0 15V21m3.75-18v1.5m0 15V21m-9-1.5h10.5a2.25 2.25 0 002.25-2.25V6.75a2.25 2.25 0 00-2.25-2.25H6.75A2.25 2.25 0 004.5 6.75v10.5a2.25 2.25 0 002.25 2.25zm.75-12h9v9h-9v-9z" />
-    </svg>
-  )
-}
+
 function QrIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

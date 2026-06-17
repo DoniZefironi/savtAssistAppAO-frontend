@@ -8,13 +8,17 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { WarrantyBadge } from './warranty-badge'
 import { cabinetsApi, UpdateCabinetDto } from '@/lib/api/cabinets'
+import type { CabinetUser } from '@/lib/api/cabinets'
 import { mediaApi } from '@/lib/api/media'
 import type { CabinetDocument, CabinetPhoto } from '@/lib/api/media'
+import { kbApi } from '@/lib/api/kb'
+import type { Tag } from '@/lib/api/kb'
+import { requestsApi } from '@/lib/api/requests'
 import { formatDate } from '@/lib/warranty'
 import { cn } from '@/lib/utils'
-import type { Cabinet } from '@/types'
+import type { Cabinet, ServiceRequest } from '@/types'
 
-type Tab = 'info' | 'docs' | 'photos'
+type Tab = 'info' | 'docs' | 'photos' | 'users' | 'requests'
 
 interface Props {
   cabinetId: number | null
@@ -95,6 +99,8 @@ function DetailContent({ cabinetId, isAdmin, initialMode }: {
     { id: 'info', label: 'Информация' },
     { id: 'docs', label: 'Документы' },
     { id: 'photos', label: 'Фото' },
+    { id: 'users', label: 'Пользователи' },
+    { id: 'requests', label: 'Заявки' },
   ]
 
   return (
@@ -143,7 +149,7 @@ function DetailContent({ cabinetId, isAdmin, initialMode }: {
             key={t.id}
             onClick={() => handleTabChange(t.id)}
             className={cn(
-              'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors',
+              'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer',
               tab === t.id
                 ? 'border-[#1B3A72] text-[#1B3A72] dark:text-blue-400 dark:border-blue-400'
                 : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
@@ -168,6 +174,8 @@ function DetailContent({ cabinetId, isAdmin, initialMode }: {
         )}
         {tab === 'docs' && <DocsTab cabinetId={cabinetId} isAdmin={isAdmin} />}
         {tab === 'photos' && <PhotosTab cabinetId={cabinetId} isAdmin={isAdmin} />}
+        {tab === 'users' && <UsersTab cabinetId={cabinetId} isAdmin={isAdmin} />}
+        {tab === 'requests' && <ServiceRequestsTab cabinetId={cabinetId} />}
       </div>
 
       {/* Footer — only for info tab */}
@@ -214,6 +222,9 @@ function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }
     queryFn: () => mediaApi.listDocuments(cabinetId),
   })
 
+  const tagsQ = useQuery({ queryKey: ['tags', 'document'], queryFn: () => kbApi.listTags('document') })
+  const allTags = tagsQ.data ?? []
+
   const uploadMut = useMutation({
     mutationFn: () => mediaApi.uploadDocument(cabinetId, pending!.file, pending!.title || undefined, pending!.requiresApproval),
     onSuccess: () => {
@@ -240,10 +251,18 @@ function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }
     e.target.value = ''
   }
 
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    if (!isAdmin || pending) return
+    const file = e.dataTransfer.files?.[0]
+    if (!file) return
+    setPending({ file, title: file.name.replace(/\.[^.]+$/, ''), requiresApproval: false })
+  }
+
   const docs = data?.items ?? []
 
   return (
-    <div>
+    <div onDragOver={e => e.preventDefault()} onDrop={handleDrop}>
       {isAdmin && (
         <div className="px-6 py-3 border-b border-slate-50 dark:border-slate-700/30">
           <input ref={fileRef} type="file" className="hidden" onChange={handleFileSelect} />
@@ -271,11 +290,11 @@ function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }
                   Требует согласования
                 </label>
                 <div className="flex gap-2">
-                  <Button variant="ghost" onClick={() => setPending(null)} className="h-7 text-xs px-2">Отмена</Button>
+                  <Button variant="ghost" onClick={() => setPending(null)} className="h-7 text-xs px-2 cursor-pointer">Отмена</Button>
                   <Button
                     onClick={() => uploadMut.mutate()}
                     disabled={uploadMut.isPending}
-                    className="h-7 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90"
+                    className="h-7 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
                   >
                     {uploadMut.isPending ? 'Загрузка...' : 'Загрузить'}
                   </Button>
@@ -285,7 +304,7 @@ function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }
           ) : (
             <button
               onClick={() => fileRef.current?.click()}
-              className="flex items-center gap-2 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline"
+              className="flex items-center gap-2 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline cursor-pointer"
             >
               <UploadIcon className="w-4 h-4" />
               Загрузить документ
@@ -313,6 +332,8 @@ function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }
             <DocRow
               key={doc.id}
               doc={doc}
+              allTags={allTags}
+              isAdmin={isAdmin}
               onOpen={() => window.open(mediaApi.toFullUrl(doc.file_url), '_blank')}
               onDownload={() => mediaApi.downloadDocument(doc.file_url, doc.title)}
               onDelete={isAdmin ? () => deleteMut.mutate(doc.id) : undefined}
@@ -325,59 +346,168 @@ function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }
   )
 }
 
-function DocRow({ doc, onOpen, onDownload, onDelete, deleting }: {
+function DocRow({ doc, allTags, isAdmin, onOpen, onDownload, onDelete, deleting }: {
   doc: CabinetDocument
+  allTags: Tag[]
+  isAdmin: boolean
   onOpen: () => void
   onDownload: () => void
   onDelete?: () => void
   deleting: boolean
 }) {
+  const qc = useQueryClient()
+  const [editingTags, setEditingTags] = useState(false)
+  const [selectedTags, setSelectedTags] = useState<Tag[]>(doc.tags)
+  const [tagInput, setTagInput] = useState('')
+  const [creatingTag, setCreatingTag] = useState(false)
+
+  const tagMut = useMutation({
+    mutationFn: () => mediaApi.updateDocumentTags(doc.id, selectedTags.map(t => t.id)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cabinet-docs', doc.cabinet_id] })
+      qc.invalidateQueries({ queryKey: ['tags'] })
+      toast.success('Теги обновлены')
+      setEditingTags(false)
+      setTagInput('')
+    },
+    onError: () => toast.error('Ошибка при обновлении тегов'),
+  })
+
+  const available = allTags.filter(t => !selectedTags.some(s => s.id === t.id))
+  const filtered = available.filter(t => t.name.toLowerCase().includes(tagInput.toLowerCase()))
+  const exactMatch = allTags.some(t => t.name.toLowerCase() === tagInput.trim().toLowerCase())
+  const showCreate = tagInput.trim().length > 0 && !exactMatch
+
+  const addTag = (tag: Tag) => { setSelectedTags(p => [...p, tag]); setTagInput('') }
+  const removeTag = (id: number) => setSelectedTags(p => p.filter(t => t.id !== id))
+
+  const handleCreateTag = async () => {
+    if (!tagInput.trim() || creatingTag) return
+    setCreatingTag(true)
+    try {
+      const tag = await kbApi.createTag(tagInput.trim(), 'document')
+      qc.invalidateQueries({ queryKey: ['tags'] })
+      addTag(tag)
+    } catch { toast.error('Не удалось создать тег') }
+    finally { setCreatingTag(false) }
+  }
+
+  const cancelEdit = () => { setSelectedTags(doc.tags); setTagInput(''); setEditingTags(false) }
+
   return (
-    <div onClick={onOpen} className="flex items-center gap-3 px-6 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 group cursor-pointer">
-      <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
-        {doc.mime_type.includes('pdf') ? (
-          <PdfIcon className="w-4 h-4 text-red-500" />
-        ) : doc.mime_type.startsWith('image/') ? (
-          <ImageIcon className="w-4 h-4 text-blue-500" />
-        ) : (
-          <FileIcon className="w-4 h-4 text-slate-400" />
-        )}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{doc.title}</p>
-        <div className="flex items-center gap-2 mt-0.5">
-          {doc.doc_type && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
-              {doc.doc_type}
-            </span>
+    <div className="group">
+      {/* Main row */}
+      <div onClick={onOpen} className="flex items-center gap-3 px-6 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer">
+        <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
+          {doc.mime_type.includes('pdf') ? (
+            <PdfIcon className="w-4 h-4 text-red-500" />
+          ) : doc.mime_type.startsWith('image/') ? (
+            <ImageIcon className="w-4 h-4 text-blue-500" />
+          ) : (
+            <FileIcon className="w-4 h-4 text-slate-400" />
           )}
-          <span className="text-xs text-slate-400">{fmtSize(doc.file_size_bytes)}</span>
-          {doc.requires_approval && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
-              Согласование
-            </span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{doc.title}</p>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {doc.doc_type && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
+                {doc.doc_type}
+              </span>
+            )}
+            <span className="text-xs text-slate-400">{fmtSize(doc.file_size_bytes)}</span>
+            {doc.requires_approval && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
+                Согласование
+              </span>
+            )}
+            {doc.tags.map(tag => (
+              <span key={tag.id} className="text-xs px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
+                {tag.name}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {isAdmin && (
+            <button
+              onClick={e => { e.stopPropagation(); setEditingTags(v => !v) }}
+              title="Теги"
+              className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 transition-colors cursor-pointer"
+            >
+              <TagIcon className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); onDownload() }}
+            title="Скачать"
+            className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+          >
+            <DownloadIcon className="w-4 h-4" />
+          </button>
+          {onDelete && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete() }}
+              disabled={deleting}
+              title="Удалить"
+              className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+            >
+              <TrashIcon className="w-4 h-4" />
+            </button>
           )}
         </div>
       </div>
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          onClick={(e) => { e.stopPropagation(); onDownload() }}
-          title="Скачать"
-          className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-        >
-          <DownloadIcon className="w-4 h-4" />
-        </button>
-        {onDelete && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete() }}
-            disabled={deleting}
-            title="Удалить"
-            className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors"
-          >
-            <TrashIcon className="w-4 h-4" />
-          </button>
-        )}
-      </div>
+
+      {/* Inline tag editor */}
+      {editingTags && (
+        <div onClick={e => e.stopPropagation()} className="px-6 pb-3 space-y-2 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-700/30">
+          {/* Selected tags */}
+          <div className="flex flex-wrap gap-1.5 pt-2">
+            {selectedTags.length === 0 && (
+              <span className="text-xs text-slate-400 italic">Нет тегов</span>
+            )}
+            {selectedTags.map(tag => (
+              <span key={tag.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#1B3A72]/10 text-[#1B3A72] dark:bg-blue-900/30 dark:text-blue-400 text-xs font-medium">
+                {tag.name}
+                <button onClick={() => removeTag(tag.id)} className="hover:text-red-500 transition-colors cursor-pointer leading-none">×</button>
+              </span>
+            ))}
+          </div>
+
+          {/* Search input + dropdown */}
+          <div className="relative">
+            <input
+              value={tagInput}
+              onChange={e => setTagInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); showCreate ? handleCreateTag() : filtered[0] && addTag(filtered[0]) } }}
+              placeholder="Найти или создать тег..."
+              className="w-full px-3 py-1.5 text-xs border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] placeholder:text-slate-400"
+            />
+            {tagInput && (filtered.length > 0 || showCreate) && (
+              <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden max-h-36 overflow-y-auto">
+                {filtered.map(tag => (
+                  <button key={tag.id} onMouseDown={() => addTag(tag)} className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer">
+                    {tag.name}
+                  </button>
+                ))}
+                {showCreate && (
+                  <button onMouseDown={handleCreateTag} disabled={creatingTag} className="w-full text-left px-3 py-1.5 text-xs text-[#1B3A72] dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-700 border-t border-slate-100 dark:border-slate-700 cursor-pointer flex gap-1">
+                    <span className="font-medium">+ Создать</span> «{tagInput.trim()}»
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Save / Cancel */}
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={cancelEdit} className="h-6 text-xs px-2 cursor-pointer">Отмена</Button>
+            <Button onClick={() => tagMut.mutate()} disabled={tagMut.isPending} className="h-6 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer">
+              {tagMut.isPending ? 'Сохранение...' : 'Сохранить'}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -389,6 +519,7 @@ function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean
   const fileRef = useRef<HTMLInputElement>(null)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [caption, setCaption] = useState('')
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['cabinet-photos', cabinetId],
@@ -415,6 +546,16 @@ function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean
     onError: () => toast.error('Ошибка при удалении'),
   })
 
+  const updateMut = useMutation({
+    mutationFn: ({ id, caption, sort_order }: { id: number; caption: string | null; sort_order: number }) =>
+      mediaApi.updatePhoto(id, caption, sort_order),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cabinet-photos', cabinetId] })
+      toast.success('Фото обновлено')
+    },
+    onError: () => toast.error('Ошибка при обновлении'),
+  })
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -423,12 +564,21 @@ function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean
     e.target.value = ''
   }
 
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    if (!isAdmin || pendingFile) return
+    const file = e.dataTransfer.files?.[0]
+    if (!file || !file.type.startsWith('image/')) return
+    setPendingFile(file)
+    setCaption('')
+  }
+
   const cancelPending = () => { setPendingFile(null); setCaption('') }
 
   const photos = data?.items ?? []
 
   return (
-    <div>
+    <div onDragOver={e => e.preventDefault()} onDrop={handleDrop}>
       {isAdmin && (
         <div className="px-6 py-3 border-b border-slate-50 dark:border-slate-700/30">
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
@@ -446,11 +596,11 @@ function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean
                 className="w-full px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
               />
               <div className="flex justify-end gap-2">
-                <Button variant="ghost" onClick={cancelPending} className="h-7 text-xs px-2">Отмена</Button>
+                <Button variant="ghost" onClick={cancelPending} className="h-7 text-xs px-2 cursor-pointer">Отмена</Button>
                 <Button
                   onClick={() => uploadMut.mutate()}
                   disabled={uploadMut.isPending}
-                  className="h-7 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90"
+                  className="h-7 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
                 >
                   {uploadMut.isPending ? 'Загрузка...' : 'Добавить'}
                 </Button>
@@ -459,7 +609,7 @@ function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean
           ) : (
             <button
               onClick={() => fileRef.current?.click()}
-              className="flex items-center gap-2 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline"
+              className="flex items-center gap-2 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline cursor-pointer"
             >
               <UploadIcon className="w-4 h-4" />
               Добавить фото
@@ -483,46 +633,331 @@ function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean
 
       {!isLoading && photos.length > 0 && (
         <div className="grid grid-cols-2 gap-2 px-6 py-4">
-          {photos.map(photo => (
+          {photos.map((photo, idx) => (
             <PhotoTile
               key={photo.id}
               photo={photo}
+              onOpen={() => setLightboxIdx(idx)}
               onDelete={isAdmin ? () => deleteMut.mutate(photo.id) : undefined}
+              onUpdate={isAdmin ? (cap, order) => updateMut.mutate({ id: photo.id, caption: cap, sort_order: order }) : undefined}
               deleting={deleteMut.isPending}
+              updating={updateMut.isPending}
             />
           ))}
+        </div>
+      )}
+
+      {lightboxIdx !== null && (
+        <PhotoLightbox
+          photos={photos}
+          initialIdx={lightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function PhotoTile({ photo, onOpen, onDelete, onUpdate, deleting, updating }: {
+  photo: CabinetPhoto
+  onOpen: () => void
+  onDelete?: () => void
+  onUpdate?: (caption: string | null, sortOrder: number) => void
+  deleting: boolean
+  updating: boolean
+}) {
+  const [editing, setEditing] = useState(false)
+  const [editCaption, setEditCaption] = useState(photo.caption ?? '')
+  const [editOrder, setEditOrder] = useState(String(photo.sort_order))
+
+  const handleSave = () => {
+    onUpdate?.(editCaption.trim() || null, parseInt(editOrder) || 0)
+    setEditing(false)
+  }
+
+  const handleCancel = () => {
+    setEditCaption(photo.caption ?? '')
+    setEditOrder(String(photo.sort_order))
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <div className="relative rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700 aspect-square">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={mediaApi.toFullUrl(photo.url)} alt="" className="w-full h-full object-cover opacity-30" />
+        <div className="absolute inset-0 bg-black/60 flex flex-col gap-2 p-3">
+          <textarea
+            value={editCaption}
+            onChange={e => setEditCaption(e.target.value)}
+            placeholder="Подпись..."
+            rows={2}
+            className="w-full text-xs px-2 py-1 rounded-lg bg-white/90 text-slate-800 resize-none outline-none"
+          />
+          <div className="flex items-center gap-2">
+            <span className="text-white/70 text-xs shrink-0">Порядок</span>
+            <input
+              type="number"
+              value={editOrder}
+              onChange={e => setEditOrder(e.target.value)}
+              className="w-16 text-xs px-2 py-0.5 rounded bg-white/90 text-slate-800 outline-none"
+            />
+          </div>
+          <div className="flex gap-1.5 mt-auto">
+            <button onClick={handleCancel} className="flex-1 text-xs py-1 rounded-lg bg-white/20 text-white hover:bg-white/30 cursor-pointer transition-colors">
+              Отмена
+            </button>
+            <button onClick={handleSave} disabled={updating} className="flex-1 text-xs py-1 rounded-lg bg-[#1B3A72] text-white hover:bg-[#1B3A72]/80 cursor-pointer transition-colors disabled:opacity-50">
+              {updating ? '...' : 'Сохранить'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative group rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700 aspect-square cursor-pointer" onClick={onOpen}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={mediaApi.toFullUrl(photo.url)}
+        alt={photo.caption ?? ''}
+        className="w-full h-full object-cover transition-transform group-hover:scale-105"
+      />
+      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {onUpdate && (
+          <button
+            onClick={e => { e.stopPropagation(); setEditing(true) }}
+            title="Редактировать"
+            className="w-7 h-7 rounded-lg bg-black/50 flex items-center justify-center text-white hover:bg-[#1B3A72]/80 cursor-pointer"
+          >
+            <PencilIcon className="w-3.5 h-3.5" />
+          </button>
+        )}
+        {onDelete && (
+          <button
+            onClick={e => { e.stopPropagation(); onDelete() }}
+            disabled={deleting}
+            title="Удалить"
+            className="w-7 h-7 rounded-lg bg-black/50 flex items-center justify-center text-white hover:bg-red-500/80 cursor-pointer"
+          >
+            <TrashIcon className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+      {photo.caption && (
+        <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 bg-linear-to-t from-black/60 to-transparent">
+          <p className="text-xs text-white truncate">{photo.caption}</p>
         </div>
       )}
     </div>
   )
 }
 
-function PhotoTile({ photo, onDelete, deleting }: {
-  photo: CabinetPhoto
-  onDelete?: () => void
-  deleting: boolean
+function PhotoLightbox({ photos, initialIdx, onClose }: {
+  photos: CabinetPhoto[]
+  initialIdx: number
+  onClose: () => void
 }) {
+  const [idx, setIdx] = useState(initialIdx)
+  const photo = photos[idx]
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+      if (e.key === 'ArrowLeft') setIdx(i => Math.max(0, i - 1))
+      if (e.key === 'ArrowRight') setIdx(i => Math.min(photos.length - 1, i + 1))
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose, photos.length])
+
   return (
-    <div className="relative group rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700 aspect-square">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={mediaApi.toFullUrl(photo.url)}
-        alt={photo.caption ?? ''}
-        className="w-full h-full object-cover"
-      />
-      {onDelete && (
+    <div
+      className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
+      onClick={onClose}
+    >
+      {/* Close */}
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer z-10"
+      >
+        <XIcon className="w-5 h-5" />
+      </button>
+
+      <div className="flex items-center gap-4 px-4 max-w-5xl w-full" onClick={e => e.stopPropagation()}>
+        {/* Prev */}
         <button
-          onClick={onDelete}
-          disabled={deleting}
-          title="Удалить"
-          className="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/50 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/80"
+          onClick={() => setIdx(i => Math.max(0, i - 1))}
+          disabled={idx === 0}
+          className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white shrink-0 transition-colors cursor-pointer disabled:opacity-20"
         >
-          <TrashIcon className="w-4 h-4" />
+          <ChevronLeftIcon className="w-5 h-5" />
         </button>
-      )}
-      {photo.caption && (
-        <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 bg-linear-to-t from-black/60 to-transparent">
-          <p className="text-xs text-white truncate">{photo.caption}</p>
+
+        {/* Image */}
+        <div className="flex-1 flex flex-col items-center gap-3 min-w-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={mediaApi.toFullUrl(photo.url)}
+            alt={photo.caption ?? ''}
+            className="max-h-[75vh] max-w-full object-contain rounded-xl"
+          />
+          {photo.caption && (
+            <p className="text-white/70 text-sm text-center">{photo.caption}</p>
+          )}
+          {photos.length > 1 && (
+            <p className="text-white/40 text-xs">{idx + 1} / {photos.length}</p>
+          )}
+        </div>
+
+        {/* Next */}
+        <button
+          onClick={() => setIdx(i => Math.min(photos.length - 1, i + 1))}
+          disabled={idx === photos.length - 1}
+          className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white shrink-0 transition-colors cursor-pointer disabled:opacity-20"
+        >
+          <ChevronRightIcon className="w-5 h-5" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Users tab ───────────────────────────────────────────────────────────────
+
+function UsersTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }) {
+  const qc = useQueryClient()
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['cabinet-users', cabinetId],
+    queryFn: () => cabinetsApi.getCabinetUsers(cabinetId),
+  })
+
+  const removeMut = useMutation({
+    mutationFn: ({ userId, reason }: { userId: number; reason: string }) =>
+      cabinetsApi.removeCabinetUser(cabinetId, userId, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cabinet-users', cabinetId] })
+      toast.success('Пользователь откреплён')
+    },
+    onError: () => toast.error('Ошибка при откреплении'),
+  })
+
+  const users = data ?? []
+
+  if (isLoading) {
+    return (
+      <div className="space-y-2 px-6 py-4">
+        {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
+      </div>
+    )
+  }
+
+  if (users.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+        <UsersIcon className="w-8 h-8 mb-2 opacity-40" />
+        <p className="text-sm">Нет привязанных пользователей</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="divide-y divide-slate-50 dark:divide-slate-700/30">
+      {users.map(u => (
+        <UserRow
+          key={u.user_id}
+          user={u}
+          isAdmin={isAdmin}
+          onRemove={(reason) => removeMut.mutate({ userId: u.user_id, reason })}
+          removing={removeMut.isPending}
+        />
+      ))}
+    </div>
+  )
+}
+
+function UserRow({ user, isAdmin, onRemove, removing }: {
+  user: CabinetUser
+  isAdmin: boolean
+  onRemove: (reason: string) => void
+  removing: boolean
+}) {
+  const [showForm, setShowForm] = useState(false)
+  const [reason, setReason] = useState('')
+
+  function fmtDate(d: string) {
+    return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
+  }
+
+  return (
+    <div className="px-6 py-3">
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
+          <UsersIcon className="w-4 h-4 text-slate-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+              {user.full_name ?? user.phone ?? `#${user.user_id}`}
+            </p>
+            {user.is_primary && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 shrink-0">
+                Основной
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+            {user.phone && (
+              <span className="text-xs text-slate-400">{user.phone}</span>
+            )}
+            {user.custom_name && (
+              <span className="text-xs text-slate-400 italic">«{user.custom_name}»</span>
+            )}
+            <span className="text-xs text-slate-400">с {fmtDate(user.added_at)}</span>
+          </div>
+        </div>
+        {isAdmin && !showForm && (
+          <button
+            onClick={() => setShowForm(true)}
+            title="Открепить"
+            className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer shrink-0"
+          >
+            <TrashIcon className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {showForm && (
+        <div className="mt-2 space-y-2 pl-12">
+          <label className="text-xs font-medium text-slate-500 block">
+            Причина открепления <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            placeholder="Укажите причину"
+            rows={2}
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 resize-none focus:outline-none focus:border-[#4A8FE7]"
+          />
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => { setShowForm(false); setReason('') }}
+              disabled={removing}
+              className="h-7 text-xs px-2 cursor-pointer"
+            >
+              Отмена
+            </Button>
+            <Button
+              onClick={() => { onRemove(reason); setShowForm(false); setReason('') }}
+              disabled={!reason.trim() || removing}
+              className="h-7 text-xs px-3 bg-red-500 hover:bg-red-600 cursor-pointer"
+            >
+              {removing ? 'Откреп...' : 'Открепить'}
+            </Button>
+          </div>
         </div>
       )}
     </div>
@@ -666,6 +1101,263 @@ function DetailSkeleton() {
   )
 }
 
+// ─── Cabinet tags row ─────────────────────────────────────────────────────────
+
+function CabinetTagsRow({ cabinetId, cabinet, isAdmin }: {
+  cabinetId: number
+  cabinet: import('@/types').Cabinet
+  isAdmin: boolean
+}) {
+  const qc = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [selectedTags, setSelectedTags] = useState<Tag[]>((cabinet.tags ?? []) as Tag[])
+  const [input, setInput] = useState('')
+  const [creating, setCreating] = useState(false)
+
+  const tagsQ = useQuery({ queryKey: ['tags', 'cabinet'], queryFn: () => kbApi.listTags('cabinet') })
+  const allTags = tagsQ.data ?? []
+
+  const tagMut = useMutation({
+    mutationFn: () => cabinetsApi.updateCabinetTags(cabinetId, selectedTags.map(t => t.id)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cabinet', cabinetId] })
+      qc.invalidateQueries({ queryKey: ['cabinets'] })
+      toast.success('Теги обновлены')
+      setEditing(false)
+      setInput('')
+    },
+    onError: () => toast.error('Ошибка при обновлении тегов'),
+  })
+
+  const available = allTags.filter(t => !selectedTags.some(s => s.id === t.id))
+  const filtered = available.filter(t => t.name.toLowerCase().includes(input.toLowerCase()))
+  const exactMatch = allTags.some(t => t.name.toLowerCase() === input.trim().toLowerCase())
+  const showCreate = input.trim().length > 0 && !exactMatch
+
+  const addTag = (tag: Tag) => { setSelectedTags(p => [...p, tag]); setInput('') }
+  const removeTag = (id: number) => setSelectedTags(p => p.filter(t => t.id !== id))
+
+  const handleCreate = async () => {
+    if (!input.trim() || creating) return
+    setCreating(true)
+    try {
+      const tag = await kbApi.createTag(input.trim(), 'cabinet')
+      qc.invalidateQueries({ queryKey: ['tags', 'cabinet'] })
+      addTag(tag)
+    } catch { toast.error('Не удалось создать тег') }
+    finally { setCreating(false) }
+  }
+
+  const cancel = () => {
+    setSelectedTags((cabinet.tags ?? []) as Tag[])
+    setInput('')
+    setEditing(false)
+  }
+
+  const currentTags = editing ? selectedTags : (cabinet.tags ?? []) as Tag[]
+
+  return (
+    <div className="flex gap-4 px-6 py-3">
+      <span className="text-xs text-slate-400 w-28 shrink-0 pt-0.5">Теги</span>
+      <div className="flex-1 min-w-0">
+        {/* Tags display */}
+        <div className="flex flex-wrap gap-1.5 mb-1">
+          {currentTags.length === 0 && !editing && (
+            <span className="text-sm text-slate-300 italic">Нет тегов</span>
+          )}
+          {currentTags.map(tag => (
+            <span key={tag.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#1B3A72]/10 text-[#1B3A72] dark:bg-blue-900/30 dark:text-blue-400 text-xs font-medium">
+              {tag.name}
+              {editing && (
+                <button onClick={() => removeTag(tag.id)} className="hover:text-red-500 transition-colors cursor-pointer leading-none">×</button>
+              )}
+            </span>
+          ))}
+        </div>
+
+        {/* Editor */}
+        {editing && (
+          <div className="space-y-2 mt-2">
+            <div className="relative">
+              <input
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); showCreate ? handleCreate() : filtered[0] && addTag(filtered[0]) } }}
+                placeholder="Найти или создать тег..."
+                className="w-full px-3 py-1.5 text-xs border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] placeholder:text-slate-400"
+              />
+              {input && (filtered.length > 0 || showCreate) && (
+                <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden max-h-36 overflow-y-auto">
+                  {filtered.map(tag => (
+                    <button key={tag.id} onMouseDown={() => addTag(tag)} className="w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer">
+                      {tag.name}
+                    </button>
+                  ))}
+                  {showCreate && (
+                    <button onMouseDown={handleCreate} disabled={creating} className="w-full text-left px-3 py-1.5 text-xs text-[#1B3A72] dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-700 border-t border-slate-100 dark:border-slate-700 cursor-pointer flex gap-1">
+                      <span className="font-medium">+ Создать</span> «{input.trim()}»
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={cancel} className="h-6 text-xs px-2 cursor-pointer">Отмена</Button>
+              <Button onClick={() => tagMut.mutate()} disabled={tagMut.isPending} className="h-6 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer">
+                {tagMut.isPending ? 'Сохранение...' : 'Сохранить'}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Edit button */}
+        {!editing && isAdmin && (
+          <button onClick={() => setEditing(true)} className="text-xs text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 transition-colors cursor-pointer mt-0.5">
+            + редактировать теги
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Service requests tab ────────────────────────────────────────────────────
+
+const REQUEST_TYPE_LABELS: Record<string, string> = {
+  repair: 'Ремонт',
+  maintenance: 'Обслуживание',
+  inspection: 'Осмотр',
+  other: 'Другое',
+}
+
+const REQUEST_STATUS_LABELS: Record<string, string> = {
+  open: 'Открыта',
+  in_progress: 'В работе',
+  closed: 'Закрыта',
+}
+
+const REQUEST_STATUS_NEXT: Record<string, string> = {
+  open: 'in_progress',
+  in_progress: 'closed',
+}
+
+function ServiceRequestsTab({ cabinetId }: { cabinetId: number }) {
+  const qc = useQueryClient()
+  const [status, setStatus] = useState('open')
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['cabinet-service-requests', cabinetId, status],
+    queryFn: () => requestsApi.getServiceRequests({ cabinet_id: cabinetId, status, size: 50 }),
+  })
+
+  const statusMut = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      requestsApi.updateServiceRequestStatus(id, status),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cabinet-service-requests', cabinetId] })
+      toast.success('Статус обновлён')
+    },
+    onError: () => toast.error('Не удалось обновить статус'),
+  })
+
+  const STATUS_TABS = [
+    { value: 'open', label: 'Открытые' },
+    { value: 'in_progress', label: 'В работе' },
+    { value: 'closed', label: 'Закрытые' },
+  ]
+
+  const requests = data?.items ?? []
+
+  return (
+    <div>
+      <div className="flex border-b border-slate-100 dark:border-slate-700/30 shrink-0">
+        {STATUS_TABS.map(t => (
+          <button
+            key={t.value}
+            onClick={() => setStatus(t.value)}
+            className={cn(
+              'px-4 py-2.5 text-sm transition-colors cursor-pointer border-b-2',
+              status === t.value
+                ? 'border-[#1B3A72] text-[#1B3A72] dark:text-blue-400 dark:border-blue-400 font-medium'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {isLoading && (
+        <div className="space-y-2 px-6 py-3">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
+        </div>
+      )}
+
+      {!isLoading && requests.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-10 text-slate-400">
+          <ToolIcon className="w-8 h-8 mb-2 opacity-40" />
+          <p className="text-sm">Нет заявок</p>
+        </div>
+      )}
+
+      {!isLoading && requests.length > 0 && (
+        <div className="divide-y divide-slate-50 dark:divide-slate-700/30">
+          {requests.map(req => (
+            <ServiceRequestRow
+              key={req.id}
+              req={req}
+              onStatusChange={next => statusMut.mutate({ id: req.id, status: next })}
+              pending={statusMut.isPending}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ServiceRequestRow({ req, onStatusChange, pending }: {
+  req: ServiceRequest
+  onStatusChange: (next: string) => void
+  pending: boolean
+}) {
+  const next = REQUEST_STATUS_NEXT[req.status]
+
+  return (
+    <div className="px-6 py-3 flex items-start gap-3">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium">
+            {REQUEST_TYPE_LABELS[req.request_type] ?? req.request_type}
+          </span>
+          <span className={cn(
+            'text-xs px-2 py-0.5 rounded font-medium',
+            req.status === 'open' && 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400',
+            req.status === 'in_progress' && 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
+            req.status === 'closed' && 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+          )}>
+            {REQUEST_STATUS_LABELS[req.status]}
+          </span>
+        </div>
+        <p className="text-sm text-slate-700 dark:text-slate-200 mt-1 line-clamp-2">{req.description}</p>
+        <div className="flex items-center gap-2 mt-1 flex-wrap">
+          {req.user_full_name && <span className="text-xs text-slate-400">{req.user_full_name}</span>}
+          <span className="text-xs text-slate-400">{formatDate(req.created_at)}</span>
+        </div>
+      </div>
+      {next && (
+        <button
+          onClick={() => onStatusChange(next)}
+          disabled={pending}
+          className="shrink-0 text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-[#1B3A72] hover:text-[#1B3A72] dark:hover:border-blue-400 dark:hover:text-blue-400 transition-colors cursor-pointer disabled:opacity-50"
+        >
+          {next === 'in_progress' ? 'В работу' : 'Закрыть'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
 function BoardIcon({ className }: { className?: string }) {
@@ -717,10 +1409,48 @@ function UploadIcon({ className }: { className?: string }) {
     </svg>
   )
 }
+function UsersIcon({ className }: { className?: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
+}
 function DownloadIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+    </svg>
+  )
+}
+function TagIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
+    </svg>
+  )
+}
+function XIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  )
+}
+function ChevronLeftIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+    </svg>
+  )
+}
+function ChevronRightIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+    </svg>
+  )
+}
+function ToolIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l5.653-4.655m5.657-5.657l3.123-3.123a.5.5 0 00-.707-.707l-3.122 3.122m-5.657 5.657l1.795-1.795" />
     </svg>
   )
 }

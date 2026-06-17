@@ -34,19 +34,41 @@ export interface UserCabinet {
 interface ListParams {
   search?: string
   is_active?: boolean
+  role?: string
+  sort_by?: string
+  sort_order?: string
   page?: number
   size?: number
 }
 
 export const usersApi = {
+  getUserList: (params?: ListParams): Promise<PaginatedResponse<AdminUser>> =>
+    apiClient.get('/admin/users', { params }).then(r => r.data),
+
+  getOperatorList: (params?: ListParams): Promise<PaginatedResponse<AdminUser>> =>
+    apiClient.get('/admin/operators', { params }).then(r => r.data),
+
+  getAdminList: (params?: ListParams): Promise<PaginatedResponse<AdminUser>> =>
+    apiClient.get('/admin/admins', { params }).then(r => r.data),
+
+  /** @deprecated use getUserList / getOperatorList / getAdminList */
   getList: (params?: ListParams): Promise<PaginatedResponse<AdminUser>> =>
     apiClient.get('/admin/users', { params }).then(r => r.data),
 
   getOne: (id: number): Promise<AdminUserDetail> =>
     apiClient.get(`/admin/users/${id}`).then(r => r.data),
 
-  verify: (id: number) => apiClient.post(`/admin/users/${id}/verify`),
-  unverify: (id: number) => apiClient.post(`/admin/users/${id}/unverify`),
-  ban: (id: number) => apiClient.post(`/admin/users/${id}/ban`),
-  unban: (id: number) => apiClient.post(`/admin/users/${id}/unban`),
+  createOperator: (data: { login: string; password: string; full_name?: string | null }): Promise<AdminUser> =>
+    apiClient.post('/admin/operators', data).then(r => r.data),
+
+  deleteOperator: (id: number): Promise<void> =>
+    apiClient.delete(`/admin/operators/${id}`).then(() => undefined),
+
+  createAdmin: (data: { login: string; password: string; full_name?: string | null }): Promise<AdminUser> =>
+    apiClient.post('/admin/admins', data).then(r => r.data),
+
+  verify: (id: number) => apiClient.post(`/admin/users/${id}/verify`, {}),
+  unverify: (id: number) => apiClient.post(`/admin/users/${id}/unverify`, {}),
+  ban: (id: number, reason: string) => apiClient.post(`/admin/users/${id}/ban`, { reason }),
+  unban: (id: number) => apiClient.post(`/admin/users/${id}/unban`, {}),
 }

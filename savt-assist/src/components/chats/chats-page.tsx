@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChatListPanel } from './chat-list-panel'
 import { ChatConversation } from './chat-conversation'
@@ -8,15 +8,86 @@ import { chatsApi } from '@/lib/api/chats'
 import { cabinetsApi } from '@/lib/api/cabinets'
 import type { Chat, ChatMessage } from '@/types'
 
+const DEFAULT_WIDTH = 288
+const MIN_WIDTH = 56       // avatars-only
+const MAX_WIDTH = 480
+const COMPACT_SNAP = 90   // below this → snap to MIN_WIDTH on release
+
 export function ChatsPage() {
   const qc = useQueryClient()
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null)
   const [showConversation, setShowConversation] = useState(false)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [chatSearchInput, setChatSearchInput] = useState('')
+  const [chatSearch, setChatSearch] = useState('')
+  const [searchInMessages, setSearchInMessages] = useState(false)
 
+  // ─── Panel width & drag ────────────────────────────────────────────────────
+  const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH)
+  const [isSnapping, setIsSnapping] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(false)
+  const isDragging = useRef(false)
+  const dragStartX = useRef(0)
+  const dragStartWidth = useRef(0)
+
+  // Detect desktop
+  useEffect(() => {
+    const check = () => setIsDesktop(window.innerWidth >= 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    isDragging.current = true
+    dragStartX.current = e.clientX
+    dragStartWidth.current = panelWidth
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }, [panelWidth])
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!isDragging.current) return
+      const delta = e.clientX - dragStartX.current
+      const next = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, dragStartWidth.current + delta))
+      setPanelWidth(next)
+    }
+    const onUp = () => {
+      if (!isDragging.current) return
+      isDragging.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      // Snap to compact if released near minimum
+      setPanelWidth(w => {
+        if (w < COMPACT_SNAP) {
+          setIsSnapping(true)
+          setTimeout(() => setIsSnapping(false), 200)
+          return MIN_WIDTH
+        }
+        return w
+      })
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    return () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+  }, [])
+
+  const isCompact = panelWidth <= COMPACT_SNAP
+
+  // ─── Search debounce ───────────────────────────────────────────────────────
+  useEffect(() => {
+    const t = setTimeout(() => setChatSearch(chatSearchInput), 300)
+    return () => clearTimeout(t)
+  }, [chatSearchInput])
+
+  // ─── Data ──────────────────────────────────────────────────────────────────
   const { data: rawChats = [], isLoading } = useQuery({
-    queryKey: ['operator-chats'],
-    queryFn: chatsApi.getChats,
+    queryKey: ['operator-chats', chatSearch, searchInMessages],
+    queryFn: () => chatsApi.getChats(chatSearch || undefined, searchInMessages),
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
   })
@@ -29,74 +100,70 @@ export function ChatsPage() {
 
   const cabinetNameMap = useMemo(() => {
     const map = new Map<number, string>()
-    cabinetsData?.items.forEach((c) => map.set(c.id, c.admin_internal_name ?? c.object_number))
+    cabinetsData?.items.forEach((c) => map.set(c.id, c.object_number))
     return map
   }, [cabinetsData])
 
   const chats = useMemo<Chat[]>(() => {
     return rawChats
       .filter((c) => c.chat_type !== 'notes')
-      .map((chat) => {
-        const betterCabinetName = chat.cabinet_id
-          ? cabinetNameMap.get(chat.cabinet_id) ?? chat.cabinet_name
-          : chat.cabinet_name
-
-        const cachedMessages = qc.getQueryData<ChatMessage[]>(['messages', chat.id])
-        const cachedLastText = cachedMessages?.[0]?.text ?? cachedMessages?.[0]?.attachments?.[0]?.file_name
-
-        return {
-          ...chat,
-          cabinet_name: betterCabinetName,
-          last_message_text: chat.last_message_text ?? cachedLastText ?? null,
-          user_name:
-            chat.user_name ?? chat.user_full_name ??
-            getUserNameFromCache(qc, chat.id),
-        }
-      })
+      .map((chat) => ({
+        ...chat,
+        cabinet_name: chat.cabinet_id ? (cabinetNameMap.get(chat.cabinet_id) ?? chat.cabinet_name) : chat.cabinet_name,
+        last_message_text: chat.last_message_text ?? (() => {
+          const cached = qc.getQueryData<ChatMessage[]>(['messages', chat.id])
+          return cached?.[0]?.text ?? cached?.[0]?.attachments?.[0]?.file_name ?? null
+        })(),
+        user_name: chat.user_name ?? chat.user_full_name ?? getUserNameFromCache(qc, chat.id),
+      }))
   }, [rawChats, cabinetNameMap, qc])
 
-  const enrichedSelected = selectedChat
-    ? (chats.find((c) => c.id === selectedChat.id) ?? selectedChat)
-    : null
+  const enrichedSelected = selectedChat ? (chats.find((c) => c.id === selectedChat.id) ?? selectedChat) : null
 
   const handleSelect = useCallback((chat: Chat) => {
     setSelectedChat(chat)
     setShowConversation(true)
   }, [])
 
+  // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-1 overflow-hidden h-full">
-      <div className={`flex-shrink-0 h-full overflow-hidden transition-[width] duration-200 ${
-        showConversation
-          ? `hidden ${sidebarOpen ? 'md:flex md:flex-col md:w-72' : 'md:flex md:flex-col md:w-0'}`
-          : `flex flex-col ${sidebarOpen ? 'w-full md:w-72' : 'w-full md:w-0'}`
-      }`}>
-        <div className="w-72 h-full flex flex-col">
-          <ChatListPanel
-            chats={chats}
-            selectedId={enrichedSelected?.id ?? null}
-            onSelect={handleSelect}
-            loading={isLoading}
-            onCollapse={() => setSidebarOpen(false)}
-          />
+
+      {/* ── Side panel ── */}
+      <div
+        className={`shrink-0 h-full overflow-hidden flex flex-col ${
+          showConversation ? 'hidden md:flex' : 'flex w-full'
+        } ${isSnapping ? 'transition-[width] duration-150' : ''}`}
+        style={isDesktop ? { width: panelWidth } : undefined}
+      >
+        <ChatListPanel
+          chats={chats}
+          selectedId={enrichedSelected?.id ?? null}
+          onSelect={handleSelect}
+          loading={isLoading}
+          compact={isCompact && isDesktop}
+          searchValue={chatSearchInput}
+          onSearchChange={setChatSearchInput}
+          searchInMessages={searchInMessages}
+          onSearchInMessagesChange={setSearchInMessages}
+        />
+      </div>
+
+      {/* ── Drag handle (desktop only) ── */}
+      <div
+        onMouseDown={handleDragStart}
+        className="hidden md:flex w-1 shrink-0 cursor-col-resize items-center justify-center group relative bg-slate-200 dark:bg-slate-700 hover:bg-[#4A8FE7]/60 transition-colors duration-100 z-10"
+        title="Потяните для изменения ширины"
+      >
+        <div className="flex flex-col gap-[3px] opacity-0 group-hover:opacity-100 transition-opacity">
+          {[0,1,2,3,4].map(i => (
+            <div key={i} className="w-[3px] h-[3px] rounded-full bg-[#4A8FE7]" />
+          ))}
         </div>
       </div>
 
-      {!sidebarOpen && (
-        <div className="hidden md:flex flex-col items-center flex-shrink-0 w-10 h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700/60">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            title="Открыть список чатов"
-            className="mt-3 w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-            </svg>
-          </button>
-        </div>
-      )}
-
-      <div className={`flex-1 h-full ${showConversation ? 'flex flex-col' : 'hidden md:flex md:flex-col'}`}>
+      {/* ── Conversation ── */}
+      <div className={`flex-1 h-full min-w-0 ${showConversation ? 'flex flex-col' : 'hidden md:flex md:flex-col'}`}>
         {enrichedSelected ? (
           <ChatConversation
             key={enrichedSelected.id}
@@ -105,6 +172,7 @@ export function ChatsPage() {
             onMessagesLoaded={() => {
               qc.invalidateQueries({ queryKey: ['operator-chats'], refetchType: 'none' })
             }}
+            onChatDeleted={() => { setSelectedChat(null); setShowConversation(false) }}
           />
         ) : (
           <EmptyState />
@@ -126,9 +194,7 @@ function EmptyState() {
     <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-3 bg-[linear-gradient(160deg,#f5f7fa_0%,#eaeff8_100%)] dark:bg-slate-800">
       <span className="text-5xl">💬</span>
       <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Выберите чат</p>
-      <p className="text-xs text-slate-400 dark:text-slate-500 text-center max-w-40">
-        Выберите чат из списка слева
-      </p>
+      <p className="text-xs text-slate-400 dark:text-slate-500 text-center max-w-40">Выберите чат из списка слева</p>
     </div>
   )
 }

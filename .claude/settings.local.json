@@ -19,7 +19,9 @@
       "WebFetch(domain:helper.savt.by)",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(m.upper\\(\\), p, json.dumps\\(d['paths'][p][m].get\\('summary',''\\), ensure_ascii=False\\)\\) for p in d['paths'] for m in d['paths'][p] if 'user' in p.lower\\(\\)]\")",
       "PowerShell($spec = Invoke-RestMethod \"http://helper.savt.by/openapi.json\"; $spec.paths.PSObject.Properties | Where-Object { $_.Name -match 'user' } | ForEach-Object { $path = $_.Name; $_.Value.PSObject.Properties | ForEach-Object { \"$\\($_.Name.ToUpper\\(\\)\\) $path — $\\($_.Value.summary\\)\" } })",
-      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\ShaboldaV\\\\Documents\\\\GitHub\\\\savtAssistAppAO-frontend\\\\savt-assist\\\\src\\\\app\\\\admin\\\\users\")"
+      "PowerShell(New-Item -ItemType Directory -Force \"c:\\\\Users\\\\ShaboldaV\\\\Documents\\\\GitHub\\\\savtAssistAppAO-frontend\\\\savt-assist\\\\src\\\\app\\\\admin\\\\users\")",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\ShaboldaV\\\\Documents\\\\GitHub\\\\savtAssistAppAO-frontend\\\\savt-assist\" -Directory)",
+      "Bash(Select-Object Name)"
     ]
   }
 }

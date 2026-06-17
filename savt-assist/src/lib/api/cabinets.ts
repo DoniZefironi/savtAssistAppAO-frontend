@@ -20,6 +20,16 @@ export interface CreateCabinetDto {
   warranty_ends_at?: string | null
 }
 
+export interface CabinetUser {
+  user_id: number
+  full_name: string | null
+  phone: string | null
+  user_type: string | null
+  is_primary: boolean
+  custom_name: string | null
+  added_at: string
+}
+
 export interface UpdateCabinetDto {
   type?: string | null
   object_number?: string | null
@@ -56,6 +66,18 @@ export const cabinetsApi = {
     await apiClient.delete(`/admin/cabinets/${id}`)
   },
 
+  updateCabinetTags: (cabinetId: number, tagIds: number[]): Promise<void> =>
+    apiClient.put(`/admin/cabinets/${cabinetId}/tags`, { tag_ids: tagIds }).then(() => undefined),
+
+  getCabinetUsers: async (cabinetId: number): Promise<CabinetUser[]> => {
+    const { data } = await apiClient.get(`/admin/cabinets/${cabinetId}/users`)
+    return data
+  },
+
+  removeCabinetUser: async (cabinetId: number, userId: number, reason: string): Promise<void> => {
+    await apiClient.delete(`/admin/cabinets/${cabinetId}/users/${userId}`, { data: { reason } })
+  },
+
   getQr: async (id: number): Promise<Blob> => {
     const { data } = await apiClient.get(`/admin/cabinets/${id}/qr`, { responseType: 'blob' })
     return data
@@ -65,18 +87,24 @@ export const cabinetsApi = {
     const [cabinets, serviceReqs, additions, shares, users] = await Promise.allSettled([
       apiClient.get('/admin/cabinets', { params: { page: 1, size: 1 } }),
       apiClient.get('/admin/service-requests', { params: { status: 'open', page: 1, size: 1 } }),
-      apiClient.get('/admin/cabinet-requests/additions', { params: { status: 'pending' } }),
-      apiClient.get('/admin/cabinet-requests/shares', { params: { status: 'pending' } }),
-      apiClient.get('/admin/users'),
+      apiClient.get('/admin/cabinet-requests/additions', { params: { status: 'pending', page: 1, size: 1 } }),
+      apiClient.get('/admin/cabinet-requests/shares', { params: { status: 'pending', page: 1, size: 1 } }),
+      apiClient.get('/admin/users', { params: { page: 1, size: 1 } }),
     ])
 
+    const getTotal = (r: PromiseSettledResult<{ data: unknown }>) => {
+      if (r.status !== 'fulfilled') return 0
+      const d = r.value.data as Record<string, unknown>
+      if (typeof d?.total === 'number') return d.total
+      if (Array.isArray(d)) return d.length
+      return 0
+    }
+
     return {
-      totalCabinets: cabinets.status === 'fulfilled' ? cabinets.value.data.total : 0,
-      openServiceRequests: serviceReqs.status === 'fulfilled' ? serviceReqs.value.data.total : 0,
-      pendingCabinetRequests:
-        (additions.status === 'fulfilled' ? additions.value.data.length : 0) +
-        (shares.status === 'fulfilled' ? shares.value.data.length : 0),
-      totalUsers: users.status === 'fulfilled' ? users.value.data.length : 0,
+      totalCabinets: getTotal(cabinets),
+      openServiceRequests: getTotal(serviceReqs),
+      pendingCabinetRequests: getTotal(additions) + getTotal(shares),
+      totalUsers: getTotal(users),
     }
   },
 }

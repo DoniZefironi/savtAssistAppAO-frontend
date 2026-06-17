@@ -76,12 +76,12 @@ export function QrDialog({ cabinet, onClose }: Props) {
           )}
 
           <div className="flex gap-2 w-full">
-            <Button variant="outline" className="flex-1" onClick={onClose}>
+            <Button variant="outline" className="flex-1 cursor-pointer" onClick={onClose}>
               Закрыть
             </Button>
             {url && (
               <Button
-                className="flex-1 bg-[#1B3A72] hover:bg-[#1B3A72]/90 gap-2"
+                className="flex-1 bg-[#1B3A72] hover:bg-[#1B3A72]/90 gap-2 cursor-pointer"
                 onClick={handleDownload}
               >
                 <DownloadIcon />

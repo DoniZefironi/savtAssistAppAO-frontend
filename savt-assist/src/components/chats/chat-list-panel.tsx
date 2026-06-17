@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import type { Chat } from '@/types'
 
@@ -9,46 +8,97 @@ interface Props {
   selectedId: number | null
   onSelect: (chat: Chat) => void
   loading: boolean
+  compact?: boolean
+  searchValue: string
+  onSearchChange: (v: string) => void
+  searchInMessages?: boolean
+  onSearchInMessagesChange?: (v: boolean) => void
   onCollapse?: () => void
 }
 
-export function ChatListPanel({ chats, selectedId, onSelect, loading, onCollapse }: Props) {
-  const [search, setSearch] = useState('')
-
-  const filtered = chats.filter((c) =>
-    chatDisplayName(c).toLowerCase().includes(search.toLowerCase())
-  )
-
-  const sorted = [...filtered].sort((a, b) => {
+export function ChatListPanel({ chats, selectedId, onSelect, loading, compact, searchValue, onSearchChange, searchInMessages, onSearchInMessagesChange, onCollapse }: Props) {
+  const sorted = [...chats].sort((a, b) => {
     if (a.operator_requested && !b.operator_requested) return -1
     if (!a.operator_requested && b.operator_requested) return 1
     return new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime()
   })
 
+  // ─── Compact mode — avatars only ──────────────────────────────────────────
+  if (compact) {
+    return (
+      <div className="flex flex-col h-full bg-white dark:bg-slate-900 overflow-y-auto overflow-x-hidden">
+        {loading
+          ? Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex justify-center py-2">
+                <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
+              </div>
+            ))
+          : sorted.map(chat => (
+              <CompactChatRow
+                key={chat.id}
+                chat={chat}
+                selected={chat.id === selectedId}
+                onSelect={() => onSelect(chat)}
+              />
+            ))
+        }
+      </div>
+    )
+  }
+
+  // ─── Full mode ────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700/60">
-      <div className="px-3 py-3 border-b border-slate-100 dark:border-slate-700/60 flex items-center gap-2">
-        <div className="relative flex-1">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-          </svg>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск"
-            className="w-full text-sm bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:placeholder:text-slate-500 rounded-xl pl-9 pr-3 py-2 focus:outline-none focus:bg-slate-200 dark:focus:bg-slate-700 transition-colors"
-          />
-        </div>
-        {onCollapse && (
-          <button
-            onClick={onCollapse}
-            title="Свернуть панель"
-            className="hidden md:flex w-7 h-7 items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex-shrink-0"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+    <div className="flex flex-col h-full bg-white dark:bg-slate-900">
+      <div className="border-b border-slate-100 dark:border-slate-700/60">
+        <div className="px-3 py-3 flex items-center gap-2">
+          <div className="relative flex-1">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
             </svg>
-          </button>
+            <input
+              value={searchValue}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="Поиск"
+              className="w-full text-sm bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:placeholder:text-slate-500 rounded-xl pl-9 pr-3 py-2 focus:outline-none focus:bg-slate-200 dark:focus:bg-slate-700 transition-colors"
+            />
+          </div>
+          {onCollapse && (
+            <button
+              onClick={onCollapse}
+              title="Свернуть панель"
+              className="hidden md:flex w-7 h-7 items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0 cursor-pointer"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+              </svg>
+            </button>
+          )}
+        </div>
+        {searchValue && (
+          <div className="flex gap-1 px-3 pb-2.5">
+            <button
+              onClick={() => onSearchInMessagesChange?.(false)}
+              className={cn(
+                'flex-1 text-xs font-medium py-1 rounded-lg border transition-colors cursor-pointer',
+                !searchInMessages
+                  ? 'bg-[#1B3A72] border-[#1B3A72] text-white'
+                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-[#4A8FE7] hover:text-[#4A8FE7]'
+              )}
+            >
+              По чатам
+            </button>
+            <button
+              onClick={() => onSearchInMessagesChange?.(true)}
+              className={cn(
+                'flex-1 text-xs font-medium py-1 rounded-lg border transition-colors cursor-pointer',
+                searchInMessages
+                  ? 'bg-[#1B3A72] border-[#1B3A72] text-white'
+                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-[#4A8FE7] hover:text-[#4A8FE7]'
+              )}
+            >
+              По сообщениям
+            </button>
+          </div>
         )}
       </div>
 
@@ -57,7 +107,7 @@ export function ChatListPanel({ chats, selectedId, onSelect, loading, onCollapse
           <div className="space-y-px pt-1">
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="flex items-center gap-3 px-3 py-3">
-                <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse flex-shrink-0" />
+                <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse shrink-0" />
                 <div className="flex-1 space-y-2">
                   <div className="h-3.5 bg-slate-200 dark:bg-slate-700 rounded animate-pulse w-3/4" />
                   <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded animate-pulse w-1/2" />
@@ -70,7 +120,7 @@ export function ChatListPanel({ chats, selectedId, onSelect, loading, onCollapse
         {!loading && sorted.length === 0 && (
           <div className="flex flex-col items-center justify-center h-32 text-slate-400 text-sm gap-2">
             <span className="text-3xl">💬</span>
-            {search ? 'Ничего не найдено' : 'Нет чатов'}
+            {searchValue ? 'Ничего не найдено' : 'Нет чатов'}
           </div>
         )}
 
@@ -87,6 +137,51 @@ export function ChatListPanel({ chats, selectedId, onSelect, loading, onCollapse
   )
 }
 
+// ─── Compact row (avatar only) ────────────────────────────────────────────
+
+function CompactChatRow({ chat, selected, onSelect }: { chat: Chat; selected: boolean; onSelect: () => void }) {
+  const hasUnread = chat.unread_count > 0
+  const isWaiting = chat.operator_requested
+  const bg = selected ? 'ring-2 ring-[#1B3A72] ring-offset-1' : ''
+  const avatarBg = chatColor(chat)
+
+  return (
+    <button
+      onClick={onSelect}
+      title={chatDisplayName(chat)}
+      className={cn(
+        'relative w-full flex justify-center py-1.5 transition-colors cursor-pointer',
+        selected
+          ? 'bg-[#1B3A72]/10 dark:bg-[#1B3A72]/20'
+          : isWaiting
+            ? 'bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30'
+            : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+      )}
+    >
+      <div className={cn(
+        'w-9 h-9 rounded-full flex items-center justify-center text-base font-semibold text-white',
+        avatarBg, bg
+      )}>
+        {chat.chat_type === 'cabinet' ? '📦' : chat.chat_type === 'notes' ? '📝' : chatInitials(chat)}
+      </div>
+
+      {/* Unread badge */}
+      {hasUnread && (
+        <span className="absolute top-1 right-1.5 min-w-4 h-4 bg-[#1B3A72] text-white text-[9px] rounded-full flex items-center justify-center px-0.5 font-bold leading-none">
+          {chat.unread_count > 9 ? '9+' : chat.unread_count}
+        </span>
+      )}
+
+      {/* Waiting dot */}
+      {isWaiting && !hasUnread && (
+        <span className="absolute top-1.5 right-2 w-2 h-2 bg-amber-500 rounded-full" />
+      )}
+    </button>
+  )
+}
+
+// ─── Full row ─────────────────────────────────────────────────────────────
+
 function ChatRow({ chat, selected, onSelect }: { chat: Chat; selected: boolean; onSelect: () => void }) {
   const name = chatDisplayName(chat)
   const hasUnread = chat.unread_count > 0
@@ -96,7 +191,7 @@ function ChatRow({ chat, selected, onSelect }: { chat: Chat; selected: boolean; 
     <button
       onClick={onSelect}
       className={cn(
-        'w-full text-left flex items-center gap-3 px-3 py-2.5 transition-colors relative',
+        'w-full text-left flex items-center gap-3 px-3 py-2.5 transition-colors relative cursor-pointer',
         selected
           ? 'bg-[#1B3A72] text-white'
           : isWaiting
@@ -108,40 +203,26 @@ function ChatRow({ chat, selected, onSelect }: { chat: Chat; selected: boolean; 
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <span className={cn(
-            'text-sm font-semibold truncate',
-            selected ? 'text-white' : 'text-slate-800 dark:text-slate-100'
-          )}>
+          <span className={cn('text-sm font-semibold truncate', selected ? 'text-white' : 'text-slate-800 dark:text-slate-100')}>
             {name}
           </span>
           {chat.last_message_at && (
-            <span className={cn(
-              'text-xs shrink-0',
-              selected ? 'text-white/70' : hasUnread ? 'text-[#1B3A72] dark:text-blue-400' : 'text-slate-400'
-            )}>
+            <span className={cn('text-xs shrink-0', selected ? 'text-white/70' : hasUnread ? 'text-[#1B3A72] dark:text-blue-400' : 'text-slate-400')}>
               {formatTime(chat.last_message_at)}
             </span>
           )}
         </div>
 
         <div className="flex items-center justify-between gap-2 mt-0.5">
-          <p className={cn(
-            'text-xs truncate',
-            selected ? 'text-white/70' : 'text-slate-500 dark:text-slate-400'
-          )}>
+          <p className={cn('text-xs truncate', selected ? 'text-white/70' : 'text-slate-500 dark:text-slate-400')}>
             {chat.last_message_text ?? ''}
           </p>
-
           <div className="flex items-center gap-1 shrink-0">
-            {isWaiting && !selected && (
-              <span className="w-2 h-2 bg-amber-500 rounded-full" />
-            )}
+            {isWaiting && !selected && <span className="w-2 h-2 bg-amber-500 rounded-full" />}
             {hasUnread && (
               <span className={cn(
-                'min-w-[20px] h-5 rounded-full text-xs font-bold flex items-center justify-center px-1.5',
-                selected
-                  ? 'bg-white text-[#1B3A72]'
-                  : 'bg-[#1B3A72] text-white'
+                'min-w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center px-1.5',
+                selected ? 'bg-white text-[#1B3A72]' : 'bg-[#1B3A72] text-white'
               )}>
                 {chat.unread_count > 99 ? '99+' : chat.unread_count}
               </span>
@@ -154,24 +235,15 @@ function ChatRow({ chat, selected, onSelect }: { chat: Chat; selected: boolean; 
 }
 
 function ChatAvatar({ chat, selected }: { chat: Chat; selected: boolean }) {
-  const initials = chatInitials(chat)
   const bg = selected ? 'bg-white/20' : chatColor(chat)
-
   return (
-    <div className={cn(
-      'w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 text-lg font-semibold',
-      bg,
-      !selected && 'text-white'
-    )}>
-      {chat.chat_type === 'cabinet'
-        ? <span>📦</span>
-        : chat.chat_type === 'notes'
-          ? <span>📝</span>
-          : <span>{initials}</span>
-      }
+    <div className={cn('w-12 h-12 rounded-full flex items-center justify-center shrink-0 text-lg font-semibold', bg, !selected && 'text-white')}>
+      {chat.chat_type === 'cabinet' ? '📦' : chat.chat_type === 'notes' ? '📝' : chatInitials(chat)}
     </div>
   )
 }
+
+// ─── Helpers ──────────────────────────────────────────────────────────────
 
 export function chatDisplayName(chat: Chat): string {
   const user = chat.user_name ?? null
@@ -195,9 +267,7 @@ function chatColor(chat: Chat): string {
 export function formatTime(iso: string): string {
   const d = new Date(iso)
   const now = new Date()
-  if (d.toDateString() === now.toDateString()) {
-    return d.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })
-  }
+  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })
   const yesterday = new Date(now)
   yesterday.setDate(yesterday.getDate() - 1)
   if (d.toDateString() === yesterday.toDateString()) return 'вчера'

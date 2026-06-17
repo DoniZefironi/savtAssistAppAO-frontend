@@ -8,6 +8,13 @@
 | operator | operator           | 123qweASDZXC     |
 | user     | +375291002030      | qweasdzxc        |
 
+> Эти аккаунты не создаются автоматически миграциями. Администратора и оператора нужно создать через CLI:
+> ```bash
+> docker exec savt-backend-api-1 python -m app.cli create-admin admin 123qweASDZXC
+> docker exec savt-backend-api-1 python -m app.cli create-operator operator 123qweASDZXC
+> ```
+> Пользователя `+375291002030` — зарегистрировать через `POST /auth/register/start` + `/auth/register/complete`.
+
 ---
 
 ## Переменные окружения (.env)
@@ -18,8 +25,6 @@
 | `JWT_SECRET_KEY` | Секрет для подписи JWT |
 | `JWT_ACCESS_TOKEN_TTL_MINUTES` | Время жизни access-токена (мин) |
 | `JWT_REFRESH_TOKEN_TTL_DAYS` | Время жизни refresh-токена (дни) |
-| `SMS_BY_TOKEN` | API-токен SMS-провайдера |
-| `SMS_BY_ALPHANAME` | Имя отправителя SMS |
 | `CORS_ORIGINS` | Разрешённые origins через запятую |
 | `FIREBASE_CREDENTIALS_PATH` | Путь к JSON-ключу Firebase |
 | `YANDEX_FOLDER_ID` | Folder ID сервисного аккаунта Yandex Cloud |
@@ -27,6 +32,15 @@
 | `YANDEX_GPT_MODEL` | Модель YandexGPT (`yandexgpt-lite`) |
 | `BOT_FOLLOW_UP_MINUTES` | Через сколько минут бот пишет follow-up (по умолч. 60) |
 | `BOT_MAX_ATTEMPTS` | Попыток бота до предложения оператора (по умолч. 3) |
+| `APP_ENV` | Окружение (`dev`/`prod`), в `dev` включает SQL-логирование |
+| `SMS_PROVIDER` | Провайдер SMS: `mock` (по умолч.) или `smscenter` |
+| `SMSCENTER_LOGIN` | Логин аккаунта smscenter.by |
+| `SMSCENTER_PASSWORD` | Пароль аккаунта smscenter.by |
+| `SMSCENTER_SENDER` | Имя отправителя SMS (Sender ID), необязательно |
+| `SMSCENTER_BASE_URL` | Базовый URL API smscenter.by (по умолч. `https://smscentre.by`) |
+| `SMS_CODE_TTL_MINUTES` | Срок действия SMS-кода в минутах (по умолч. `10`) |
+| `SMS_CODE_MAX_ATTEMPTS` | Максимум попыток ввода SMS-кода (по умолч. `5`) |
+| `SMS_CODE_RESEND_COOLDOWN_SECONDS` | Кулдаун повторной отправки SMS-кода в секундах (по умолч. `60`) |
 
 ---
 
@@ -58,10 +72,14 @@ docker exec -it savt-backend-db-1 psql -U postgres -d savt
 
 API для управления пользователями, шкафами управления (ШУ), документацией, QR-кодами, чатами, сервисными заявками, уведомлениями, базой знаний и FAQ.
 
-**Роли:**
-1. **Пользователь** — добавляет ШУ, пользуется чатом поддержки, просматривает/запрашивает документацию, создаёт сервисные заявки.
-2. **Оператор** — отвечает в чате, обрабатывает заявки.
-3. **Администратор** — полное управление всеми данными.
+**Роли (иерархия от низшей к высшей):**
+1. **Пользователь** (`user`) — добавляет ШУ, пользуется чатом поддержки, просматривает/запрашивает документацию, создаёт сервисные заявки.
+2. **Оператор** (`operator`) — отвечает в чате, просматривает все данные. Создаётся через `POST /admin/users/operators` или CLI.
+3. **Администратор** (`admin`) — полное управление данными, создаёт операторов. Создаётся суперадмином через API или CLI.
+4. **Суперадмин** (`superadmin`) — управляет администраторами, имеет все права. Создаётся **только через CLI**.
+5. **Бот** (`bot`) — системная роль для Аси, не отображается в списках пользователей.
+
+> Иерархия: каждая роль выше автоматически имеет все права более низкой роли.
 
 ---
 
@@ -301,6 +319,38 @@ POST /chats/{chat_id}/read
 Убрать:    DELETE /chats/{chat_id}/messages/{msg_id}/reactions/{emoji}
 ```
 
+### Закрепить сообщение
+```
+Закрепить:  PUT    /chats/{chat_id}/pin/{msg_id}
+Открепить:  DELETE /chats/{chat_id}/pin
+→ Ответ: ChatOut с обновлённым pinned_message_id
+```
+
+### Обои чата
+```
+Установить: PATCH /chats/{chat_id}/wallpaper
+Тело: { "wallpaper_url": "/static/photos/bg.jpg" }
+Сбросить:   { "wallpaper_url": null }
+→ Ответ: ChatOut с обновлённым wallpaper_url
+```
+
+### Удалить чат
+```
+DELETE /chats/{chat_id}
+→ Только cabinet и notes. Чат поддержки нельзя удалить (403).
+→ 204 No Content
+```
+
+### Голосовое сообщение → текст
+```
+1. Загрузить: POST /upload/voice (multipart, file)
+   Ответ: { url: "/static/voices/abc.ogg" }
+
+2. Распознать: POST /upload/transcribe
+   Тело: { "file_url": "/static/voices/abc.ogg" }
+   Ответ: { "text": "распознанный текст" }
+```
+
 ---
 
 ## 4. Уведомления
@@ -329,6 +379,18 @@ POST /notifications/read-all    → прочитать все
 1. GET /notifications/settings → предзаполнить переключатели
 2. PATCH /notifications/settings
    Тело: { promotional: false }  ← только изменённые поля
+```
+
+### Push при новом сообщении
+```
+Когда оператор или бот пишет пользователю — сервер автоматически
+отправляет FCM push на все зарегистрированные устройства пользователя:
+  title: имя отправителя ("Ася" / "Оператор Иванов")
+  body:  текст сообщения (до 100 символов)
+  data:  { chat_id: "3", type: "chat_message" }
+
+Условие: тип уведомления chat_message должен быть включён
+в настройках пользователя (по умолчанию — включён).
 ```
 
 ---
@@ -406,6 +468,10 @@ POST /upload/attachment (multipart/form-data, поле: file)
 Голосовое сообщение:
 POST /upload/voice (multipart/form-data, поле: file)
 Ответ: { url: "/static/voices/abc.ogg" }
+
+Голосовое → текст:
+POST /upload/transcribe (JSON: { file_url: "/static/voices/abc.ogg" })
+Ответ: { text: "распознанный текст" }
 ```
 
 ---
@@ -468,7 +534,7 @@ POST /upload/voice (multipart/form-data, поле: file)
   "code": "123456"
 }
 ```
-Ответ:
+Ответ: `201 Created`
 ```json
 {
   "access_token": "eyJ...",
@@ -613,7 +679,7 @@ POST /upload/voice (multipart/form-data, поле: file)
 ---
 
 ### POST `/auth/change-phone/start`
-Запрос SMS-кода для смены номера телефона. Код отправляется на **новый** номер.
+Запрос SMS-кода для смены номера телефона. Код отправляется на **новый** номер. Лимит — 5 запросов в минуту.
 ```json
 { "new_phone": "+375291234568" }
 ```
@@ -626,7 +692,7 @@ POST /upload/voice (multipart/form-data, поле: file)
 ---
 
 ### POST `/auth/change-phone/complete`
-Подтверждение смены номера кодом из SMS.
+Подтверждение смены номера кодом из SMS. Лимит — 10 запросов в минуту.
 ```json
 {
   "new_phone": "+375291234568",
@@ -658,14 +724,20 @@ POST /upload/voice (multipart/form-data, поле: file)
 
 | Тип | Форматы | Лимит |
 |---|---|---|
-| Изображение | jpg, png, webp | 10 МБ |
-| Документ | pdf, doc, docx, xls, xlsx | 50 МБ |
+| Изображение | jpg, png, webp | 500 МБ |
+| Документ | pdf, doc, docx, xls, xlsx | 500 МБ |
 | Видео | mp4, mov | 500 МБ |
+
+Единый лимит на все типы вложений — 500 МБ.
 
 Ответ:
 ```json
 { "url": "/static/photos/abc123.jpg" }
 ```
+
+Ошибки:
+- `415` — неподдерживаемый MIME-тип файла
+- `413` — файл превышает лимит размера
 
 ---
 
@@ -681,6 +753,10 @@ POST /upload/voice (multipart/form-data, поле: file)
 { "url": "/static/voices/abc123.ogg" }
 ```
 
+Ошибки:
+- `415` — неподдерживаемый MIME-тип файла
+- `413` — файл превышает лимит размера
+
 ---
 
 ### GET `/upload/download?url={file_url}`
@@ -693,13 +769,35 @@ POST /upload/voice (multipart/form-data, поле: file)
 
 ---
 
+### POST `/upload/transcribe`
+Распознать голосовое сообщение в текст через Yandex SpeechKit. Требует настроенных `YANDEX_FOLDER_ID` и `YANDEX_API_KEY`.
+
+Тело запроса (JSON):
+```json
+{ "file_url": "/static/voices/abc123.ogg" }
+```
+
+Ответ:
+```json
+{ "text": "распознанный текст сообщения" }
+```
+
+Поддерживаемые форматы: `ogg/opus`, `mp3`. Файл должен быть предварительно загружен через `POST /upload/voice`.
+
+Ошибки:
+- `400` — некорректный URL
+- `404` — файл не найден
+- `503` — Yandex SpeechKit недоступен или не настроен
+
+---
+
 ## Рут `admin: cabinets` — управление ШУ (только админ)
 
 ### POST `/admin/cabinets`
 Создание нового ШУ. `unique_code` генерируется автоматически (64-бит случайный код).
 ```json
 {
-  "type": "Вентиляционная установка",
+  "type": "вентиляционная установка",
   "object_number": "29_099",
   "description": "Описание",
   "warranty_starts_at": "2025-01-01T00:00:00Z",
@@ -709,33 +807,47 @@ POST /upload/voice (multipart/form-data, поле: file)
   "purpose": "Вентиляция"
 }
 ```
-Ответ — полная информация о созданном ШУ включая `unique_code`.
+
+**Поле `type`:**
+- Приводится к нижнему регистру автоматически (`"Вентиляция"` = `"вентиляция"`)
+- Если тип новый — создаётся тег `scope="cabinet_type"` автоматически
+- На фронте: получить список готовых типов через `GET /tags?scope=cabinet_type` и показать выпадающий список
+
+Ответ — полная информация о созданном ШУ включая `unique_code` и `tags`.
 
 ---
 
 ### GET `/admin/cabinets`
-Список всех ШУ. Параметры:
-- `search` — поиск по типу, номеру объекта, названию
-- `sort_by` — `type`, `warranty_ends_at`, `object_number`, `created_at`
+Список всех ШУ. Доступно оператору и администратору. Параметры:
+- `search` — поиск по типу, номеру объекта, названию, назначению, описанию, комментарию
+- `tag_ids` — фильтр по тегам (`?tag_ids=1&tag_ids=2`)
+- `sort_by` — `type`, `warranty_ends_at`, `object_number`, `admin_internal_name`, `created_at`
 - `sort_order` — `asc`, `desc`
-- `page` — номер страницы (по умолчанию `1`)
-- `size` — элементов на странице (по умолчанию `20`, максимум `100`)
+- `page`, `size` — пагинация (по умолч. `1` / `20`, максимум `100`)
 
-Ответ:
+Каждый элемент содержит:
 ```json
 {
-  "items": [...],
-  "total": 150,
-  "page": 1,
-  "size": 20,
-  "pages": 8
+  "id": 1,
+  "unique_code": "A3F7BC1254E8D9F0",
+  "type": "Вентиляционная установка",
+  "object_number": "29_099",
+  "purpose": "Вентиляция",
+  "warranty_starts_at": "2025-01-01T00:00:00Z",
+  "warranty_ends_at": "2027-01-01T00:00:00Z",
+  "warranty_status": "active",
+  "admin_internal_name": "ШУ-18К",
+  "admin_comment": "Внутренний комментарий",
+  "tags": [{ "id": 2, "name": "Электрика", "scope": "cabinet" }],
+  "created_at": "2026-05-01T10:00:00Z"
 }
 ```
+`warranty_status`: `active`, `expiring_soon` (≤30 дней), `expired`.
 
 ---
 
 ### GET `/admin/cabinets/{cabinet_id}`
-Детальная информация о ШУ.
+Детальная информация о ШУ с тегами.
 
 ---
 
@@ -749,7 +861,18 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ---
 
 ### PATCH `/admin/cabinets/{cabinet_id}`
-Обновление данных ШУ (все поля опциональны).
+Обновление данных ШУ (все поля опциональны). Возвращает обновлённый ШУ с тегами.
+
+---
+
+### PUT `/admin/cabinets/{cabinet_id}/tags`
+Привязать теги к ШУ (полная замена). Только для администратора.
+```json
+{ "tag_ids": [1, 2] }
+```
+Пустой список снимает все теги. `204 No Content`.
+
+> Рекомендуется привязывать теги со `scope="cabinet"` (на фронте — выбирать из `GET /tags?scope=cabinet`), но сервер не проверяет `scope` тега при сохранении.
 
 ---
 
@@ -785,27 +908,39 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 
 ---
 
-## Рут `admin: cabinet requests` — заявки по ШУ (админ/оператор)
+## Рут `admin: cabinet requests` — заявки по ШУ (просмотр — оператор/админ, одобрение/отклонение — только админ)
 
 ### GET `/admin/cabinet-requests/additions`
-Заявки на добавление ШУ через фото. Параметры: `status=pending|approved|rejected`, `page`, `size`
+Заявки на добавление ШУ через фото. Параметры:
+- `status` — `pending` / `approved` / `rejected`
+- `search` — поиск по ФИО, телефону, организации пользователя
+- `sort_by` — `created_at` (по умолч.), `status`, `user_full_name`
+- `sort_order` — `asc` / `desc`
+- `page`, `size`
 
 ```json
-[
-  {
-    "id": 1,
-    "user_id": 8,
-    "user_full_name": "Иванов Иван",
-    "user_phone": "+375291234567",
-    "photo_url": "/static/photos/abc.jpg",
-    "user_comment": "Шкаф на заводе",
-    "status": "pending",
-    "cabinet_id": null,
-    "admin_response": null,
-    "created_at": "2026-05-12T08:00:00Z",
-    "resolved_at": null
-  }
-]
+{
+  "items": [
+    {
+      "id": 1,
+      "user_id": 8,
+      "user_full_name": "Иванов Иван",
+      "user_phone": "+375291234567",
+      "user_type": "individual",
+      "organization_name": null,
+      "user_is_verified": false,
+      "user_registered_at": "2026-04-01T10:00:00Z",
+      "photo_url": "/static/photos/abc.jpg",
+      "user_comment": "Шкаф на заводе",
+      "status": "pending",
+      "cabinet_id": null,
+      "admin_response": null,
+      "created_at": "2026-05-12T08:00:00Z",
+      "resolved_at": null
+    }
+  ],
+  "total": 1, "page": 1, "size": 20, "pages": 1
+}
 ```
 `cabinet_id` — `null` пока заявка не одобрена.
 
@@ -833,25 +968,37 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ---
 
 ### GET `/admin/cabinet-requests/shares`
-Заявки на доступ к уже существующему ШУ (сканирован QR, но ШУ уже занят). Параметры: `status=pending|approved|rejected`, `page`, `size`
+Заявки на доступ к уже существующему ШУ (сканирован QR, но ШУ уже занят). Параметры:
+- `status` — `pending` / `approved` / `rejected`
+- `search` — поиск по ФИО/телефону пользователя, типу/номеру/названию ШУ
+- `sort_by` — `created_at` (по умолч.), `status`, `user_full_name`, `cabinet_object_number`
+- `sort_order` — `asc` / `desc`
+- `page`, `size`
 
 ```json
-[
-  {
-    "id": 1,
-    "user_id": 10,
-    "user_full_name": "Петров Пётр",
-    "user_phone": "+375291111111",
-    "cabinet_id": 5,
-    "cabinet_type": "Вентиляционная установка",
-    "cabinet_object_number": "29_099",
-    "user_comment": null,
-    "status": "pending",
-    "admin_response": null,
-    "created_at": "2026-05-12T09:00:00Z",
-    "resolved_at": null
-  }
-]
+{
+  "items": [
+    {
+      "id": 1,
+      "user_id": 10,
+      "user_full_name": "Петров Пётр",
+      "user_phone": "+375291111111",
+      "user_type": "organization",
+      "organization_name": "ООО Ромашка",
+      "user_is_verified": true,
+      "user_registered_at": "2026-03-15T08:00:00Z",
+      "cabinet_id": 5,
+      "cabinet_type": "Вентиляционная установка",
+      "cabinet_object_number": "29_099",
+      "user_comment": null,
+      "status": "pending",
+      "admin_response": null,
+      "created_at": "2026-05-12T09:00:00Z",
+      "resolved_at": null
+    }
+  ],
+  "total": 1, "page": 1, "size": 20, "pages": 1
+}
 ```
 
 ---
@@ -876,34 +1023,102 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 
 ## Рут `admin: users` — управление пользователями (админ/оператор)
 
-### GET `/admin/users`
-Список всех пользователей. Параметры:
-- `search` — поиск по ФИО, телефону, организации
-- `is_active` — `true` / `false`
-- `page`, `size` — пагинация (по умолчанию `page=1`, `size=20`, максимум `100`)
+> Список **не показывает** пользователей с ролями `admin` и `bot` (системные аккаунты). Только `user` и `operator`.
 
+### POST `/admin/users/admins`
+Создать администратора. Только для **суперадмина**. Логируется в `audit_log`.
 ```json
-[
-  {
-    "id": 1,
-    "phone": "+375291234567",
-    "login": null,
-    "full_name": "Иванов Иван",
-    "user_type": "individual",
-    "organization_name": null,
-    "role": "user",
-    "is_active": true,
-    "is_phone_verified": true,
-    "is_verified": false,
-    "created_at": "2026-05-01T10:00:00Z"
-  }
-]
+{
+  "login": "admin2",
+  "password": "securePass8",
+  "full_name": "Сидоров Сидор"
+}
+```
+Ответ: созданный пользователь (`AdminUserListOut`), `201 Created`.
+
+---
+
+### POST `/admin/users/operators`
+Создать оператора. Только для администратора. Логируется в `audit_log`.
+```json
+{
+  "login": "operator2",
+  "password": "securePass8",
+  "full_name": "Иванов Иван"
+}
+```
+- `login` — минимум 3 символа, без пробелов, приводится к нижнему регистру, должен быть уникальным
+- `password` — минимум 8 символов
+- `full_name` — необязателен
+
+Ответ: созданный пользователь (`AdminUserListOut`), `201 Created`.
+
+> Создание **администратора** — через API (только суперадмин) или CLI:
+> ```bash
+> docker exec savt-backend-api-1 python -m app.cli create-admin <login> <password> [full_name]
+> ```
+
+---
+
+### DELETE `/admin/users/operators/{user_id}`
+Удалить оператора. Только для администратора. Логируется в `audit_log`.
+
+Что происходит:
+- Все сессии оператора немедленно отзываются (принудительный logout)
+- Аккаунт деактивируется и анонимизируется
+- Переписка в чатах сохраняется
+- Оператор исчезает из всех списков
+
+Ответ: `204 No Content`.
+
+---
+
+### GET `/admin/users`
+Только пользователи (`role=user`). Параметры:
+- `search` — поиск по ФИО, телефону, логину, email, организации
+- `is_active` — `true` / `false`
+- `sort_by` — `created_at` (по умолч.), `full_name`, `phone`, `email`, `role`
+- `sort_order` — `asc` / `desc`
+- `page`, `size` — пагинация (по умолч. `page=1`, `size=20`, максимум `100`)
+
+---
+
+### GET `/admin/operators`
+Только операторы (`role=operator`). Параметры: аналогично `/admin/users` (без значения `role` в `sort_by`).
+
+---
+
+### GET `/admin/admins`
+Только администраторы (`role=admin`). **Только для суперадмина.** Параметры: аналогично `/admin/users` (без значения `role` в `sort_by`).
+
+---
+
+Все три эндпоинта возвращают `PageOut[AdminUserListOut]`:
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "phone": "+375291234567",
+      "login": null,
+      "full_name": "Иванов Иван",
+      "user_type": "individual",
+      "organization_name": null,
+      "role": "user",
+      "is_active": true,
+      "is_phone_verified": true,
+      "is_verified": false,
+      "created_at": "2026-05-01T10:00:00Z"
+    }
+  ],
+  "total": 50, "page": 1, "size": 20, "pages": 3
+}
 ```
 
 ---
 
 ### GET `/admin/users/{user_id}`
-Детальная информация о пользователе включая список его ШУ с гарантийным статусом.
+Детальная информация о пользователе включая список его ШУ с гарантийным статусом. Доступно только для пользователей с ролью `user`/`operator` — для администраторов, суперадминов и системных аккаунтов возвращает `404`.
 
 ```json
 {
@@ -956,7 +1171,7 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ```json
 { "reason": "Нарушение условий использования" }
 ```
-Ответ: `204 No Content`.
+Поле `reason` обязательно (минимум 1 символ). Ответ: `204 No Content`.
 
 ---
 
@@ -964,6 +1179,10 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 Разблокировка пользователя. Только для администратора. Логируется в `audit_log`.
 
 Ответ: `204 No Content`.
+
+---
+
+`verify`/`unverify`/`ban`/`unban` применимы только к пользователям с ролью `user`/`operator`. При попытке выполнить действие над администратором, суперадмином или системным аккаунтом — `403`.
 
 ---
 
@@ -1123,7 +1342,7 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 
 | Поле | Тип | Обязательно |
 |---|---|---|
-| `file` | файл (jpg/png/webp) | ✅ |
+| `file` | файл (jpg/png/webp; сервер технически также принимает форматы из `/upload/attachment` — pdf/doc/docx/xls/xlsx/mp4/mov, но фронту следует загружать только изображения) | ✅ |
 | `cabinet_id` | int | ✅ |
 | `caption` | string | нет |
 | `sort_order` | int | нет (по умолчанию `0`) |
@@ -1149,7 +1368,12 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ---
 
 ### GET `/admin/document-requests`
-Заявки пользователей на доступ к закрытым документам. Параметры: `status=pending|approved|rejected`, `page`, `size`.
+Заявки пользователей на доступ к закрытым документам. Параметры:
+- `status` — `pending` / `approved` / `rejected`
+- `search` — поиск по ФИО/телефону/организации пользователя, типу документа
+- `sort_by` — `created_at` (по умолч.), `status`, `user_full_name`, `doc_type`
+- `sort_order` — `asc` / `desc`
+- `page`, `size`
 
 ---
 
@@ -1211,7 +1435,7 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ```json
 { "user_message": "Нужен для проверки регламента" }
 ```
-`user_message` необязателен. Ответ: `{ "request_id": 1, "message": "Заявка отправлена" }`.
+`user_message` необязателен. Ответ: `201 Created`, `{ "request_id": 1, "message": "Заявка отправлена" }`.
 
 ---
 
@@ -1222,19 +1446,33 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 
 ## Рут `tags` — теги
 
+Теги разделены по области видимости (`scope`):
+- `document` — теги для документов и статей базы знаний
+- `cabinet` — теги для ШУ
+- `cabinet_type` — типы ШУ (создаются автоматически при вводе нового типа)
+
 ### GET `/tags`
-Список всех тегов (все авторизованные пользователи).
+Список тегов. Параметры:
+- `scope` — фильтр: `document` / `cabinet` / `cabinet_type`. Без фильтра — все теги.
+
 ```json
-[{ "id": 1, "name": "паспорт" }, { "id": 2, "name": "схема" }]
+[
+  { "id": 1, "name": "паспорт", "scope": "document" },
+  { "id": 2, "name": "электрика", "scope": "cabinet_type" }
+]
 ```
+
+> Для автодополнения типа ШУ на фронте: `GET /tags?scope=cabinet_type`
 
 ---
 
 ### POST `/admin/tags`
-Создать тег.
+Создать тег вручную. Доступно администратору и оператору.
 ```json
-{ "name": "паспорт" }
+{ "name": "паспорт", "scope": "document" }
 ```
+- `scope`: `document` / `cabinet` / `cabinet_type`
+- Имя тега уникально в рамках одной области (сравнение без учёта регистра)
 
 ---
 
@@ -1297,6 +1535,7 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
     "chat_type": "cabinet",
     "cabinet_id": 5,
     "cabinet_name": "ШУ-18К",
+    "cabinet_object_number": "29_099",
     "last_message_text": "Здравствуйте, помогите",
     "last_message_at": "2026-05-15T10:00:00Z",
     "unread_count": 2,
@@ -1307,10 +1546,20 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ]
 ```
 
+`ChatOut` (возвращается при `GET /cabinets/{cabinet_id}/chat`, `PATCH wallpaper`, `PUT/DELETE pin`) содержит дополнительные поля:
+```json
+{
+  "wallpaper_url": "/static/photos/bg.jpg",
+  "pinned_message_id": 42
+}
+```
+
 ---
 
 ### GET `/cabinets/{cabinet_id}/chat`
 Получить или создать чат для конкретного ШУ. Чат создаётся автоматически если его ещё нет.
+
+> Требует, чтобы пользователь был привязан к ШУ (`user_cabinets`). Pending-заявка доступа не даёт — вернёт `403`.
 
 ---
 
@@ -1318,6 +1567,7 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 История сообщений. Параметры:
 - `before_id` — ID сообщения, загрузить более старые (cursor pagination для бесконечного скролла)
 - `limit` — количество (по умолчанию `30`, максимум `100`)
+- `search` — поиск по тексту сообщений
 
 Сообщения возвращаются от новых к старым.
 ```json
@@ -1387,15 +1637,48 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 
 ---
 
+### DELETE `/chats/{chat_id}`
+Удалить чат. Доступно только владельцу. Чат `support` удалить нельзя (403). Каскадно удаляет все сообщения. `204 No Content`.
+
+---
+
+### PATCH `/chats/{chat_id}/wallpaper`
+Установить или сбросить обои чата. Доступно только владельцу.
+```json
+{ "wallpaper_url": "/static/photos/bg.jpg" }
+```
+Для сброса: `{ "wallpaper_url": null }`. Ответ: `ChatOut`.
+
+---
+
+### PUT `/chats/{chat_id}/pin/{msg_id}`
+Закрепить сообщение. Ответ: `ChatOut` с обновлённым `pinned_message_id`.
+
+---
+
+### DELETE `/chats/{chat_id}/pin`
+Открепить сообщение. Ответ: `ChatOut` с `pinned_message_id: null`.
+
+---
+
 ## Рут `operator` — операторский интерфейс
 
 ### GET `/operator/chats`
-Все `cabinet` и `support` чаты. Сортировка: сначала ожидающие оператора (`operator_requested=true`).
+Все `cabinet` и `support` чаты. Параметры:
+- `search` — поиск по имени/телефону пользователя, номеру/типу/названию ШУ
+
+Сортировка: сначала ожидающие оператора (`operator_requested=true`), затем по последнему сообщению.
+
+Каждый чат содержит `user_id`, `user_name`, `cabinet_object_number`.
 
 ---
 
 ### GET `/operator/chats/{chat_id}/messages`
-История сообщений чата (аналогично пользовательскому, но без ограничения владельца).
+История сообщений чата. Параметры:
+- `before_id`, `limit` — cursor pagination
+- `search` — поиск по тексту сообщений
+
+Личные чаты пользователя (`chat_type=notes`) недоступны оператору/админу — `403`.
 
 ---
 
@@ -1417,7 +1700,7 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ## Рут `service requests` — сервисные заявки
 
 Типы заявок (`request_type`): `repair`, `maintenance`, `inspection`, `other`.
-Статусы: `open` → `in_progress` → `closed`.
+Статусы: `open`, `in_progress`, `closed`. Переход между статусами не валидируется — администратор/оператор может установить любой статус через `PATCH /admin/service-requests/{req_id}/status` (типичный сценарий: `open → in_progress → closed`).
 
 ### POST `/service-requests`
 Создать заявку. Пользователь должен быть привязан к указанному ШУ.
@@ -1438,7 +1721,12 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ---
 
 ### GET `/admin/service-requests`
-Все заявки (для админа/оператора). Параметры: `status`, `cabinet_id`, `page`, `size`.
+Все заявки (для админа/оператора). Параметры:
+- `status`, `cabinet_id`
+- `search` — поиск по ФИО/телефону/организации пользователя, номеру/названию ШУ, типу и описанию заявки
+- `sort_by` — `created_at` (по умолч.), `status`, `user_full_name`, `cabinet_object_number`, `request_type`
+- `sort_order` — `asc` / `desc`
+- `page`, `size`
 
 ```json
 {
@@ -1493,11 +1781,13 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 }
 ```
 
-Типы уведомлений (`type`):
-- `chat_message` — новое сообщение от оператора/бота
-- `request_status` — изменился статус заявки (ШУ, документ, сервисная)
+Типы уведомлений (`type`), фактически отправляемые на данный момент:
 - `warranty_expiring` — гарантия истекает через 30/10/1 день
 - `promotional` — рекламное сообщение от администратора
+
+Зарезервированы в настройках уведомлений, но пока не генерируются кодом:
+- `chat_message` — новое сообщение от оператора/бота
+- `request_status` — изменился статус заявки (ШУ, документ, сервисная)
 
 ---
 
@@ -1565,6 +1855,8 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ## Рут `admin: kb` — база знаний (администратор/оператор)
 
 База знаний — файловый репозиторий, организованный по категориям. Каждая запись может содержать несколько файлов любых типов (PDF, Word, Excel, видео, фото). Создание записи = публикация (черновиков нет).
+
+> Просмотр категорий (`GET /admin/kb/categories`) доступен администратору и оператору. Создание/редактирование/удаление категорий и записей, а также добавление/удаление вложений — только для администратора.
 
 ### POST `/admin/kb/categories`
 Создать категорию. Категории могут быть вложенными через `parent_id`.
@@ -1674,7 +1966,9 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 Список записей. Параметры:
 - `category_id` — фильтр по категории
 - `tag_ids` — фильтр по тегам (`?tag_ids=1&tag_ids=2`)
-- `search` — поиск по заголовку
+- `search` — поиск по заголовку **и содержимому**
+- `sort_by` — `created_at` (по умолч.), `updated_at`, `title`
+- `sort_order` — `asc` / `desc`
 - `page`, `size` — пагинация
 
 ```json
@@ -1687,7 +1981,7 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
       "slug": "pasport-shu-a1b2c3",
       "description": "Техническая документация для ВУ-100",
       "created_at": "2026-05-15T10:00:00Z",
-      "tags": [{ "id": 1, "name": "паспорт" }],
+      "tags": [{ "id": 1, "name": "паспорт", "scope": "document" }],
       "attachment_count": 3
     }
   ],
@@ -1809,7 +2103,9 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ### GET `/faq/entries`
 Список вопросов. Параметры:
 - `category_id` — фильтр по категории
-- `search` — поиск по тексту вопроса
+- `search` — поиск по тексту **вопроса и ответа**
+- `sort_by` — `created_at` (по умолч.), `updated_at`, `question`
+- `sort_order` — `asc` / `desc`
 - `page`, `size` — пагинация
 
 ```json
@@ -1842,10 +2138,11 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
         ↓
 Текст запроса → Yandex Embeddings (text-search-query) → вектор запроса
         ↓
-pgvector cosine search → 3 ближайших чанка из embeddings
-  (если cabinet-чат → сначала ищет в документах конкретного ШУ)
+pgvector cosine search → до 3 ближайших чанков из embeddings
+  (если cabinet-чат → до 2 чанков ищутся среди документов конкретного ШУ,
+   остальные — по всей базе embeddings)
         ↓
-История диалога (6 последних сообщений) + найденные чанки → YandexGPT-lite
+История диалога (до 5 предыдущих сообщений) + текущий вопрос с найденными чанками → YandexGPT-lite
         ↓
 Ответ бота + цитата из источника → сохраняется в messages (sender = "Ася")
 ```
@@ -2005,7 +2302,7 @@ gunzip -c backups/savt_backup_2026-05-18_03-00-00.sql.gz \
 
 **Логика:**
 - Находит все чаты где `bot_active=true`, `follow_up_sent=false`, и последнее сообщение пользователя старше `BOT_FOLLOW_UP_MINUTES` минут (по умолчанию 60).
-- Отправляет от имени Аси: «Здравствуйте! Удалось ли решить вашу проблему?»
+- Отправляет от имени Аси: «Здравствуйте! Удалось ли решить вашу проблему? Если нет — я готов помочь.»
 - Ставит `follow_up_sent=true` — повторно не пишет до нового сообщения от пользователя.
 
 ---
@@ -2013,9 +2310,18 @@ gunzip -c backups/savt_backup_2026-05-18_03-00-00.sql.gz \
 ## Управление через CLI
 
 ```bash
-# Создать администратора
+# Создать суперадмина (только через CLI — намеренно нет API)
+docker exec savt-backend-api-1 python -m app.cli create-superadmin <login> <password> [full_name]
+
+# Создать администратора через CLI (альтернатива API POST /admin/users/admins, доступна суперадмину)
 docker exec savt-backend-api-1 python -m app.cli create-admin <login> <password> [full_name]
 
-# Создать оператора
+# Создать оператора через CLI (альтернатива API POST /admin/users/operators)
 docker exec savt-backend-api-1 python -m app.cli create-operator <login> <password> [full_name]
 ```
+
+| Кто создаёт | Через CLI | Через API |
+|---|---|---|
+| Суперадмин | ✅ | ❌ только CLI |
+| Администратор | ✅ | ✅ `POST /admin/users/admins` (суперадмин) |
+| Оператор | ✅ | ✅ `POST /admin/users/operators` (администратор) |
