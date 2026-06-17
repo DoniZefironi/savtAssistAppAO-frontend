@@ -39,11 +39,61 @@ interface DeleteConfirm {
   warning?: string
 }
 
+const CAT_DEFAULT = 208
+const CAT_MAX = 360
+const CAT_SNAP = 56  // below this → snap to 0 (hidden)
+
 export function KbView() {
   const qc = useQueryClient()
   const sentinelRef = useRef<HTMLDivElement>(null)
 
-  const [catCollapsed, setCatCollapsed] = useState(false)
+  // Panel resize
+  const [panelWidth, setPanelWidth] = useState(CAT_DEFAULT)
+  const [isSnapping, setIsSnapping] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(false)
+  const isDragging = useRef(false)
+  const dragStartX = useRef(0)
+  const dragStartWidth = useRef(0)
+
+  useEffect(() => {
+    const check = () => setIsDesktop(window.innerWidth >= 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
+  const handleDragStart = (e: React.MouseEvent) => {
+    e.preventDefault()
+    isDragging.current = true
+    dragStartX.current = e.clientX
+    dragStartWidth.current = panelWidth
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!isDragging.current) return
+      const next = Math.max(0, Math.min(CAT_MAX, dragStartWidth.current + e.clientX - dragStartX.current))
+      setPanelWidth(next)
+    }
+    const onUp = () => {
+      if (!isDragging.current) return
+      isDragging.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      setPanelWidth(w => {
+        if (w < CAT_SNAP) { setIsSnapping(true); setTimeout(() => setIsSnapping(false), 200); return 0 }
+        return w
+      })
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
+  }, [])
+
+  const expandPanel = () => { setIsSnapping(true); setPanelWidth(CAT_DEFAULT); setTimeout(() => setIsSnapping(false), 200) }
+
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null)
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
@@ -220,10 +270,11 @@ export function KbView() {
       {/* ── Body ── */}
       <div className="flex flex-1 overflow-hidden">
         {/* Category panel */}
-        <div className={cn(
-          'shrink-0 border-r border-slate-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 flex flex-col overflow-hidden transition-[width] duration-200',
-          catCollapsed ? 'w-0 border-r-0' : 'w-52'
-        )}>
+        {panelWidth > 0 && (
+        <div
+          className={cn('shrink-0 border-r border-slate-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 flex flex-col overflow-hidden', isSnapping && 'transition-[width] duration-150')}
+          style={isDesktop ? { width: panelWidth } : { width: CAT_DEFAULT }}
+        >
           <div className="p-2 overflow-y-auto flex-1">
             <button
               onClick={() => handleCatSelect(null)}
@@ -285,15 +336,28 @@ export function KbView() {
             </button>
           </div>
         </div>
+        )}
 
-        {/* Toggle */}
-        <button
-          onClick={() => setCatCollapsed(v => !v)}
-          title={catCollapsed ? 'Показать категории' : 'Скрыть категории'}
-          className="shrink-0 w-5 flex items-center justify-center bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-700/60 text-slate-300 hover:text-slate-500 dark:hover:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-        >
-          {catCollapsed ? <ChevronRightIcon className="w-3 h-3" /> : <ChevronLeftIcon className="w-3 h-3" />}
-        </button>
+        {/* Drag handle / expand strip */}
+        {panelWidth === 0 ? (
+          <button
+            onClick={expandPanel}
+            title="Показать категории"
+            className="shrink-0 w-5 flex items-center justify-center bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-700/60 text-slate-300 hover:text-[#1B3A72] dark:hover:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+          >
+            <ChevronRightIcon className="w-3 h-3" />
+          </button>
+        ) : (
+          <div
+            onMouseDown={handleDragStart}
+            className="shrink-0 w-1 cursor-col-resize bg-slate-200 dark:bg-slate-700 hover:bg-[#4A8FE7]/60 transition-colors duration-100 group flex items-center justify-center"
+            title="Потяните для изменения ширины"
+          >
+            <div className="flex flex-col gap-[3px] opacity-0 group-hover:opacity-100 transition-opacity">
+              {[0,1,2,3,4].map(i => <div key={i} className="w-[3px] h-[3px] rounded-full bg-[#4A8FE7]" />)}
+            </div>
+          </div>
+        )}
 
         {/* Articles */}
         <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900">
