@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { API_URL } from '@/lib/api/client'
 import { cn } from '@/lib/utils'
 import type { MessageAttachment } from '@/types'
@@ -100,6 +100,15 @@ function ImageAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean })
   )
 }
 
+function seededBars(seed: string, count: number): number[] {
+  let s = 5381
+  for (let i = 0; i < seed.length; i++) s = ((s * 33) ^ seed.charCodeAt(i)) >>> 0
+  return Array.from({ length: count }, () => {
+    s = ((s * 1664525) + 1013904223) >>> 0
+    return 12 + ((s >>> 16) % 68)
+  })
+}
+
 function AudioAttachment({ a, isOwn, transcription, transcribing, onTranscribe }: {
   a: MessageAttachment
   isOwn: boolean
@@ -107,52 +116,104 @@ function AudioAttachment({ a, isOwn, transcription, transcribing, onTranscribe }
   transcribing?: boolean
   onTranscribe?: () => void
 }) {
+  const [playing, setPlaying] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [elapsed, setElapsed] = useState(0)
+  const audioRef = useRef<HTMLAudioElement>(null)
   const url = toFullUrl(a.file_url)
-  const isVoice = a.file_name === 'Голосовое сообщение' || a.mime_type.includes('ogg')
+  const isVoice = a.file_name === 'Голосовое сообщение' || a.mime_type.includes('ogg') || a.mime_type.includes('webm')
+  const bars = useMemo(() => seededBars(a.file_url, 34), [a.file_url])
+  const duration = a.duration_seconds ?? 0
+  const displayTime = playing && elapsed > 0 ? formatDuration(elapsed) : formatDuration(duration)
+
+  const toggle = () => {
+    const el = audioRef.current
+    if (!el) return
+    playing ? el.pause() : el.play()
+  }
 
   return (
-    <div className={cn(
-      'mt-1 rounded-xl px-3 py-2 min-w-55',
-      isOwn ? 'bg-white/15' : 'bg-slate-100 dark:bg-slate-700'
-    )}>
-      <div className="flex items-center gap-2">
-        <span className="text-lg shrink-0">{isVoice ? '🎙' : '🎵'}</span>
-        <div className="flex-1 min-w-0">
-          <p className={cn('text-xs mb-1 truncate', isOwn ? 'text-white/70' : 'text-slate-500 dark:text-slate-400')}>
-            {isVoice ? 'Голосовое сообщение' : a.file_name}
-            {a.duration_seconds != null && <span className="ml-1">{formatDuration(a.duration_seconds)}</span>}
-          </p>
-          <audio controls src={url} className="h-7 w-full" style={{ colorScheme: isOwn ? 'dark' : 'light' }}>
-            Ваш браузер не поддерживает аудио
-          </audio>
-        </div>
-        <div className="flex flex-col gap-1 shrink-0">
-          <button onClick={() => downloadBlob(url, a.file_name)} className={cn('cursor-pointer', isOwn ? 'text-white/60 hover:text-white' : 'text-slate-400 hover:text-slate-700')} title="Скачать">
-            <DownloadIcon size={16} />
-          </button>
-          {isVoice && onTranscribe && !transcription && (
-            <button
-              onClick={onTranscribe}
-              disabled={transcribing}
-              title="Распознать текст"
-              className={cn(
-                'w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors cursor-pointer',
-                isOwn
-                  ? 'bg-white/20 hover:bg-white/30 text-white disabled:opacity-50'
-                  : 'bg-slate-200 hover:bg-slate-300 text-slate-600 disabled:opacity-50'
-              )}
-            >
-              {transcribing ? (
-                <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-              ) : (
-                'T'
-              )}
-            </button>
+    <div className={cn('mt-1 rounded-2xl overflow-hidden', isOwn ? 'bg-white/15' : 'bg-slate-100 dark:bg-slate-700')}>
+      <audio
+        ref={audioRef}
+        src={url}
+        preload="metadata"
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => { setPlaying(false); setProgress(0); setElapsed(0) }}
+        onTimeUpdate={() => {
+          const el = audioRef.current
+          if (el && el.duration && !isNaN(el.duration)) {
+            setProgress(el.currentTime / el.duration)
+            setElapsed(Math.round(el.currentTime))
+          }
+        }}
+      />
+
+      <div className="flex items-center gap-2.5 px-2.5 py-2.5 min-w-[220px]">
+        <button
+          onClick={toggle}
+          className={cn(
+            'w-10 h-10 rounded-full flex items-center justify-center shrink-0 cursor-pointer transition-colors',
+            isOwn ? 'bg-white/25 hover:bg-white/40 text-white' : 'bg-[#1B3A72] hover:bg-[#1B3A72]/80 text-white'
           )}
+        >
+          {playing ? <PauseIcon /> : <PlayIcon />}
+        </button>
+
+        <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
+          <div className="flex items-end gap-[1.5px] h-8">
+            {bars.map((pct, i) => {
+              const filled = progress > 0 && (i / bars.length) <= progress
+              return (
+                <div
+                  key={i}
+                  className="flex-1 rounded-full min-w-[2px]"
+                  style={{
+                    height: `${pct}%`,
+                    backgroundColor: filled
+                      ? (isOwn ? 'rgba(255,255,255,0.9)' : '#1B3A72')
+                      : (isOwn ? 'rgba(255,255,255,0.3)' : 'rgba(27,58,114,0.25)'),
+                  }}
+                />
+              )
+            })}
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className={cn('text-[10px]', isOwn ? 'text-white/55' : 'text-slate-400 dark:text-slate-500')}>
+              {isVoice ? '🎙 ' : '🎵 '}{displayTime || '0:00'}
+            </span>
+            <div className="flex items-center gap-1.5">
+              {isVoice && onTranscribe && !transcription && (
+                <button
+                  onClick={onTranscribe}
+                  disabled={transcribing}
+                  title="Распознать текст"
+                  className={cn(
+                    'w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold cursor-pointer transition-colors',
+                    isOwn
+                      ? 'bg-white/20 hover:bg-white/30 text-white disabled:opacity-50'
+                      : 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 text-slate-600 dark:text-slate-300 disabled:opacity-50'
+                  )}
+                >
+                  {transcribing ? <div className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin" /> : 'T'}
+                </button>
+              )}
+              <button
+                onClick={() => downloadBlob(url, a.file_name)}
+                title="Скачать"
+                className={cn('cursor-pointer transition-colors', isOwn ? 'text-white/50 hover:text-white' : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300')}
+              >
+                <DownloadIcon size={13} />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
+
       {transcription && (
-        <p className={cn('text-xs mt-2 pt-2 border-t leading-relaxed', isOwn ? 'border-white/20 text-white/80' : 'border-slate-200 text-slate-600')}>
+        <p className={cn('text-xs px-2.5 pb-2.5 leading-relaxed border-t', isOwn ? 'border-white/15 text-white/80' : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300')}>
           {transcription}
         </p>
       )}
@@ -264,6 +325,22 @@ function ImageLightbox({ url, name, onClose }: { url: string; name: string; onCl
         className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl"
       />
     </div>
+  )
+}
+
+function PlayIcon() {
+  return (
+    <svg className="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M8 5v14l11-7z" />
+    </svg>
+  )
+}
+
+function PauseIcon() {
+  return (
+    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+    </svg>
   )
 }
 

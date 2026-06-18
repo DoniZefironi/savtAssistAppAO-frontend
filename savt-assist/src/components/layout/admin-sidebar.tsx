@@ -21,7 +21,7 @@ const navItems = [
   { href: '/admin/settings', label: 'Настройки', icon: SettingsIcon },
 ]
 
-export function AdminSidebar() {
+export function AdminSidebar({ mobileOpen, onMobileClose }: { mobileOpen: boolean; onMobileClose: () => void }) {
   const [collapsed, setCollapsed] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
@@ -38,80 +38,95 @@ export function AdminSidebar() {
   }
 
   return (
-    <aside className={cn(
-      'flex-shrink-0 bg-[#1B3A72] flex flex-col h-full transition-[width] duration-200 overflow-hidden',
-      collapsed ? 'w-16' : 'w-64'
-    )}>
-      <div className="border-b border-white/10 px-3 py-5">
+    <>
+      {/* Mobile backdrop */}
+      <div
+        className={cn(
+          'fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity duration-200',
+          mobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        )}
+        onClick={onMobileClose}
+      />
+
+      <aside className={cn(
+        'bg-[#1B3A72] flex flex-col overflow-hidden z-50',
+        'transition-[width,transform] duration-200 ease-in-out',
+        'fixed top-0 left-0 h-screen w-72',
+        mobileOpen ? 'translate-x-0' : '-translate-x-full',
+        'md:relative md:flex-shrink-0 md:h-full md:translate-x-0',
+        collapsed ? 'md:w-16' : 'md:w-64'
+      )}>
+        <div className="border-b border-white/10 px-3 py-5">
+          {collapsed ? (
+            <div className="flex flex-col items-center gap-3">
+              <button
+                onClick={() => setCollapsed(false)}
+                title="Развернуть"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <ChevronRightIcon />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 pl-2">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0">
+                <ShieldIcon className="w-7 h-7 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-bold text-sm leading-none">SavtAssist</p>
+                <p className="text-white/50 text-xs mt-0.5">Admin Panel</p>
+              </div>
+              <button
+                onClick={() => setCollapsed(true)}
+                title="Свернуть"
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
+              >
+                <ChevronLeftIcon />
+              </button>
+            </div>
+          )}
+        </div>
+
+        <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
+          {navItems.map((item) => {
+            const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onMobileClose}
+                title={collapsed ? item.label : undefined}
+                className={cn(
+                  'flex items-center rounded-lg text-sm transition-colors',
+                  collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5',
+                  isActive
+                    ? 'bg-white/15 text-white font-medium'
+                    : 'text-white/60 hover:text-white hover:bg-white/10'
+                )}
+              >
+                <item.icon className="w-5 h-5 flex-shrink-0" />
+                {!collapsed && item.label}
+              </Link>
+            )
+          })}
+        </nav>
+
         {collapsed ? (
-          <div className="flex flex-col items-center gap-3">
-            <button
-              onClick={() => setCollapsed(false)}
-              title="Развернуть"
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-            >
-              <ChevronRightIcon />
-            </button>
-          </div>
+          <div />
         ) : (
-          <div className="flex items-center gap-3 pl-2">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0">
-              <ShieldIcon className="w-7 h-7 text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-white font-bold text-sm leading-none">SavtAssist</p>
-              <p className="text-white/50 text-xs mt-0.5">Admin Panel</p>
-            </div>
-            <button
-              onClick={() => setCollapsed(true)}
-              title="Свернуть"
-              className="w-7 h-7 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
-            >
-              <ChevronLeftIcon />
-            </button>
+          <div className='pb-4 pl-4'>
+            <Link href='/admin/dashboard' onClick={onMobileClose} className='cursor-pointer'>
+              <Image
+                src='/logo-small.png'
+                width={225}
+                height={225}
+                alt='savt'
+              />
+            </Link>
           </div>
         )}
-      </div>
-
-      <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              title={collapsed ? item.label : undefined}
-              className={cn(
-                'flex items-center rounded-lg text-sm transition-colors',
-                collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5',
-                isActive
-                  ? 'bg-white/15 text-white font-medium'
-                  : 'text-white/60 hover:text-white hover:bg-white/10'
-              )}
-            >
-              <item.icon className="w-5 h-5 flex-shrink-0" />
-              {!collapsed && item.label}
-            </Link>
-          )
-        })}
-      </nav>
-
-      {collapsed ? (
-        <div>
-        </div>
-      ) : (
-        <div className='pb-4 pl-4'>
-          <Link href='/admin/dashboard' className='cursor-pointer'>
-            <Image 
-            src='/logo-small.png'
-            width={225}
-            height={225}
-            alt='savt'
-            />
-          </Link>
-        </div>
-      )}
-    </aside>
+      </aside>
+    </>
   )
 }
 

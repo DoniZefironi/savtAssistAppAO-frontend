@@ -61,6 +61,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const fileInputRef = useRef<HTMLInputElement>(null)
   const prevScrollHeightRef = useRef<number | null>(null)
   const headerMenuRef = useRef<HTMLDivElement>(null)
+  const scrolledRef = useRef(false)
 
   const [text, setText] = useState('')
   const [pendingAttachments, setPendingAttachments] = useState<(MessageAttachment & { name: string })[]>([])
@@ -77,6 +78,9 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [wallpaper, setWallpaper] = useState<string>(() =>
     typeof window !== 'undefined' ? (localStorage.getItem(`chat-wallpaper-${chat.id}`) ?? 'default') : 'default'
+  )
+  const [customWallpaperUrl, setCustomWallpaperUrl] = useState<string | null>(() =>
+    typeof window !== 'undefined' ? localStorage.getItem(`chat-wallpaper-custom-${chat.id}`) : null
   )
   const [wallpaperOpen, setWallpaperOpen] = useState(false)
   const [attachmentsOpen, setAttachmentsOpen] = useState(false)
@@ -108,14 +112,18 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (selectMode) { setSelectMode(false); setSelectedIds(new Set()) }
-        if (searchOpen) toggleSearch()
-      }
+      if (e.key !== 'Escape') return
+      if (confirmModal) { setConfirmModal(null); return }
+      if (forwardTarget) { setForwardTarget(null); return }
+      if (attachmentsOpen) { setAttachmentsOpen(false); return }
+      if (wallpaperOpen) { setWallpaperOpen(false); return }
+      if (stickerPickerOpen) { setStickerPickerOpen(false); return }
+      if (selectMode) { setSelectMode(false); setSelectedIds(new Set()); return }
+      if (searchOpen) toggleSearch()
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [selectMode, searchOpen]) 
+  }, [selectMode, searchOpen, attachmentsOpen, wallpaperOpen, stickerPickerOpen, confirmModal, forwardTarget])
 
   useEffect(() => {
     const t = setTimeout(() => setSearchQuery(searchInput), 300)
@@ -149,14 +157,20 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   const displayMessages = searchOpen && searchQuery ? [...searchResults].reverse() : messages
 
-  useEffect(() => { if (messages.length > 0) onMessagesLoaded?.() }, [messages.length]) 
+  useEffect(() => { scrolledRef.current = false }, [chat.id])
+  useEffect(() => { if (messages.length > 0) onMessagesLoaded?.() }, [messages.length])
   useEffect(() => {
+    if (messages.length === 0) return
+    if (!scrolledRef.current) {
+      scrolledRef.current = true
+      bottomRef.current?.scrollIntoView()
+      return
+    }
     const el = listRef.current
     if (!el) return
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120
     if (atBottom) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length])
-  useEffect(() => { setTimeout(() => bottomRef.current?.scrollIntoView(), 60) }, [chat.id])
   useEffect(() => {
     const el = listRef.current
     if (!el || prevScrollHeightRef.current === null) return
@@ -527,7 +541,10 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
       <div
         ref={listRef}
-        style={{ background: isDarkMode ? currentWallpaper.dark : currentWallpaper.light }}
+        style={customWallpaperUrl
+          ? { backgroundImage: `url(${customWallpaperUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+          : { background: isDarkMode ? currentWallpaper.dark : currentWallpaper.light }
+        }
         className={cn('flex-1 overflow-y-auto px-4 py-3 space-y-1 relative', isDragOver && 'ring-2 ring-inset ring-[#4A8FE7]')}
         onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
       >
@@ -746,12 +763,47 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
             <div className="grid grid-cols-3 gap-3">
               {WALLPAPERS.map(wp => (
                 <button key={wp.id}
-                  onClick={() => { setWallpaper(wp.id); localStorage.setItem(`chat-wallpaper-${chat.id}`, wp.id) }}
-                  className={cn('h-20 rounded-xl border-2 flex items-end justify-center pb-2 transition-all cursor-pointer overflow-hidden', wallpaper === wp.id ? 'border-[#1B3A72] scale-95 shadow-md' : 'border-transparent hover:scale-95')}
+                  onClick={() => { setWallpaper(wp.id); setCustomWallpaperUrl(null); localStorage.setItem(`chat-wallpaper-${chat.id}`, wp.id); localStorage.removeItem(`chat-wallpaper-custom-${chat.id}`) }}
+                  className={cn('h-20 rounded-xl border-2 flex items-end justify-center pb-2 transition-all cursor-pointer overflow-hidden', wallpaper === wp.id && !customWallpaperUrl ? 'border-[#1B3A72] scale-95 shadow-md' : 'border-transparent hover:scale-95')}
                   style={{ background: isDarkMode ? wp.dark : wp.light }}>
                   <span className="text-[10px] font-semibold text-white drop-shadow px-1.5 py-0.5 rounded-full bg-black/25">{wp.label}</span>
                 </button>
               ))}
+            </div>
+            <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Своё изображение</p>
+              <div className="flex items-center gap-2">
+                <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 text-sm text-slate-500 dark:text-slate-400 hover:border-[#1B3A72] hover:text-[#1B3A72] dark:hover:border-blue-400 dark:hover:text-blue-400 cursor-pointer transition-colors">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+                  Загрузить
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    const reader = new FileReader()
+                    reader.onload = (ev) => {
+                      const dataUrl = ev.target?.result as string
+                      setCustomWallpaperUrl(dataUrl)
+                      localStorage.setItem(`chat-wallpaper-custom-${chat.id}`, dataUrl)
+                      setWallpaper('custom')
+                      localStorage.setItem(`chat-wallpaper-${chat.id}`, 'custom')
+                    }
+                    reader.readAsDataURL(file)
+                    e.target.value = ''
+                  }} />
+                </label>
+                {customWallpaperUrl && (
+                  <>
+                    <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border-2 border-[#1B3A72]">
+                      <img src={customWallpaperUrl} alt="Custom" className="w-full h-full object-cover" />
+                    </div>
+                    <button
+                      onClick={() => { setCustomWallpaperUrl(null); localStorage.removeItem(`chat-wallpaper-custom-${chat.id}`); setWallpaper('default'); localStorage.setItem(`chat-wallpaper-${chat.id}`, 'default') }}
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer text-sm">
+                      ✕
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
             <button onClick={() => setWallpaperOpen(false)} className="mt-4 w-full py-2.5 bg-[#1B3A72] text-white rounded-xl font-medium text-sm hover:bg-[#1B3A72]/90 transition-colors cursor-pointer">
               Готово
@@ -903,7 +955,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 function ForwardDialog({ message, currentChatId, onClose }: { message: ChatMessage; currentChatId: number; onClose: () => void }) {
   const qc = useQueryClient()
   const [sending, setSending] = useState(false)
-  const chats = (qc.getQueryData<Chat[]>(['operator-chats']) ?? []).filter((c) => c.id !== currentChatId && !c.bot_active)
+  const chats = (qc.getQueryData<Chat[]>(['operator-chats']) ?? []).filter((c) => c.id !== currentChatId)
 
   const forward = async (chatId: number) => {
     setSending(true)

@@ -71,7 +71,7 @@ export function MessageBubble({
   const toolbar = !selectMode && (
     <div className={cn(
       'absolute -top-9 flex items-center gap-0.5 bg-white dark:bg-slate-700 rounded-xl shadow-md border border-slate-100 dark:border-slate-600 px-1 py-0.5 z-10',
-      'opacity-0 group-hover/msg:opacity-100 transition-opacity pointer-events-none group-hover/msg:pointer-events-auto',
+      ctxOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 group-hover/msg:opacity-100 pointer-events-none group-hover/msg:pointer-events-auto',
       isBot ? 'left-1/2 -translate-x-1/2' : isOwn ? 'right-0' : 'left-0'
     )}>
       {!isDeleted && onReact && (
@@ -126,6 +126,7 @@ export function MessageBubble({
         id={`msg-${message.id}`}
         className={cn('flex justify-center my-1 px-4 group/msg', selectMode && 'cursor-pointer')}
         onClick={selectMode ? (e) => { e.stopPropagation(); onSelect?.(message) } : undefined}
+        onContextMenu={!selectMode ? (e) => { e.preventDefault(); setCtxOpen(true) } : undefined}
       >
         <div className="relative max-w-[75%]">
           {toolbar}
@@ -209,6 +210,7 @@ export function MessageBubble({
         selectMode && 'cursor-pointer'
       )}
       onClick={selectMode ? (e) => { e.stopPropagation(); onSelect?.(message) } : undefined}
+      onContextMenu={!selectMode ? (e) => { e.preventDefault(); setCtxOpen(true) } : undefined}
     >
       {selectMode && (
         <div className={cn(
