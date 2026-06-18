@@ -24,6 +24,23 @@ const SORT_OPTIONS = [
 
 type SortValue = (typeof SORT_OPTIONS)[number]['value']
 type ViewMode = 'list' | 'grid'
+type WarrantyFilter = 'active' | 'expired' | null
+
+interface CabinetFilters {
+  has_documents: boolean
+  has_photos: boolean
+  has_users: boolean
+  has_service_requests: boolean
+  warranty_status: WarrantyFilter
+}
+
+const DEFAULT_FILTERS: CabinetFilters = {
+  has_documents: false,
+  has_photos: false,
+  has_users: false,
+  has_service_requests: false,
+  warranty_status: null,
+}
 
 interface Props {
   isAdmin: boolean
@@ -34,6 +51,7 @@ export function CabinetsView({ isAdmin }: Props) {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortValue>('created_at')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [filters, setFilters] = useState<CabinetFilters>(DEFAULT_FILTERS)
   const [view, setView] = useState<ViewMode>('list')
   useEffect(() => {
     const saved = localStorage.getItem('view-mode-cabinets')
@@ -47,6 +65,19 @@ export function CabinetsView({ isAdmin }: Props) {
   const debouncedSearch = useDebounce(search)
   const sentinelRef = useRef<HTMLDivElement>(null)
 
+  const activeFiltersCount =
+    (filters.has_documents ? 1 : 0) +
+    (filters.has_photos ? 1 : 0) +
+    (filters.has_users ? 1 : 0) +
+    (filters.has_service_requests ? 1 : 0) +
+    (filters.warranty_status ? 1 : 0)
+
+  const toggleBoolFilter = (key: keyof Omit<CabinetFilters, 'warranty_status'>) =>
+    setFilters(f => ({ ...f, [key]: !f[key] }))
+
+  const toggleWarranty = (val: WarrantyFilter) =>
+    setFilters(f => ({ ...f, warranty_status: f.warranty_status === val ? null : val }))
+
   const {
     data,
     isLoading,
@@ -56,7 +87,7 @@ export function CabinetsView({ isAdmin }: Props) {
     isFetchingNextPage,
     refetch,
   } = useInfiniteQuery({
-    queryKey: ['cabinets', { search: debouncedSearch, sortBy, sortOrder }],
+    queryKey: ['cabinets', { search: debouncedSearch, sortBy, sortOrder, filters }],
     initialPageParam: 1,
     queryFn: ({ pageParam }: { pageParam: number }) =>
       cabinetsApi.getAll({
@@ -65,12 +96,16 @@ export function CabinetsView({ isAdmin }: Props) {
         sort_order: sortOrder,
         page: pageParam,
         size: PAGE_SIZE,
+        ...(filters.has_documents ? { has_documents: true } : {}),
+        ...(filters.has_photos ? { has_photos: true } : {}),
+        ...(filters.has_users ? { has_users: true } : {}),
+        ...(filters.has_service_requests ? { has_service_requests: true } : {}),
+        ...(filters.warranty_status ? { warranty_status: filters.warranty_status } : {}),
       }),
     getNextPageParam: (lastPage) =>
       lastPage.page < lastPage.pages ? lastPage.page + 1 : undefined,
   })
 
-  // Infinite scroll — trigger next page when sentinel enters viewport
   useEffect(() => {
     const el = sentinelRef.current
     if (!el) return
@@ -121,7 +156,6 @@ export function CabinetsView({ isAdmin }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* ── Header ── */}
       <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
         <div className="flex items-end justify-between mb-4">
           <div>
@@ -131,7 +165,6 @@ export function CabinetsView({ isAdmin }: Props) {
             <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Шкафы управления</h1>
           </div>
           <div className="flex items-center gap-2">
-            {/* View toggle */}
             <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
               <button
                 onClick={() => { setView('list'); localStorage.setItem('view-mode-cabinets', 'list') }}
@@ -160,7 +193,7 @@ export function CabinetsView({ isAdmin }: Props) {
             {isAdmin && (
               <Button
                 onClick={() => setShowCreate(true)}
-                className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 gap-2 cursor-pointer"
+                className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 dark:text-white gap-2 cursor-pointer"
               >
                 <PlusIcon />
                 Добавить ШУ
@@ -207,9 +240,61 @@ export function CabinetsView({ isAdmin }: Props) {
             )
           })}
         </div>
+
+        <div className="flex gap-1.5 mt-2 flex-wrap items-center">
+          <span className="text-xs text-slate-400 font-medium mr-0.5">Фильтр:</span>
+          {([
+            { key: 'has_documents', label: 'Документы', icon: '📄' },
+            { key: 'has_photos', label: 'Фото', icon: '🖼' },
+            { key: 'has_users', label: 'Пользователь', icon: '👤' },
+            { key: 'has_service_requests', label: 'Заявки', icon: '🔧' },
+          ] as const).map(({ key, label, icon }) => (
+            <button
+              key={key}
+              onClick={() => toggleBoolFilter(key)}
+              className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
+                filters[key]
+                  ? 'bg-[#4A8FE7] text-white border-[#4A8FE7]'
+                  : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-[#4A8FE7] hover:text-[#4A8FE7]'
+              }`}
+            >
+              <span>{icon}</span>
+              {label}
+            </button>
+          ))}
+          <button
+            onClick={() => toggleWarranty('active')}
+            className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
+              filters.warranty_status === 'active'
+                ? 'bg-emerald-500 text-white border-emerald-500'
+                : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-emerald-400 hover:text-emerald-600'
+            }`}
+          >
+            <span>✅</span>
+            Гарантия есть
+          </button>
+          <button
+            onClick={() => toggleWarranty('expired')}
+            className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
+              filters.warranty_status === 'expired'
+                ? 'bg-rose-500 text-white border-rose-500'
+                : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-rose-400 hover:text-rose-500'
+            }`}
+          >
+            <span>❌</span>
+            Истекла
+          </button>
+          {activeFiltersCount > 0 && (
+            <button
+              onClick={() => setFilters(DEFAULT_FILTERS)}
+              className="ml-1 px-3 py-1 rounded-full text-xs font-medium text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 border border-dashed border-slate-300 dark:border-slate-600 hover:border-slate-400 transition-colors cursor-pointer"
+            >
+              Сбросить ({activeFiltersCount})
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* ── Content ── */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
         {isLoading && (
           <div className={view === 'grid' ? 'grid grid-cols-2 gap-3' : 'space-y-3'}>
@@ -251,7 +336,6 @@ export function CabinetsView({ isAdmin }: Props) {
           </div>
         )}
 
-        {/* Infinite scroll sentinel */}
         <div ref={sentinelRef} className="h-1 mt-2" />
 
         {isFetchingNextPage && (

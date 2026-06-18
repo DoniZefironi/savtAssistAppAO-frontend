@@ -17,12 +17,12 @@ import type { InfiniteData } from '@tanstack/react-query'
 const GROUP_GAP_MS = 5 * 60 * 1000
 
 const WALLPAPERS = [
-  { id: 'default', label: 'Обычный', style: 'linear-gradient(160deg,#f5f7fa 0%,#eaeff8 100%)' },
-  { id: 'blue',    label: 'Синий',   style: 'linear-gradient(135deg,#dfe9f3 0%,#b8cce4 100%)' },
-  { id: 'mint',    label: 'Мята',    style: 'linear-gradient(135deg,#d4f1e4 0%,#b2dfe8 100%)' },
-  { id: 'sand',    label: 'Песок',   style: 'linear-gradient(135deg,#fdf6e3 0%,#f0e4d0 100%)' },
-  { id: 'lavender',label: 'Лаванда', style: 'linear-gradient(135deg,#e8d5f5 0%,#d4b8f0 100%)' },
-  { id: 'dark',    label: 'Тёмный',  style: '#1e293b' },
+  { id: 'default',  label: 'Обычный', light: 'linear-gradient(160deg,#f5f7fa 0%,#eaeff8 100%)', dark: 'linear-gradient(160deg,#1a2236 0%,#1e2744 100%)' },
+  { id: 'blue',     label: 'Синий',   light: 'linear-gradient(135deg,#dfe9f3 0%,#b8cce4 100%)', dark: 'linear-gradient(135deg,#1a2d42 0%,#1e3a5c 100%)' },
+  { id: 'mint',     label: 'Мята',    light: 'linear-gradient(135deg,#d4f1e4 0%,#b2dfe8 100%)', dark: 'linear-gradient(135deg,#102d22 0%,#14323a 100%)' },
+  { id: 'sand',     label: 'Песок',   light: 'linear-gradient(135deg,#fdf6e3 0%,#f0e4d0 100%)', dark: 'linear-gradient(135deg,#2d2518 0%,#2a1e0e 100%)' },
+  { id: 'lavender', label: 'Лаванда', light: 'linear-gradient(135deg,#e8d5f5 0%,#d4b8f0 100%)', dark: 'linear-gradient(135deg,#1e1230 0%,#231540 100%)' },
+  { id: 'dark',     label: 'Тёмный',  light: '#1e293b', dark: '#0f172a' },
 ]
 
 const STICKERS: Record<string, string[]> = {
@@ -73,7 +73,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
 
-  // ── New feature state ────────────────────────────────────────────────────────
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [wallpaper, setWallpaper] = useState<string>(() =>
@@ -87,8 +86,17 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const [stickerPickerOpen, setStickerPickerOpen] = useState(false)
   const [stickerCat, setStickerCat] = useState(Object.keys(STICKERS)[0])
   const [transcriptions, setTranscriptions] = useState<Map<number, { text: string; loading: boolean }>>(new Map())
+  const [isDarkMode, setIsDarkMode] = useState(() =>
+    typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
+  )
+  useEffect(() => {
+    const obs = new MutationObserver(() =>
+      setIsDarkMode(document.documentElement.classList.contains('dark'))
+    )
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    return () => obs.disconnect()
+  }, [])
 
-  // Dismiss header menu on outside click
   useEffect(() => {
     if (!headerMenuOpen) return
     const handler = (e: MouseEvent) => {
@@ -98,7 +106,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     return () => document.removeEventListener('mousedown', handler)
   }, [headerMenuOpen])
 
-  // ESC exits select mode
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -108,15 +115,13 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [selectMode, searchOpen]) // eslint-disable-line
+  }, [selectMode, searchOpen]) 
 
-  // ── Debounce search ───────────────────────────────────────────────────────────
   useEffect(() => {
     const t = setTimeout(() => setSearchQuery(searchInput), 300)
     return () => clearTimeout(t)
   }, [searchInput])
 
-  // ── Messages ──────────────────────────────────────────────────────────────────
   const { data: messagesData, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
     queryKey: ['messages', chat.id],
     initialPageParam: undefined as number | undefined,
@@ -144,8 +149,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   const displayMessages = searchOpen && searchQuery ? [...searchResults].reverse() : messages
 
-  // ── Scroll behaviour ──────────────────────────────────────────────────────────
-  useEffect(() => { if (messages.length > 0) onMessagesLoaded?.() }, [messages.length]) // eslint-disable-line
+  useEffect(() => { if (messages.length > 0) onMessagesLoaded?.() }, [messages.length]) 
   useEffect(() => {
     const el = listRef.current
     if (!el) return
@@ -178,11 +182,10 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
       chatsApi.markRead(chat.id).catch(() => {})
       qc.invalidateQueries({ queryKey: ['operator-chats'] })
     }
-  }, [chat.id]) // eslint-disable-line
+  }, [chat.id])
 
   const messagesById = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages])
 
-  // ── Mutations ─────────────────────────────────────────────────────────────────
   const sendMutation = useMutation({
     mutationFn: ({ t, attachments, replyToId }: { t: string; attachments?: MessageAttachment[]; replyToId?: number }) =>
       chatsApi.sendMessage(chat.id, t, attachments, replyToId),
@@ -267,7 +270,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     onError: () => toast.error('Не удалось удалить чат'),
   })
 
-  // ── Reactions ─────────────────────────────────────────────────────────────────
   const handleReact = useCallback(async (msg: ChatMessage, emoji: string) => {
     const myId = currentUser?.id ?? -1
     const alreadyReacted = (msg.reactions ?? []).some(r => r.emoji === emoji && r.user_id === myId)
@@ -280,7 +282,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     }
   }, [chat.id, currentUser?.id, qc])
 
-  // ── Voice ─────────────────────────────────────────────────────────────────────
   const handleVoiceFinish = useCallback(async (blob: Blob, duration: number) => {
     try {
       const { url } = await chatsApi.uploadVoice(blob)
@@ -292,7 +293,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   const voice = useVoiceRecorder(handleVoiceFinish)
 
-  // ── File uploads ──────────────────────────────────────────────────────────────
   const uploadFiles = async (files: FileList | File[]) => {
     for (const file of Array.from(files)) {
       setUploadingFile(true)
@@ -317,7 +317,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const handleDragLeave = (e: React.DragEvent) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false) }
   const handleDrop = async (e: React.DragEvent) => { e.preventDefault(); setIsDragOver(false); if (e.dataTransfer.files.length > 0) await uploadFiles(e.dataTransfer.files) }
 
-  // ── Input handlers ────────────────────────────────────────────────────────────
   const handleSend = () => {
     if (editingMessage) {
       const t = text.trim()
@@ -360,13 +359,11 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   const toggleSearch = () => { setSearchOpen(v => !v); setSearchInput(''); setSearchQuery('') }
 
-  // ── Pin handlers ──────────────────────────────────────────────────────────────
   const handlePin = useCallback((msg: ChatMessage) => {
     if (pinnedMessage?.id === msg.id) unpinMutation.mutate()
     else pinMutation.mutate(msg.id)
   }, [pinnedMessage?.id, pinMutation, unpinMutation])
 
-  // ── Multi-select ──────────────────────────────────────────────────────────────
   const handleSelectMessage = (msg: ChatMessage) => {
     if (!selectMode) setSelectMode(true)
     setSelectedIds(prev => {
@@ -391,7 +388,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     handleCancelSelect()
   }
 
-  // ── Transcription ─────────────────────────────────────────────────────────────
   const handleTranscribe = async (msg: ChatMessage, audioUrl: string) => {
     setTranscriptions(prev => new Map(prev).set(msg.id, { text: '', loading: true }))
     try {
@@ -403,7 +399,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     }
   }
 
-  // ── Derived ───────────────────────────────────────────────────────────────────
   const canSend = !sendMutation.isPending && !editMutation.isPending && !voice.recording && !uploadingFile
   const inputDisabled = voice.recording || uploadingFile
   const botActive = chat.bot_active
@@ -413,7 +408,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const avatarBg = chat.chat_type === 'cabinet' ? 'bg-[#1B3A72]' : 'bg-slate-500'
   const currentWallpaper = WALLPAPERS.find(w => w.id === wallpaper) ?? WALLPAPERS[0]
 
-  // Attachments for the drawer
   const allAttachments = useMemo(() => {
     const media: { msg: ChatMessage; url: string; mime: string }[] = []
     const files: { msg: ChatMessage; name: string; url: string; mime: string; size: number }[] = []
@@ -434,7 +428,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   return (
     <div className="flex flex-col h-full">
-      {/* ── Header ── */}
       <div className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700/60 shrink-0 shadow-sm">
         {onBack && (
           <button onClick={onBack} className="md:hidden text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mr-1 cursor-pointer">
@@ -487,7 +480,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
               Вернуть боту
             </button>
           )}
-          {/* Three-dot menu */}
           <div className="relative" ref={headerMenuRef}>
             <button onClick={() => setHeaderMenuOpen(v => !v)}
               className={cn('w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer',
@@ -510,7 +502,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         </div>
       </div>
 
-      {/* ── Pinned message bar ── */}
       {pinnedMessage && !searchOpen && (
         <div className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
           onClick={() => handleScrollToMessage(pinnedMessage.id)}>
@@ -526,7 +517,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         </div>
       )}
 
-      {/* ── Search results count ── */}
       {searchOpen && searchQuery && (
         <div className="px-4 py-1.5 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-900/40 shrink-0">
           <p className="text-xs text-blue-600 dark:text-blue-400">
@@ -535,10 +525,9 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         </div>
       )}
 
-      {/* ── Message list ── */}
       <div
         ref={listRef}
-        style={{ background: currentWallpaper.style }}
+        style={{ background: isDarkMode ? currentWallpaper.dark : currentWallpaper.light }}
         className={cn('flex-1 overflow-y-auto px-4 py-3 space-y-1 relative', isDragOver && 'ring-2 ring-inset ring-[#4A8FE7]')}
         onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
       >
@@ -599,7 +588,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         <div ref={bottomRef} />
       </div>
 
-      {/* ── Bot banner ── */}
       {botActive && !searchOpen && !selectMode && (
         <div className="border-t border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 shrink-0">
           <div className="flex items-center gap-3">
@@ -616,7 +604,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         </div>
       )}
 
-      {/* ── Select mode bar ── */}
       {selectMode && (
         <div className="flex items-center gap-2 px-4 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700/60 shrink-0">
           <button onClick={handleCancelSelect}
@@ -641,10 +628,8 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         </div>
       )}
 
-      {/* ── Input area ── */}
       {!botActive && !searchOpen && !selectMode && (
         <>
-          {/* Sticker picker */}
           {stickerPickerOpen && (
             <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700/60 px-3 pt-2 pb-1 shrink-0">
               <div className="flex gap-1 mb-2">
@@ -667,7 +652,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
             </div>
           )}
 
-          {/* Pending attachments */}
           {pendingAttachments.length > 0 && (
             <div className="flex flex-wrap gap-2 px-4 py-2 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-700/60">
               {pendingAttachments.map((a, i) => (
@@ -680,7 +664,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
             </div>
           )}
 
-          {/* Reply / edit context */}
           {(replyTo || editingMessage) && (
             <div className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-700/60">
               <div className={cn('w-0.5 h-8 rounded-full shrink-0', editingMessage ? 'bg-amber-400' : 'bg-[#4A8FE7]')} />
@@ -698,7 +681,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
             </div>
           )}
 
-          {/* Text input */}
           <div className="flex items-end gap-2 px-3 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700/60 shrink-0">
             <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} multiple
               accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.mp4,.mov" />
@@ -752,12 +734,10 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         </>
       )}
 
-      {/* ── Forward dialog ── */}
       {forwardTarget && (
         <ForwardDialog message={forwardTarget} currentChatId={chat.id} onClose={() => setForwardTarget(null)} />
       )}
 
-      {/* ── Wallpaper modal ── */}
       {wallpaperOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setWallpaperOpen(false)}>
           <div className="absolute inset-0 bg-black/50" />
@@ -768,7 +748,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
                 <button key={wp.id}
                   onClick={() => { setWallpaper(wp.id); localStorage.setItem(`chat-wallpaper-${chat.id}`, wp.id) }}
                   className={cn('h-20 rounded-xl border-2 flex items-end justify-center pb-2 transition-all cursor-pointer overflow-hidden', wallpaper === wp.id ? 'border-[#1B3A72] scale-95 shadow-md' : 'border-transparent hover:scale-95')}
-                  style={{ background: wp.style }}>
+                  style={{ background: isDarkMode ? wp.dark : wp.light }}>
                   <span className="text-[10px] font-semibold text-white drop-shadow px-1.5 py-0.5 rounded-full bg-black/25">{wp.label}</span>
                 </button>
               ))}
@@ -780,7 +760,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         </div>
       )}
 
-      {/* ── Attachments drawer ── */}
       {attachmentsOpen && (
         <div className="fixed inset-0 z-50 flex" onClick={() => setAttachmentsOpen(false)}>
           <div className="absolute inset-0 bg-black/40" />
@@ -820,7 +799,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
                         <div key={i} className="aspect-square bg-slate-100 dark:bg-slate-800 overflow-hidden relative group cursor-pointer"
                           onClick={() => { setAttachmentsOpen(false); setTimeout(() => handleScrollToMessage(item.msg.id), 100) }}>
                           {item.mime.startsWith('image/')
-                            // eslint-disable-next-line @next/next/no-img-element
                             ? <img src={fullUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
                             : <div className="w-full h-full flex items-center justify-center text-2xl">🎬</div>
                           }
@@ -893,7 +871,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         </div>
       )}
 
-      {/* ── Confirm modal ── */}
       {confirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setConfirmModal(null)}>
           <div className="absolute inset-0 bg-black/50" />
@@ -922,8 +899,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     </div>
   )
 }
-
-// ─── Forward dialog ────────────────────────────────────────────────────────────
 
 function ForwardDialog({ message, currentChatId, onClose }: { message: ChatMessage; currentChatId: number; onClose: () => void }) {
   const qc = useQueryClient()
@@ -996,8 +971,6 @@ function HeaderMenuItem({ icon, onClick, danger, children }: { icon: string; onC
   )
 }
 
-// ─── Build render items ────────────────────────────────────────────────────────
-
 const BOT_NAMES = new Set(['Ася', 'Bot', 'bot', 'Asya'])
 
 type RenderItem =
@@ -1021,8 +994,6 @@ function buildRenderItems(messages: ChatMessage[], myId: number): RenderItem[] {
   }
   return items
 }
-
-// ─── Icons ────────────────────────────────────────────────────────────────────
 
 function SearchIcon() {
   return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>

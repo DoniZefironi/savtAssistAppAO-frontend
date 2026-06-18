@@ -41,13 +41,12 @@ interface DeleteConfirm {
 
 const CAT_DEFAULT = 208
 const CAT_MAX = 360
-const CAT_SNAP = 56  // below this → snap to 0 (hidden)
+const CAT_SNAP = 56  
 
 export function KbView() {
   const qc = useQueryClient()
   const sentinelRef = useRef<HTMLDivElement>(null)
 
-  // Panel resize
   const [panelWidth, setPanelWidth] = useState(CAT_DEFAULT)
   const [isSnapping, setIsSnapping] = useState(false)
   const [isDesktop, setIsDesktop] = useState(false)
@@ -137,7 +136,6 @@ export function KbView() {
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
   })
 
-  // Infinite scroll
   useEffect(() => {
     const el = sentinelRef.current
     if (!el) return
@@ -196,13 +194,11 @@ export function KbView() {
   const allArticles = articlesQ.data?.pages.flatMap(p => p.items) ?? []
   const total = articlesQ.data?.pages[0]?.total
 
-  // Build category tree (2 levels)
   const rootCats = categories.filter(c => !c.parent_id)
   const childrenOf = (parentId: number) => categories.filter(c => c.parent_id === parentId)
 
   return (
     <div className="flex flex-col h-full">
-      {/* ── Header ── */}
       <div className="px-6 pt-6 pb-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
         <div className="flex items-end justify-between mb-4">
           <div>
@@ -214,14 +210,13 @@ export function KbView() {
               <button onClick={() => { setView('list'); localStorage.setItem('view-mode-kb', 'list') }} title="Список" className={`p-1.5 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon className="w-4 h-4" /></button>
               <button onClick={() => { setView('grid'); localStorage.setItem('view-mode-kb', 'grid') }} title="Сетка" className={`p-1.5 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon className="w-4 h-4" /></button>
             </div>
-            <Button onClick={() => setCreateArticleOpen(true)} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer">
+            <Button onClick={() => setCreateArticleOpen(true)} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white">
               <PlusIcon className="w-4 h-4 mr-1.5" />
               Новая статья
             </Button>
           </div>
         </div>
 
-        {/* Search */}
         <div className="relative mb-3">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
           <input
@@ -232,7 +227,6 @@ export function KbView() {
           />
         </div>
 
-        {/* Sort + tag filters */}
         <div className="flex flex-wrap gap-2 items-center">
           {SORT_OPTIONS.map(opt => {
             const active = sortBy === opt.value
@@ -278,9 +272,7 @@ export function KbView() {
         </div>
       </div>
 
-      {/* ── Body ── */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Category panel */}
         {panelWidth > 0 && (
         <div
           className={cn('shrink-0 border-r border-slate-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 flex flex-col overflow-hidden', isSnapping && 'transition-[width] duration-150')}
@@ -349,7 +341,6 @@ export function KbView() {
         </div>
         )}
 
-        {/* Drag handle / expand strip */}
         {panelWidth === 0 ? (
           <button
             onClick={expandPanel}
@@ -370,7 +361,6 @@ export function KbView() {
           </div>
         )}
 
-        {/* Articles */}
         <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900">
           <div className="flex-1 overflow-y-auto px-6 py-4">
             {articlesQ.isLoading && (
@@ -423,7 +413,6 @@ export function KbView() {
         </div>
       </div>
 
-      {/* ── Modals ── */}
       {createArticleOpen && (
         <ArticleModal article={null} categories={categories} defaultCategoryId={selectedCatId} onClose={() => setCreateArticleOpen(false)} />
       )}
@@ -433,7 +422,6 @@ export function KbView() {
       {createCatOpen && <CategoryModal cat={null} onClose={() => setCreateCatOpen(false)} />}
       {editCat && <CategoryModal cat={editCat} onClose={() => setEditCat(null)} />}
 
-      {/* Delete confirmation */}
       {deleteConfirm && (
         <AppModal open onClose={() => setDeleteConfirm(null)}>
           <div className="px-6 py-5">
@@ -466,8 +454,6 @@ export function KbView() {
     </div>
   )
 }
-
-// ─── Category row ─────────────────────────────────────────────────────────────
 
 function CategoryRow({ cat, selected, indent, onSelect, onEdit, onDelete }: {
   cat: KbCategory
@@ -505,8 +491,6 @@ function CategoryRow({ cat, selected, indent, onSelect, onEdit, onDelete }: {
     </div>
   )
 }
-
-// ─── Article card ─────────────────────────────────────────────────────────────
 
 function ArticleCard({ article, categoryName, view = 'list', onEdit, onDelete }: {
   article: KbArticleList
@@ -589,8 +573,6 @@ function ArticleCard({ article, categoryName, view = 'list', onEdit, onDelete }:
     </div>
   )
 }
-
-// ─── Article modal ────────────────────────────────────────────────────────────
 
 function ArticleModal({ article, categories, defaultCategoryId, onClose }: {
   article: KbArticleList | null
@@ -769,8 +751,6 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose }: {
   )
 }
 
-// ─── Attachments tab ──────────────────────────────────────────────────────────
-
 function AttachmentsTab({ article }: { article: KbArticleDetail }) {
   const qc = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -883,8 +863,6 @@ function AttachmentRow({ att, articleId, onDelete, deleting }: {
   )
 }
 
-// ─── Category modal ───────────────────────────────────────────────────────────
-
 function CategoryModal({ cat, onClose }: { cat: KbCategory | null; onClose: () => void }) {
   const qc = useQueryClient()
   const [name, setName] = useState(cat?.name ?? '')
@@ -947,8 +925,6 @@ function CategoryModal({ cat, onClose }: { cat: KbCategory | null; onClose: () =
     </AppModal>
   )
 }
-
-// ─── Tag selector ─────────────────────────────────────────────────────────────
 
 function TagSelector({ selected, allTags, onChange, onCreateTag }: {
   selected: Tag[]
@@ -1022,8 +998,6 @@ function TagSelector({ selected, allTags, onChange, onCreateTag }: {
     </div>
   )
 }
-
-// ─── Icons ────────────────────────────────────────────────────────────────────
 
 function BookIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>

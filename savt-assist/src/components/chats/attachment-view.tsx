@@ -71,7 +71,6 @@ function ImageAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean })
   return (
     <>
       <div className="relative group mt-1 max-w-xs">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={url}
           alt={a.file_name}
@@ -114,12 +113,12 @@ function AudioAttachment({ a, isOwn, transcription, transcribing, onTranscribe }
   return (
     <div className={cn(
       'mt-1 rounded-xl px-3 py-2 min-w-55',
-      isOwn ? 'bg-white/15' : 'bg-slate-100'
+      isOwn ? 'bg-white/15' : 'bg-slate-100 dark:bg-slate-700'
     )}>
       <div className="flex items-center gap-2">
         <span className="text-lg shrink-0">{isVoice ? '🎙' : '🎵'}</span>
         <div className="flex-1 min-w-0">
-          <p className={cn('text-xs mb-1 truncate', isOwn ? 'text-white/70' : 'text-slate-500')}>
+          <p className={cn('text-xs mb-1 truncate', isOwn ? 'text-white/70' : 'text-slate-500 dark:text-slate-400')}>
             {isVoice ? 'Голосовое сообщение' : a.file_name}
             {a.duration_seconds != null && <span className="ml-1">{formatDuration(a.duration_seconds)}</span>}
           </p>
@@ -192,15 +191,15 @@ function FileAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean }) 
       'mt-1 rounded-xl px-3 py-2.5 flex items-center gap-3 min-w-[220px] max-w-xs',
       isOwn
         ? 'bg-white/25 border border-white/35'
-        : 'bg-white border border-slate-200 shadow-sm'
+        : 'bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 shadow-sm'
     )}>
       <span className="text-2xl flex-shrink-0">{fileIcon(a.mime_type)}</span>
       <div className="flex-1 min-w-0">
-        <p className={cn('text-sm font-medium truncate leading-tight', isOwn ? 'text-white' : 'text-slate-800')}>
+        <p className={cn('text-sm font-medium truncate leading-tight', isOwn ? 'text-white' : 'text-slate-800 dark:text-slate-100')}>
           {a.file_name}
         </p>
         {a.file_size_bytes > 0 && (
-          <p className={cn('text-xs mt-0.5', isOwn ? 'text-white/60' : 'text-slate-500')}>
+          <p className={cn('text-xs mt-0.5', isOwn ? 'text-white/60' : 'text-slate-500 dark:text-slate-400')}>
             {formatBytes(a.file_size_bytes)}
           </p>
         )}
@@ -212,7 +211,7 @@ function FileAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean }) 
           rel="noopener noreferrer"
           className={cn(
             'w-7 h-7 rounded-full flex items-center justify-center transition-colors',
-            isOwn ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+            isOwn ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-slate-100 dark:bg-slate-600 hover:bg-slate-200 dark:hover:bg-slate-500 text-slate-600 dark:text-slate-300'
           )}
           title="Открыть"
         >
@@ -222,7 +221,7 @@ function FileAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean }) 
           onClick={() => downloadBlob(url, a.file_name)}
           className={cn(
             'w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer',
-            isOwn ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+            isOwn ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-slate-100 dark:bg-slate-600 hover:bg-slate-200 dark:hover:bg-slate-500 text-slate-600 dark:text-slate-300'
           )}
           title="Скачать"
         >

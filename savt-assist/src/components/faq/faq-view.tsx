@@ -32,7 +32,6 @@ export function FaqView() {
   const qc = useQueryClient()
   const sentinelRef = useRef<HTMLDivElement>(null)
 
-  // Panel resize
   const CAT_DEFAULT = 208
   const CAT_MAX = 360
   const CAT_SNAP = 56
@@ -98,7 +97,6 @@ export function FaqView() {
   const [editCat, setEditCat] = useState<FaqCategory | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirm | null>(null)
 
-  // Debounce search
   useEffect(() => {
     const t = setTimeout(() => setSearch(searchInput), 300)
     return () => clearTimeout(t)
@@ -126,7 +124,6 @@ export function FaqView() {
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
   })
 
-  // Infinite scroll
   useEffect(() => {
     const el = sentinelRef.current
     if (!el) return
@@ -177,8 +174,6 @@ export function FaqView() {
   const allEntries = entriesQ.data?.pages.flatMap(p => p.items) ?? []
   const total = entriesQ.data?.pages[0]?.total
 
-  // Build flat ordered list: roots first, each followed by their children.
-  // Orphaned cats (parent deleted) are appended so nothing is lost.
   const rootCats = categories.filter(c => !c.parent_id)
   const childrenOf = (parentId: number) => categories.filter(c => c.parent_id === parentId)
   const shownIds = new Set<number>()
@@ -197,7 +192,6 @@ export function FaqView() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* ── Header ── */}
       <div className="px-6 pt-6 pb-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
         <div className="flex items-end justify-between mb-4">
           <div>
@@ -209,14 +203,13 @@ export function FaqView() {
               <button onClick={() => { setView('list'); localStorage.setItem('view-mode-faq', 'list') }} title="Список" className={`p-1.5 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon className="w-4 h-4" /></button>
               <button onClick={() => { setView('grid'); localStorage.setItem('view-mode-faq', 'grid') }} title="Сетка" className={`p-1.5 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon className="w-4 h-4" /></button>
             </div>
-            <Button onClick={() => setCreateEntryOpen(true)} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer">
+            <Button onClick={() => setCreateEntryOpen(true)} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white">
               <PlusIcon className="w-4 h-4 mr-1.5" />
               Новый вопрос
             </Button>
           </div>
         </div>
 
-        {/* Search */}
         <div className="relative mb-3">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
           <input
@@ -227,7 +220,6 @@ export function FaqView() {
           />
         </div>
 
-        {/* Sort */}
         <div className="flex flex-wrap gap-2">
           {SORT_OPTIONS.map(opt => {
             const active = sortBy === opt.value
@@ -250,9 +242,7 @@ export function FaqView() {
         </div>
       </div>
 
-      {/* ── Body ── */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Category panel */}
         {panelWidth > 0 && (
         <div
           className={cn('shrink-0 border-r border-slate-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 flex flex-col overflow-hidden', isSnapping && 'transition-[width] duration-150')}
@@ -296,7 +286,6 @@ export function FaqView() {
         </div>
         )}
 
-        {/* Drag handle / expand strip */}
         {panelWidth === 0 ? (
           <button
             onClick={expandPanel}
@@ -317,7 +306,6 @@ export function FaqView() {
           </div>
         )}
 
-        {/* Entries */}
         <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900">
           <div className="flex-1 overflow-y-auto px-6 py-4">
             {entriesQ.isLoading && (
@@ -370,7 +358,6 @@ export function FaqView() {
         </div>
       </div>
 
-      {/* ── Modals ── */}
       {createEntryOpen && (
         <EntryModal entry={null} categories={categories} defaultCategoryId={selectedCatId} onClose={() => setCreateEntryOpen(false)} />
       )}
@@ -380,7 +367,6 @@ export function FaqView() {
       {createCatOpen && <CategoryModal cat={null} onClose={() => setCreateCatOpen(false)} />}
       {editCat && <CategoryModal cat={editCat} onClose={() => setEditCat(null)} />}
 
-      {/* Delete confirmation */}
       {deleteConfirm && (
         <AppModal open onClose={() => setDeleteConfirm(null)}>
           <div className="px-6 py-5">
@@ -411,8 +397,6 @@ export function FaqView() {
     </div>
   )
 }
-
-// ─── Category row ─────────────────────────────────────────────────────────────
 
 function CategoryRow({ cat, selected, indent, onSelect, onEdit, onDelete }: {
   cat: FaqCategory
@@ -450,8 +434,6 @@ function CategoryRow({ cat, selected, indent, onSelect, onEdit, onDelete }: {
     </div>
   )
 }
-
-// ─── Entry card ───────────────────────────────────────────────────────────────
 
 function EntryCard({ entry, categoryName, view = 'list', onEdit, onDelete }: {
   entry: FaqEntry
@@ -522,8 +504,6 @@ function EntryCard({ entry, categoryName, view = 'list', onEdit, onDelete }: {
   )
 }
 
-// ─── Entry modal ──────────────────────────────────────────────────────────────
-
 function EntryModal({ entry, categories, defaultCategoryId, onClose }: {
   entry: FaqEntry | null
   categories: FaqCategory[]
@@ -556,7 +536,6 @@ function EntryModal({ entry, categories, defaultCategoryId, onClose }: {
 
   const canSave = question.trim().length >= 5 && answer.trim().length >= 1 && (isEdit ? true : categoryId > 0)
 
-  // Current category name for display in edit mode
   const currentCat = categories.find(c => c.id === (entry?.category_id ?? categoryId))
 
   return (
@@ -577,7 +556,6 @@ function EntryModal({ entry, categories, defaultCategoryId, onClose }: {
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-          {/* Category — editable only when creating */}
           <div>
             <label className="text-xs font-medium text-slate-500 block mb-1.5">
               Категория {!isEdit && <span className="text-red-500">*</span>}
@@ -644,8 +622,6 @@ function EntryModal({ entry, categories, defaultCategoryId, onClose }: {
   )
 }
 
-// ─── Category modal ───────────────────────────────────────────────────────────
-
 function CategoryModal({ cat, onClose }: { cat: FaqCategory | null; onClose: () => void }) {
   const qc = useQueryClient()
   const [name, setName] = useState(cat?.name ?? '')
@@ -701,8 +677,6 @@ function CategoryModal({ cat, onClose }: { cat: FaqCategory | null; onClose: () 
     </AppModal>
   )
 }
-
-// ─── Icons ────────────────────────────────────────────────────────────────────
 
 function QuestionIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" /></svg>

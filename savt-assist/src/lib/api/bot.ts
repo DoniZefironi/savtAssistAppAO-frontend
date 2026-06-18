@@ -6,12 +6,13 @@ export interface ReindexResult {
     faq: number
     kb_article: number
     document: number
+    skipped: number
   }
 }
 
 export const botApi = {
-  reindex: (): Promise<ReindexResult> =>
-    apiClient.post('/admin/bot/reindex').then(r => r.data),
+  reindex: (force = false): Promise<ReindexResult> =>
+    apiClient.post('/admin/bot/reindex', null, { params: force ? { force: true } : {} }).then(r => r.data),
 
   broadcastNotification: (data: { title: string; body: string; role: string | null }): Promise<void> =>
     apiClient.post('/admin/notifications/broadcast', data).then(() => undefined),

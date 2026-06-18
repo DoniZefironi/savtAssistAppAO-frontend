@@ -9,9 +9,9 @@ import { cabinetsApi } from '@/lib/api/cabinets'
 import type { Chat, ChatMessage } from '@/types'
 
 const DEFAULT_WIDTH = 288
-const MIN_WIDTH = 56       // avatars-only
+const MIN_WIDTH = 56       
 const MAX_WIDTH = 480
-const COMPACT_SNAP = 90   // below this → snap to MIN_WIDTH on release
+const COMPACT_SNAP = 90   
 
 export function ChatsPage() {
   const qc = useQueryClient()
@@ -19,9 +19,7 @@ export function ChatsPage() {
   const [showConversation, setShowConversation] = useState(false)
   const [chatSearchInput, setChatSearchInput] = useState('')
   const [chatSearch, setChatSearch] = useState('')
-  const [searchInMessages, setSearchInMessages] = useState(false)
 
-  // ─── Panel width & drag ────────────────────────────────────────────────────
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH)
   const [isSnapping, setIsSnapping] = useState(false)
   const [isDesktop, setIsDesktop] = useState(false)
@@ -29,7 +27,6 @@ export function ChatsPage() {
   const dragStartX = useRef(0)
   const dragStartWidth = useRef(0)
 
-  // Detect desktop
   useEffect(() => {
     const check = () => setIsDesktop(window.innerWidth >= 768)
     check()
@@ -58,7 +55,6 @@ export function ChatsPage() {
       isDragging.current = false
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
-      // Snap to compact if released near minimum
       setPanelWidth(w => {
         if (w < COMPACT_SNAP) {
           setIsSnapping(true)
@@ -78,16 +74,14 @@ export function ChatsPage() {
 
   const isCompact = panelWidth <= COMPACT_SNAP
 
-  // ─── Search debounce ───────────────────────────────────────────────────────
   useEffect(() => {
     const t = setTimeout(() => setChatSearch(chatSearchInput), 300)
     return () => clearTimeout(t)
   }, [chatSearchInput])
 
-  // ─── Data ──────────────────────────────────────────────────────────────────
   const { data: rawChats = [], isLoading } = useQuery({
-    queryKey: ['operator-chats', chatSearch, searchInMessages],
-    queryFn: () => chatsApi.getChats(chatSearch || undefined, searchInMessages),
+    queryKey: ['operator-chats', chatSearch],
+    queryFn: () => chatsApi.getChats(chatSearch || undefined),
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
   })
@@ -125,11 +119,9 @@ export function ChatsPage() {
     setShowConversation(true)
   }, [])
 
-  // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-1 overflow-hidden h-full">
 
-      {/* ── Side panel ── */}
       <div
         className={`shrink-0 h-full overflow-hidden flex flex-col ${
           showConversation ? 'hidden md:flex' : 'flex w-full'
@@ -144,12 +136,9 @@ export function ChatsPage() {
           compact={isCompact && isDesktop}
           searchValue={chatSearchInput}
           onSearchChange={setChatSearchInput}
-          searchInMessages={searchInMessages}
-          onSearchInMessagesChange={setSearchInMessages}
         />
       </div>
 
-      {/* ── Drag handle (desktop only) ── */}
       <div
         onMouseDown={handleDragStart}
         className="hidden md:flex w-1 shrink-0 cursor-col-resize items-center justify-center group relative bg-slate-200 dark:bg-slate-700 hover:bg-[#4A8FE7]/60 transition-colors duration-100 z-10"
@@ -162,7 +151,6 @@ export function ChatsPage() {
         </div>
       </div>
 
-      {/* ── Conversation ── */}
       <div className={`flex-1 h-full min-w-0 ${showConversation ? 'flex flex-col' : 'hidden md:flex md:flex-col'}`}>
         {enrichedSelected ? (
           <ChatConversation
@@ -191,7 +179,7 @@ function getUserNameFromCache(qc: ReturnType<typeof useQueryClient>, chatId: num
 
 function EmptyState() {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-3 bg-[linear-gradient(160deg,#f5f7fa_0%,#eaeff8_100%)] dark:bg-slate-800">
+    <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-3 bg-[linear-gradient(160deg,#f5f7fa_0%,#eaeff8_100%)] dark:[background:linear-gradient(160deg,#1a2236_0%,#1e2744_100%)]">
       <span className="text-5xl">💬</span>
       <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Выберите чат</p>
       <p className="text-xs text-slate-400 dark:text-slate-500 text-center max-w-40">Выберите чат из списка слева</p>

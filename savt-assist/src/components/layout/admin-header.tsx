@@ -8,8 +8,9 @@ import Cookies from 'js-cookie'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/lib/store/auth'
 import { authApi } from '@/lib/api/auth'
+import { NotificationBell } from './notification-bell'
 
-export function AdminHeader() {
+export function AdminHeader({ onMenuClick }: { onMenuClick?: () => void }) {
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [profileOpen, setProfileOpen] = useState(false)
   const profileRef = useRef<HTMLDivElement>(null)
@@ -57,8 +58,18 @@ export function AdminHeader() {
     : '?'
 
   return (
-    <header className="flex-shrink-0 h-14 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700/60 flex items-center justify-end px-4 gap-3 z-10">
+    <header className="flex-shrink-0 h-14 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700/60 flex items-center px-4 gap-2 z-10">
+      <button
+        onClick={onMenuClick}
+        className="md:hidden w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+        title="Меню"
+      >
+        <HamburgerIcon />
+      </button>
+      <div className="flex-1" />
       <div className="flex items-center gap-1">
+        <NotificationBell />
+
         <button
           onClick={toggleTheme}
           title={theme === 'light' ? 'Тёмная тема' : 'Светлая тема'}
@@ -116,6 +127,9 @@ export function AdminHeader() {
   )
 }
 
+function HamburgerIcon() {
+  return <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+}
 function MoonIcon() {
   return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" /></svg>
 }

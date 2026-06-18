@@ -11,6 +11,8 @@ import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { RequestCard, ServiceCardIcon, AdditionCardIcon, ShareCardIcon, StatusPill, TypePill } from './request-card'
+import { UserDialog } from '@/components/users/users-view'
+import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
 
 type Tab = 'service' | 'additions' | 'shares' | 'docs'
 
@@ -181,7 +183,6 @@ export function RequestsView() {
   const curQ = tab === 'service' ? svcQ : tab === 'additions' ? addQ : tab === 'shares' ? shrQ : docQ
   const total = curQ.data?.pages[0]?.total
 
-  // Infinite scroll sentinel
   useEffect(() => {
     const el = sentinelRef.current
     if (!el) return
@@ -211,7 +212,6 @@ export function RequestsView() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* ── Header ── */}
       <div className="px-6 pt-6 pb-0 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60">
         <div className="flex items-end justify-between mb-4">
           <div>
@@ -241,7 +241,6 @@ export function RequestsView() {
         </div>
       </div>
 
-      {/* ── Search ── */}
       <div className="px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60">
         <div className="relative">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
@@ -257,7 +256,6 @@ export function RequestsView() {
         </div>
       </div>
 
-      {/* ── Filters / sort ── */}
       <div className="px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
         {filters.map(f => (
           <button
@@ -299,7 +297,6 @@ export function RequestsView() {
         )}
       </div>
 
-      {/* ── Content ── */}
       <div className="flex-1 overflow-y-auto px-6 py-4 bg-slate-50 dark:bg-slate-900">
         {curQ.isLoading && (
           <div className={view === 'grid' ? 'grid grid-cols-2 gap-3' : 'space-y-2'}>
@@ -328,7 +325,6 @@ export function RequestsView() {
           <DocumentRequestList items={docItems} onSelect={setSelectedDocRequest} view={view} />
         )}
 
-        {/* Infinite scroll sentinel */}
         <div ref={sentinelRef} className="h-1 mt-2" />
         {curQ.isFetchingNextPage && (
           <div className="flex justify-center py-4">
@@ -352,8 +348,6 @@ export function RequestsView() {
     </div>
   )
 }
-
-// ─── List rows ──────────────────────────────────────────────────────────────
 
 function Empty({ text }: { text: string }) {
   return (
@@ -461,14 +455,29 @@ function DocumentRequestList({ items, onSelect, view }: { items: DocumentRequest
   )
 }
 
-// ─── Dialogs ────────────────────────────────────────────────────────────────
-
 function DRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex gap-4 px-6 py-3">
       <span className="text-xs text-slate-400 w-32 shrink-0 pt-0.5">{label}</span>
       <div className="flex-1 text-sm font-medium text-slate-700 dark:text-slate-200">{value}</div>
     </div>
+  )
+}
+
+function DRowLink({ label, value, onClick }: { label: string; value: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full flex gap-4 px-6 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group text-left cursor-pointer"
+    >
+      <span className="text-xs text-slate-400 w-32 shrink-0 pt-0.5">{label}</span>
+      <div className="flex-1 flex items-center gap-1 min-w-0">
+        <span className="text-sm font-medium text-[#1B3A72] dark:text-blue-400 group-hover:underline underline-offset-2 truncate">{value}</span>
+        <svg className="w-3 h-3 text-[#1B3A72]/40 dark:text-blue-400/40 shrink-0 group-hover:text-[#1B3A72] dark:group-hover:text-blue-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+        </svg>
+      </div>
+    </button>
   )
 }
 
@@ -572,9 +581,11 @@ function StatusStepper({ status, onChange }: {
   )
 }
 
-function ServiceDialog({ request, onClose }: { request: ServiceRequest; onClose: () => void }) {
+export function ServiceDialog({ request, onClose }: { request: ServiceRequest; onClose: () => void }) {
   const qc = useQueryClient()
   const [status, setStatus] = useState(request.status)
+  const [subUserId, setSubUserId] = useState<number | null>(null)
+  const [subCabinetId, setSubCabinetId] = useState<number | null>(null)
 
   const mutation = useMutation({
     mutationFn: () => requestsApi.updateServiceRequestStatus(request.id, status),
@@ -605,8 +616,13 @@ function ServiceDialog({ request, onClose }: { request: ServiceRequest; onClose:
         }
       />
       <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
-        <DRow label="Пользователь" value={request.user_full_name ?? '—'} />
+        <DRowLink label="Пользователь" value={request.user_full_name ?? `#${request.user_id}`} onClick={() => setSubUserId(request.user_id)} />
         <DRow label="Телефон" value={request.user_phone ?? '—'} />
+        <DRow label="Тип" value={userTypeLabel(request.user_type)} />
+        {request.organization_name && <DRow label="Организация" value={request.organization_name} />}
+        <DRow label="Статус аккаунта" value={<VerifiedBadge verified={request.user_is_verified} />} />
+        {request.user_registered_at && <DRow label="Зарегистрирован" value={fmtDate(request.user_registered_at)} />}
+        <DRowLink label="Шкаф управления" value={`ШУ ${request.cabinet_object_number}`} onClick={() => setSubCabinetId(request.cabinet_id)} />
         <DRow label="Создана" value={fmtDate(request.created_at)} />
         <DRow label="Закрыта" value={request.closed_at ? fmtDate(request.closed_at) : '—'} />
         <div className="flex gap-4 px-6 py-3">
@@ -633,6 +649,8 @@ function ServiceDialog({ request, onClose }: { request: ServiceRequest; onClose:
           </div>
         )}
       </div>
+      {subUserId !== null && <UserDialog userId={subUserId} role="user" onClose={() => setSubUserId(null)} />}
+      {subCabinetId !== null && <CabinetDetailDialog cabinetId={subCabinetId} isAdmin onClose={() => setSubCabinetId(null)} />}
     </AppModal>
   )
 }
@@ -643,6 +661,8 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
   const [cabinetId, setCabinetId] = useState('')
   const [approveNote, setApproveNote] = useState('')
   const [rejectNote, setRejectNote] = useState('')
+  const [subUserId, setSubUserId] = useState<number | null>(null)
+  const [subCabinetId, setSubCabinetId] = useState<number | null>(null)
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['addition-requests'] })
@@ -675,7 +695,7 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
         }
       />
       <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
-        <DRow label="Пользователь" value={request.user_full_name ?? '—'} />
+        <DRowLink label="Пользователь" value={request.user_full_name ?? `#${request.user_id}`} onClick={() => setSubUserId(request.user_id)} />
         <DRow label="Телефон" value={request.user_phone ?? '—'} />
         <DRow label="Тип" value={userTypeLabel(request.user_type)} />
         {request.organization_name && <DRow label="Организация" value={request.organization_name} />}
@@ -683,7 +703,7 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
         {request.user_registered_at && <DRow label="Зарегистрирован" value={fmtDate(request.user_registered_at)} />}
         <DRow label="Заявка создана" value={fmtDate(request.created_at)} />
         {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
-        {request.cabinet_id && <DRow label="Связанный ШУ" value={`#${request.cabinet_id}`} />}
+        {request.cabinet_id && <DRowLink label="Связанный ШУ" value={`ШУ #${request.cabinet_id}`} onClick={() => setSubCabinetId(request.cabinet_id!)} />}
         {request.user_comment && (
           <DRow label="Комментарий" value={
             <span className="font-normal text-slate-600 dark:text-slate-300">{request.user_comment}</span>
@@ -699,7 +719,6 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
       {request.photo_url && (
         <div className="px-6 pb-4">
           <p className="text-xs text-slate-400 mb-2">Фото</p>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={toFullUrl(request.photo_url)}
             alt="Фото заявки"
@@ -764,6 +783,8 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
           </div>
         )}
       </div>
+      {subUserId !== null && <UserDialog userId={subUserId} role="user" onClose={() => setSubUserId(null)} />}
+      {subCabinetId !== null && <CabinetDetailDialog cabinetId={subCabinetId} isAdmin onClose={() => setSubCabinetId(null)} />}
     </AppModal>
   )
 }
@@ -773,6 +794,8 @@ function ShareDialog({ request, onClose }: { request: ShareRequest; onClose: () 
   const [action, setAction] = useState<'approve' | 'reject' | null>(null)
   const [approveNote, setApproveNote] = useState('')
   const [rejectNote, setRejectNote] = useState('')
+  const [subUserId, setSubUserId] = useState<number | null>(null)
+  const [subCabinetId, setSubCabinetId] = useState<number | null>(null)
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['share-requests'] })
@@ -805,13 +828,13 @@ function ShareDialog({ request, onClose }: { request: ShareRequest; onClose: () 
         }
       />
       <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
-        <DRow label="Пользователь" value={request.user_full_name ?? '—'} />
+        <DRowLink label="Пользователь" value={request.user_full_name ?? `#${request.user_id}`} onClick={() => setSubUserId(request.user_id)} />
         <DRow label="Телефон" value={request.user_phone ?? '—'} />
         <DRow label="Тип" value={userTypeLabel(request.user_type)} />
         {request.organization_name && <DRow label="Организация" value={request.organization_name} />}
         <DRow label="Статус аккаунта" value={<VerifiedBadge verified={request.user_is_verified} />} />
         {request.user_registered_at && <DRow label="Зарегистрирован" value={fmtDate(request.user_registered_at)} />}
-        <DRow label="Шкаф" value={`ШУ ${request.cabinet_object_number}`} />
+        <DRowLink label="Шкаф" value={`ШУ ${request.cabinet_object_number}`} onClick={() => setSubCabinetId(request.cabinet_id)} />
         <DRow label="Тип ШУ" value={request.cabinet_type} />
         <DRow label="Заявка создана" value={fmtDate(request.created_at)} />
         {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
@@ -871,6 +894,8 @@ function ShareDialog({ request, onClose }: { request: ShareRequest; onClose: () 
           </div>
         )}
       </div>
+      {subUserId !== null && <UserDialog userId={subUserId} role="user" onClose={() => setSubUserId(null)} />}
+      {subCabinetId !== null && <CabinetDetailDialog cabinetId={subCabinetId} isAdmin onClose={() => setSubCabinetId(null)} />}
     </AppModal>
   )
 }
@@ -880,6 +905,8 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
   const [action, setAction] = useState<'approve' | 'reject' | null>(null)
   const [approveNote, setApproveNote] = useState('')
   const [rejectNote, setRejectNote] = useState('')
+  const [subUserId, setSubUserId] = useState<number | null>(null)
+  const [subCabinetId, setSubCabinetId] = useState<number | null>(null)
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['document-requests'] })
 
@@ -909,7 +936,12 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
         }
       />
       <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
-        <DRow label="Пользователь" value={request.user_full_name ?? '—'} />
+        <DRowLink label="Пользователь" value={request.user_full_name ?? `#${request.user_id}`} onClick={() => setSubUserId(request.user_id)} />
+        <DRow label="Телефон" value={request.user_phone ?? '—'} />
+        <DRow label="Тип" value={userTypeLabel(request.user_type)} />
+        {request.organization_name && <DRow label="Организация" value={request.organization_name} />}
+        <DRow label="Статус аккаунта" value={<VerifiedBadge verified={request.user_is_verified} />} />
+        {request.user_registered_at && <DRow label="Зарегистрирован" value={fmtDate(request.user_registered_at)} />}
         {request.document_id && (
           <DRow label="Документ" value={
             <span>
@@ -922,7 +954,7 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
             </span>
           } />
         )}
-        {request.cabinet_id && <DRow label="Шкаф" value={`ШУ #${request.cabinet_id}`} />}
+        {request.cabinet_id && <DRowLink label="Шкаф" value={`ШУ #${request.cabinet_id}`} onClick={() => setSubCabinetId(request.cabinet_id!)} />}
         <DRow label="Создана" value={fmtDate(request.created_at)} />
         {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
         {request.user_message && (
@@ -981,11 +1013,11 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
           </div>
         )}
       </div>
+      {subUserId !== null && <UserDialog userId={subUserId} role="user" onClose={() => setSubUserId(null)} />}
+      {subCabinetId !== null && <CabinetDetailDialog cabinetId={subCabinetId} isAdmin onClose={() => setSubCabinetId(null)} />}
     </AppModal>
   )
 }
-
-// ─── Icons ───────────────────────────────────────────────────────────────────
 
 function CheckIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>

@@ -14,6 +14,8 @@ import type { CabinetDocument, CabinetPhoto } from '@/lib/api/media'
 import { kbApi } from '@/lib/api/kb'
 import type { Tag } from '@/lib/api/tags'
 import { requestsApi } from '@/lib/api/requests'
+import { ServiceDialog } from '@/components/requests/requests-view'
+import { UserDialog } from '@/components/users/users-view'
 import { formatDate } from '@/lib/warranty'
 import { cn } from '@/lib/utils'
 import type { Cabinet, ServiceRequest } from '@/types'
@@ -105,7 +107,6 @@ function DetailContent({ cabinetId, isAdmin, initialMode }: {
 
   return (
     <div className="flex flex-col max-h-[85vh]">
-      {/* Header */}
       <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-6 py-5 shrink-0">
         <div className="flex items-start gap-4 pr-2">
           <div className="w-12 h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
@@ -142,7 +143,6 @@ function DetailContent({ cabinetId, isAdmin, initialMode }: {
         </div>
       </div>
 
-      {/* Tab bar */}
       <div className="flex border-b border-slate-100 dark:border-slate-700/60 bg-white dark:bg-slate-800 shrink-0">
         {TABS.map(t => (
           <button
@@ -160,7 +160,6 @@ function DetailContent({ cabinetId, isAdmin, initialMode }: {
         ))}
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-y-auto">
         {tab === 'info' && (
           <div className="divide-y divide-slate-50 dark:divide-slate-700/30">
@@ -178,7 +177,6 @@ function DetailContent({ cabinetId, isAdmin, initialMode }: {
         {tab === 'requests' && <ServiceRequestsTab cabinetId={cabinetId} />}
       </div>
 
-      {/* Footer — only for info tab */}
       {tab === 'info' && (
         <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-2 shrink-0">
           {!editing && isAdmin && (
@@ -209,8 +207,6 @@ function DetailContent({ cabinetId, isAdmin, initialMode }: {
     </div>
   )
 }
-
-// ─── Documents tab ───────────────────────────────────────────────────────────
 
 function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }) {
   const qc = useQueryClient()
@@ -396,7 +392,6 @@ function DocRow({ doc, allTags, isAdmin, onOpen, onDownload, onDelete, deleting 
 
   return (
     <div className="group">
-      {/* Main row */}
       <div onClick={onOpen} className="flex items-center gap-3 px-6 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer">
         <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
           {doc.mime_type.includes('pdf') ? (
@@ -458,10 +453,8 @@ function DocRow({ doc, allTags, isAdmin, onOpen, onDownload, onDelete, deleting 
         </div>
       </div>
 
-      {/* Inline tag editor */}
       {editingTags && (
         <div onClick={e => e.stopPropagation()} className="px-6 pb-3 space-y-2 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-700/30">
-          {/* Selected tags */}
           <div className="flex flex-wrap gap-1.5 pt-2">
             {selectedTags.length === 0 && (
               <span className="text-xs text-slate-400 italic">Нет тегов</span>
@@ -474,7 +467,6 @@ function DocRow({ doc, allTags, isAdmin, onOpen, onDownload, onDelete, deleting 
             ))}
           </div>
 
-          {/* Search input + dropdown */}
           <div className="relative">
             <input
               value={tagInput}
@@ -499,7 +491,6 @@ function DocRow({ doc, allTags, isAdmin, onOpen, onDownload, onDelete, deleting 
             )}
           </div>
 
-          {/* Save / Cancel */}
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={cancelEdit} className="h-6 text-xs px-2 cursor-pointer">Отмена</Button>
             <Button onClick={() => tagMut.mutate()} disabled={tagMut.isPending} className="h-6 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer">
@@ -511,8 +502,6 @@ function DocRow({ doc, allTags, isAdmin, onOpen, onDownload, onDelete, deleting 
     </div>
   )
 }
-
-// ─── Photos tab ──────────────────────────────────────────────────────────────
 
 function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }) {
   const qc = useQueryClient()
@@ -684,7 +673,6 @@ function PhotoTile({ photo, onOpen, onDelete, onUpdate, deleting, updating }: {
   if (editing) {
     return (
       <div className="relative rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700 aspect-square">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={mediaApi.toFullUrl(photo.url)} alt="" className="w-full h-full object-cover opacity-30" />
         <div className="absolute inset-0 bg-black/60 flex flex-col gap-2 p-3">
           <textarea
@@ -718,7 +706,6 @@ function PhotoTile({ photo, onOpen, onDelete, onUpdate, deleting, updating }: {
 
   return (
     <div className="relative group rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700 aspect-square cursor-pointer" onClick={onOpen}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={mediaApi.toFullUrl(photo.url)}
         alt={photo.caption ?? ''}
@@ -777,7 +764,6 @@ function PhotoLightbox({ photos, initialIdx, onClose }: {
       className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
       onClick={onClose}
     >
-      {/* Close */}
       <button
         onClick={onClose}
         className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer z-10"
@@ -786,7 +772,6 @@ function PhotoLightbox({ photos, initialIdx, onClose }: {
       </button>
 
       <div className="flex items-center gap-4 px-4 max-w-5xl w-full" onClick={e => e.stopPropagation()}>
-        {/* Prev */}
         <button
           onClick={() => setIdx(i => Math.max(0, i - 1))}
           disabled={idx === 0}
@@ -795,9 +780,7 @@ function PhotoLightbox({ photos, initialIdx, onClose }: {
           <ChevronLeftIcon className="w-5 h-5" />
         </button>
 
-        {/* Image */}
         <div className="flex-1 flex flex-col items-center gap-3 min-w-0">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={mediaApi.toFullUrl(photo.url)}
             alt={photo.caption ?? ''}
@@ -811,7 +794,6 @@ function PhotoLightbox({ photos, initialIdx, onClose }: {
           )}
         </div>
 
-        {/* Next */}
         <button
           onClick={() => setIdx(i => Math.min(photos.length - 1, i + 1))}
           disabled={idx === photos.length - 1}
@@ -824,10 +806,9 @@ function PhotoLightbox({ photos, initialIdx, onClose }: {
   )
 }
 
-// ─── Users tab ───────────────────────────────────────────────────────────────
-
 function UsersTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }) {
   const qc = useQueryClient()
+  const [viewUserId, setViewUserId] = useState<number | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['cabinet-users', cabinetId],
@@ -864,23 +845,30 @@ function UsersTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean 
   }
 
   return (
-    <div className="divide-y divide-slate-50 dark:divide-slate-700/30">
-      {users.map(u => (
-        <UserRow
-          key={u.user_id}
-          user={u}
-          isAdmin={isAdmin}
-          onRemove={(reason) => removeMut.mutate({ userId: u.user_id, reason })}
-          removing={removeMut.isPending}
-        />
-      ))}
-    </div>
+    <>
+      <div className="divide-y divide-slate-50 dark:divide-slate-700/30">
+        {users.map(u => (
+          <UserRow
+            key={u.user_id}
+            user={u}
+            isAdmin={isAdmin}
+            onView={() => setViewUserId(u.user_id)}
+            onRemove={(reason) => removeMut.mutate({ userId: u.user_id, reason })}
+            removing={removeMut.isPending}
+          />
+        ))}
+      </div>
+      {viewUserId !== null && (
+        <UserDialog userId={viewUserId} role="user" onClose={() => setViewUserId(null)} />
+      )}
+    </>
   )
 }
 
-function UserRow({ user, isAdmin, onRemove, removing }: {
+function UserRow({ user, isAdmin, onView, onRemove, removing }: {
   user: CabinetUser
   isAdmin: boolean
+  onView: () => void
   onRemove: (reason: string) => void
   removing: boolean
 }) {
@@ -894,12 +882,15 @@ function UserRow({ user, isAdmin, onRemove, removing }: {
   return (
     <div className="px-6 py-3">
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
+        <button
+          onClick={onView}
+          className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0 hover:bg-[#1B3A72]/10 dark:hover:bg-blue-900/30 transition-colors cursor-pointer"
+        >
           <UsersIcon className="w-4 h-4 text-slate-400" />
-        </div>
-        <div className="flex-1 min-w-0">
+        </button>
+        <button onClick={onView} className="flex-1 min-w-0 text-left cursor-pointer group">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate group-hover:text-[#1B3A72] dark:group-hover:text-blue-400 transition-colors">
               {user.full_name ?? user.phone ?? `#${user.user_id}`}
             </p>
             {user.is_primary && (
@@ -917,7 +908,7 @@ function UserRow({ user, isAdmin, onRemove, removing }: {
             )}
             <span className="text-xs text-slate-400">с {fmtDate(user.added_at)}</span>
           </div>
-        </div>
+        </button>
         {isAdmin && !showForm && (
           <button
             onClick={() => setShowForm(true)}
@@ -963,8 +954,6 @@ function UserRow({ user, isAdmin, onRemove, removing }: {
     </div>
   )
 }
-
-// ─── Info tab helpers ────────────────────────────────────────────────────────
 
 function DetailRow({ label, value, editing, onChange, placeholder, multiline }: {
   label: string
@@ -1030,8 +1019,6 @@ function DateRow({ label, value, editing, onChange }: {
   )
 }
 
-// ─── Types / helpers ─────────────────────────────────────────────────────────
-
 interface FormFields {
   admin_internal_name: string
   object_number: string
@@ -1075,8 +1062,6 @@ function fmtSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-// ─── Skeleton ────────────────────────────────────────────────────────────────
-
 function DetailSkeleton() {
   return (
     <div>
@@ -1100,8 +1085,6 @@ function DetailSkeleton() {
     </div>
   )
 }
-
-// ─── Cabinet tags row ─────────────────────────────────────────────────────────
 
 function CabinetTagsRow({ cabinetId, cabinet, isAdmin }: {
   cabinetId: number
@@ -1160,7 +1143,6 @@ function CabinetTagsRow({ cabinetId, cabinet, isAdmin }: {
     <div className="flex gap-4 px-6 py-3">
       <span className="text-xs text-slate-400 w-28 shrink-0 pt-0.5">Теги</span>
       <div className="flex-1 min-w-0">
-        {/* Tags display */}
         <div className="flex flex-wrap gap-1.5 mb-1">
           {currentTags.length === 0 && !editing && (
             <span className="text-sm text-slate-300 italic">Нет тегов</span>
@@ -1175,7 +1157,6 @@ function CabinetTagsRow({ cabinetId, cabinet, isAdmin }: {
           ))}
         </div>
 
-        {/* Editor */}
         {editing && (
           <div className="space-y-2 mt-2">
             <div className="relative">
@@ -1210,7 +1191,6 @@ function CabinetTagsRow({ cabinetId, cabinet, isAdmin }: {
           </div>
         )}
 
-        {/* Edit button */}
         {!editing && isAdmin && (
           <button onClick={() => setEditing(true)} className="text-xs text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 transition-colors cursor-pointer mt-0.5">
             + редактировать теги
@@ -1220,8 +1200,6 @@ function CabinetTagsRow({ cabinetId, cabinet, isAdmin }: {
     </div>
   )
 }
-
-// ─── Service requests tab ────────────────────────────────────────────────────
 
 const REQUEST_TYPE_LABELS: Record<string, string> = {
   repair: 'Ремонт',
@@ -1244,6 +1222,7 @@ const REQUEST_STATUS_NEXT: Record<string, string> = {
 function ServiceRequestsTab({ cabinetId }: { cabinetId: number }) {
   const qc = useQueryClient()
   const [status, setStatus] = useState('open')
+  const [selectedRequest, setSelectedRequest] = useState<ServiceRequest | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['cabinet-service-requests', cabinetId, status],
@@ -1269,63 +1248,70 @@ function ServiceRequestsTab({ cabinetId }: { cabinetId: number }) {
   const requests = data?.items ?? []
 
   return (
-    <div>
-      <div className="flex border-b border-slate-100 dark:border-slate-700/30 shrink-0">
-        {STATUS_TABS.map(t => (
-          <button
-            key={t.value}
-            onClick={() => setStatus(t.value)}
-            className={cn(
-              'px-4 py-2.5 text-sm transition-colors cursor-pointer border-b-2',
-              status === t.value
-                ? 'border-[#1B3A72] text-[#1B3A72] dark:text-blue-400 dark:border-blue-400 font-medium'
-                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {isLoading && (
-        <div className="space-y-2 px-6 py-3">
-          {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
-        </div>
-      )}
-
-      {!isLoading && requests.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-10 text-slate-400">
-          <ToolIcon className="w-8 h-8 mb-2 opacity-40" />
-          <p className="text-sm">Нет заявок</p>
-        </div>
-      )}
-
-      {!isLoading && requests.length > 0 && (
-        <div className="divide-y divide-slate-50 dark:divide-slate-700/30">
-          {requests.map(req => (
-            <ServiceRequestRow
-              key={req.id}
-              req={req}
-              onStatusChange={next => statusMut.mutate({ id: req.id, status: next })}
-              pending={statusMut.isPending}
-            />
+    <>
+      <div>
+        <div className="flex border-b border-slate-100 dark:border-slate-700/30 shrink-0">
+          {STATUS_TABS.map(t => (
+            <button
+              key={t.value}
+              onClick={() => setStatus(t.value)}
+              className={cn(
+                'px-4 py-2.5 text-sm transition-colors cursor-pointer border-b-2',
+                status === t.value
+                  ? 'border-[#1B3A72] text-[#1B3A72] dark:text-blue-400 dark:border-blue-400 font-medium'
+                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+              )}
+            >
+              {t.label}
+            </button>
           ))}
         </div>
+
+        {isLoading && (
+          <div className="space-y-2 px-6 py-3">
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
+          </div>
+        )}
+
+        {!isLoading && requests.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-10 text-slate-400">
+            <ToolIcon className="w-8 h-8 mb-2 opacity-40" />
+            <p className="text-sm">Нет заявок</p>
+          </div>
+        )}
+
+        {!isLoading && requests.length > 0 && (
+          <div className="divide-y divide-slate-50 dark:divide-slate-700/30">
+            {requests.map(req => (
+              <ServiceRequestRow
+                key={req.id}
+                req={req}
+                onSelect={() => setSelectedRequest(req)}
+                onStatusChange={next => statusMut.mutate({ id: req.id, status: next })}
+                pending={statusMut.isPending}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+      {selectedRequest && (
+        <ServiceDialog request={selectedRequest} onClose={() => setSelectedRequest(null)} />
       )}
-    </div>
+    </>
   )
 }
 
-function ServiceRequestRow({ req, onStatusChange, pending }: {
+function ServiceRequestRow({ req, onSelect, onStatusChange, pending }: {
   req: ServiceRequest
+  onSelect: () => void
   onStatusChange: (next: string) => void
   pending: boolean
 }) {
   const next = REQUEST_STATUS_NEXT[req.status]
 
   return (
-    <div className="px-6 py-3 flex items-start gap-3">
-      <div className="flex-1 min-w-0">
+    <div className="px-6 py-3 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group">
+      <button onClick={onSelect} className="flex-1 min-w-0 text-left cursor-pointer">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium">
             {REQUEST_TYPE_LABELS[req.request_type] ?? req.request_type}
@@ -1339,15 +1325,15 @@ function ServiceRequestRow({ req, onStatusChange, pending }: {
             {REQUEST_STATUS_LABELS[req.status]}
           </span>
         </div>
-        <p className="text-sm text-slate-700 dark:text-slate-200 mt-1 line-clamp-2">{req.description}</p>
+        <p className="text-sm text-slate-700 dark:text-slate-200 mt-1 line-clamp-2 group-hover:text-[#1B3A72] dark:group-hover:text-blue-400 transition-colors">{req.description}</p>
         <div className="flex items-center gap-2 mt-1 flex-wrap">
           {req.user_full_name && <span className="text-xs text-slate-400">{req.user_full_name}</span>}
           <span className="text-xs text-slate-400">{formatDate(req.created_at)}</span>
         </div>
-      </div>
+      </button>
       {next && (
         <button
-          onClick={() => onStatusChange(next)}
+          onClick={(e) => { e.stopPropagation(); onStatusChange(next) }}
           disabled={pending}
           className="shrink-0 text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-[#1B3A72] hover:text-[#1B3A72] dark:hover:border-blue-400 dark:hover:text-blue-400 transition-colors cursor-pointer disabled:opacity-50"
         >
@@ -1357,8 +1343,6 @@ function ServiceRequestRow({ req, onStatusChange, pending }: {
     </div>
   )
 }
-
-// ─── Icons ───────────────────────────────────────────────────────────────────
 
 function BoardIcon({ className }: { className?: string }) {
   return (

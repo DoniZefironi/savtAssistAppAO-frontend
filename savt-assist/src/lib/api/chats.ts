@@ -2,12 +2,9 @@ import { apiClient } from './client'
 import type { Chat, ChatMessage, MessageAttachment } from '@/types'
 
 export const chatsApi = {
-  getChats: async (search?: string, inMessages?: boolean): Promise<Chat[]> => {
+  getChats: async (search?: string): Promise<Chat[]> => {
     const { data } = await apiClient.get<Chat[]>('/operator/chats', {
-      params: {
-        ...(search ? { search } : {}),
-        ...(search && inMessages ? { search_in_messages: true } : {}),
-      },
+      params: search ? { search } : {},
     })
     return data
   },
@@ -73,11 +70,11 @@ export const chatsApi = {
   },
 
   pinMessage: async (chatId: number, messageId: number): Promise<void> => {
-    await apiClient.post(`/operator/chats/${chatId}/messages/${messageId}/pin`)
+    await apiClient.put(`/chats/${chatId}/pin/${messageId}`)
   },
 
   unpinMessage: async (chatId: number): Promise<void> => {
-    await apiClient.delete(`/operator/chats/${chatId}/pin`)
+    await apiClient.delete(`/chats/${chatId}/pin`)
   },
 
   getPinnedMessage: async (chatId: number): Promise<ChatMessage | null> => {
@@ -94,11 +91,11 @@ export const chatsApi = {
   },
 
   deleteChat: async (chatId: number): Promise<void> => {
-    await apiClient.delete(`/operator/chats/${chatId}`)
+    await apiClient.delete(`/chats/${chatId}`)
   },
 
   transcribeVoice: async (audioUrl: string): Promise<{ text: string }> => {
-    const { data } = await apiClient.post<{ text: string }>('/operator/transcribe', { audio_url: audioUrl })
+    const { data } = await apiClient.post<{ text: string }>('/upload/transcribe', { file_url: audioUrl })
     return data
   },
 

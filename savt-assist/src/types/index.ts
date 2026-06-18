@@ -91,6 +91,12 @@ export interface DashboardStats {
 export interface ServiceRequest {
   id: number
   user_id: number
+  user_full_name: string | null
+  user_phone: string | null
+  user_type: 'individual' | 'organization' | null
+  organization_name: string | null
+  user_is_verified: boolean
+  user_registered_at: string | null
   cabinet_id: number
   cabinet_object_number: string
   request_type: string
@@ -98,8 +104,6 @@ export interface ServiceRequest {
   status: 'open' | 'in_progress' | 'closed'
   created_at: string
   closed_at: string | null
-  user_full_name: string | null
-  user_phone: string | null
 }
 
 export interface AdditionRequest {
@@ -124,6 +128,11 @@ export interface DocumentRequest {
   id: number
   user_id: number
   user_full_name: string | null
+  user_phone: string | null
+  user_type: 'individual' | 'organization' | null
+  organization_name: string | null
+  user_is_verified: boolean
+  user_registered_at: string | null
   document_id: number | null
   cabinet_id: number | null
   doc_type: string

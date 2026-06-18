@@ -34,6 +34,8 @@ export interface UserCabinet {
 interface ListParams {
   search?: string
   is_active?: boolean
+  is_verified?: boolean
+  is_phone_verified?: boolean
   role?: string
   sort_by?: string
   sort_order?: string
