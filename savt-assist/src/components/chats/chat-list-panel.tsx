@@ -11,19 +11,16 @@ interface Props {
   compact?: boolean
   searchValue: string
   onSearchChange: (v: string) => void
-  searchInMessages?: boolean
-  onSearchInMessagesChange?: (v: boolean) => void
   onCollapse?: () => void
 }
 
-export function ChatListPanel({ chats, selectedId, onSelect, loading, compact, searchValue, onSearchChange, searchInMessages, onSearchInMessagesChange, onCollapse }: Props) {
+export function ChatListPanel({ chats, selectedId, onSelect, loading, compact, searchValue, onSearchChange, onCollapse }: Props) {
   const sorted = [...chats].sort((a, b) => {
     if (a.operator_requested && !b.operator_requested) return -1
     if (!a.operator_requested && b.operator_requested) return 1
     return new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime()
   })
 
-  // ─── Compact mode — avatars only ──────────────────────────────────────────
   if (compact) {
     return (
       <div className="flex flex-col h-full bg-white dark:bg-slate-900 overflow-y-auto overflow-x-hidden">
@@ -46,7 +43,6 @@ export function ChatListPanel({ chats, selectedId, onSelect, loading, compact, s
     )
   }
 
-  // ─── Full mode ────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full bg-white dark:bg-slate-900">
       <div className="border-b border-slate-100 dark:border-slate-700/60">
@@ -74,32 +70,6 @@ export function ChatListPanel({ chats, selectedId, onSelect, loading, compact, s
             </button>
           )}
         </div>
-        {searchValue && (
-          <div className="flex gap-1 px-3 pb-2.5">
-            <button
-              onClick={() => onSearchInMessagesChange?.(false)}
-              className={cn(
-                'flex-1 text-xs font-medium py-1 rounded-lg border transition-colors cursor-pointer',
-                !searchInMessages
-                  ? 'bg-[#1B3A72] border-[#1B3A72] text-white'
-                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-[#4A8FE7] hover:text-[#4A8FE7]'
-              )}
-            >
-              По чатам
-            </button>
-            <button
-              onClick={() => onSearchInMessagesChange?.(true)}
-              className={cn(
-                'flex-1 text-xs font-medium py-1 rounded-lg border transition-colors cursor-pointer',
-                searchInMessages
-                  ? 'bg-[#1B3A72] border-[#1B3A72] text-white'
-                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-[#4A8FE7] hover:text-[#4A8FE7]'
-              )}
-            >
-              По сообщениям
-            </button>
-          </div>
-        )}
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -137,8 +107,6 @@ export function ChatListPanel({ chats, selectedId, onSelect, loading, compact, s
   )
 }
 
-// ─── Compact row (avatar only) ────────────────────────────────────────────
-
 function CompactChatRow({ chat, selected, onSelect }: { chat: Chat; selected: boolean; onSelect: () => void }) {
   const hasUnread = chat.unread_count > 0
   const isWaiting = chat.operator_requested
@@ -165,22 +133,18 @@ function CompactChatRow({ chat, selected, onSelect }: { chat: Chat; selected: bo
         {chat.chat_type === 'cabinet' ? '📦' : chat.chat_type === 'notes' ? '📝' : chatInitials(chat)}
       </div>
 
-      {/* Unread badge */}
       {hasUnread && (
         <span className="absolute top-1 right-1.5 min-w-4 h-4 bg-[#1B3A72] text-white text-[9px] rounded-full flex items-center justify-center px-0.5 font-bold leading-none">
           {chat.unread_count > 9 ? '9+' : chat.unread_count}
         </span>
       )}
 
-      {/* Waiting dot */}
       {isWaiting && !hasUnread && (
         <span className="absolute top-1.5 right-2 w-2 h-2 bg-amber-500 rounded-full" />
       )}
     </button>
   )
 }
-
-// ─── Full row ─────────────────────────────────────────────────────────────
 
 function ChatRow({ chat, selected, onSelect }: { chat: Chat; selected: boolean; onSelect: () => void }) {
   const name = chatDisplayName(chat)
@@ -242,8 +206,6 @@ function ChatAvatar({ chat, selected }: { chat: Chat; selected: boolean }) {
     </div>
   )
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────
 
 export function chatDisplayName(chat: Chat): string {
   const user = chat.user_name ?? null

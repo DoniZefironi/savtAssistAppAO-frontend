@@ -64,7 +64,6 @@ async function multipartPost<T>(path: string, form: FormData): Promise<T> {
 }
 
 export const kbApi = {
-  // Categories
   listCategories: (): Promise<KbCategory[]> =>
     apiClient.get('/admin/kb/categories').then(r => r.data),
 
@@ -76,7 +75,6 @@ export const kbApi = {
 
   deleteCategory: (id: number) => apiClient.delete(`/admin/kb/categories/${id}`),
 
-  // Articles
   listArticles: (params?: {
     category_id?: number
     search?: string
@@ -99,7 +97,6 @@ export const kbApi = {
 
   deleteArticle: (id: number) => apiClient.delete(`/admin/kb/articles/${id}`),
 
-  // Attachments
   uploadAttachment: (articleId: number, file: File): Promise<KbAttachment> => {
     const form = new FormData()
     form.append('file', file)
@@ -131,7 +128,6 @@ export const kbApi = {
     }
   },
 
-  // Tags
   listTags: (scope?: 'document' | 'cabinet'): Promise<Tag[]> =>
     apiClient.get('/tags', { params: scope ? { scope } : undefined }).then(r => r.data),
 

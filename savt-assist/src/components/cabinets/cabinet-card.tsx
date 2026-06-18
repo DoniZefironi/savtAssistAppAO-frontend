@@ -21,7 +21,6 @@ export function CabinetCard({ cabinet, isAdmin, loading, view = 'list', onOpen, 
     return (
       <div className="group relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-4 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-600 transition-all flex flex-col gap-2 cursor-pointer" onClick={onOpen}>
 
-        {/* Top: name + QR */}
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="font-semibold text-slate-800 dark:text-slate-100 truncate leading-tight">{displayName}</p>
@@ -43,7 +42,6 @@ export function CabinetCard({ cabinet, isAdmin, loading, view = 'list', onOpen, 
           </button>
         </div>
 
-        {/* Middle: type, purpose, comment */}
         {(cabinet.type || cabinet.purpose) && (
           <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
             {[cabinet.type, cabinet.purpose].filter(Boolean).join(' · ')}
@@ -53,7 +51,6 @@ export function CabinetCard({ cabinet, isAdmin, loading, view = 'list', onOpen, 
           <p className="text-xs text-slate-400 italic truncate">{cabinet.admin_comment}</p>
         )}
 
-        {/* Bottom: warranty */}
         <div className="mt-auto pt-1 flex items-center gap-2 flex-wrap">
           <WarrantyBadge warrantyEndsAt={cabinet.warranty_ends_at} warrantyStatus={cabinet.warranty_status} />
           {(cabinet.warranty_starts_at || cabinet.warranty_ends_at) && (
@@ -63,7 +60,6 @@ export function CabinetCard({ cabinet, isAdmin, loading, view = 'list', onOpen, 
           )}
         </div>
 
-        {/* Admin actions — hover overlay bottom-right */}
         {isAdmin && (
           <div
             className="absolute bottom-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -81,7 +77,6 @@ export function CabinetCard({ cabinet, isAdmin, loading, view = 'list', onOpen, 
     )
   }
 
-  // ─── List view ───────────────────────────────────────────────────────────────
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-4 flex items-center gap-4 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-600 transition-all group">
 

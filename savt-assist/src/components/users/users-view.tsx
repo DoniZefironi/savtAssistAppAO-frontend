@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { RequestCard, StatusPill, TypePill } from '@/components/requests/request-card'
+import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
 
 const STATUS_FILTERS = [
   { value: 'all', label: 'Все' },
@@ -73,6 +74,8 @@ export function UsersView() {
 
   const [roleTab, setRoleTab] = useState<RoleTab>('user')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [verifiedFilter, setVerifiedFilter] = useState<boolean | null>(null)
+  const [phoneVerifiedFilter, setPhoneVerifiedFilter] = useState<boolean | null>(null)
   const [sortBy, setSortBy] = useState<SortValue>('created_at')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [searchInput, setSearchInput] = useState('')
@@ -93,9 +96,10 @@ export function UsersView() {
     return () => clearTimeout(t)
   }, [searchInput])
 
-  // Reset filters when role tab changes
   useEffect(() => {
     setStatusFilter('all')
+    setVerifiedFilter(null)
+    setPhoneVerifiedFilter(null)
     setSearchInput('')
     setSearch('')
     setSortBy('created_at')
@@ -105,11 +109,13 @@ export function UsersView() {
   const isActive = statusFilter === 'all' ? undefined : statusFilter === 'active'
 
   const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } = useInfiniteQuery({
-    queryKey: ['admin-users', roleTab, statusFilter, sortBy, sortOrder, search],
+    queryKey: ['admin-users', roleTab, statusFilter, verifiedFilter, phoneVerifiedFilter, sortBy, sortOrder, search],
     initialPageParam: 1,
     queryFn: ({ pageParam }: { pageParam: number }) =>
       getListFn(roleTab)({
         is_active: isActive,
+        ...(verifiedFilter !== null ? { is_verified: verifiedFilter } : {}),
+        ...(phoneVerifiedFilter !== null ? { is_phone_verified: phoneVerifiedFilter } : {}),
         search: search || undefined,
         sort_by: sortBy,
         sort_order: sortOrder,
@@ -119,7 +125,6 @@ export function UsersView() {
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
   })
 
-  // Infinite scroll sentinel
   useEffect(() => {
     const el = sentinelRef.current
     if (!el) return
@@ -149,7 +154,6 @@ export function UsersView() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* ── Header ── */}
       <div className="px-6 pt-6 pb-0 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
         <div className="flex items-end justify-between mb-4">
           <div>
@@ -164,19 +168,18 @@ export function UsersView() {
               <button onClick={() => { setView('grid'); localStorage.setItem('view-mode-users', 'grid') }} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon /></button>
             </div>
             {isSuperadmin && (
-              <Button onClick={() => setCreateAdminOpen(true)} className="bg-purple-600 hover:bg-purple-700 cursor-pointer">
+              <Button onClick={() => setCreateAdminOpen(true)} className="bg-purple-600 hover:bg-purple-700 cursor-pointer dark:text-white">
                 <PlusIcon className="w-4 h-4 mr-1.5" />
                 Создать администратора
               </Button>
             )}
-            <Button onClick={() => setCreateOperatorOpen(true)} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer">
+            <Button onClick={() => setCreateOperatorOpen(true)} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white">
               <PlusIcon className="w-4 h-4 mr-1.5" />
               Создать оператора
             </Button>
           </div>
         </div>
 
-        {/* Role tabs */}
         <div className="flex gap-0 -mb-px">
           {ROLE_TABS.map(t => (
             <button
@@ -195,7 +198,6 @@ export function UsersView() {
         </div>
       </div>
 
-      {/* ── Search ── */}
       <div className="px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
         <div className="relative">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
@@ -211,9 +213,7 @@ export function UsersView() {
         </div>
       </div>
 
-      {/* ── Filters bar ── */}
       <div className="px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0 flex flex-wrap items-center gap-2">
-        {/* Status filter */}
         {STATUS_FILTERS.map(f => (
           <button
             key={f.value}
@@ -231,7 +231,53 @@ export function UsersView() {
 
         <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />
 
-        {/* Sort */}
+        <button
+          onClick={() => setVerifiedFilter(v => v === true ? null : true)}
+          className={cn(
+            'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+            verifiedFilter === true
+              ? 'bg-emerald-500 text-white border-emerald-500'
+              : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-emerald-400 hover:text-emerald-600'
+          )}
+        >
+          ✓ Верифицированные
+        </button>
+        <button
+          onClick={() => setVerifiedFilter(v => v === false ? null : false)}
+          className={cn(
+            'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+            verifiedFilter === false
+              ? 'bg-rose-500 text-white border-rose-500'
+              : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-rose-400 hover:text-rose-500'
+          )}
+        >
+          ✗ Не верифицированные
+        </button>
+        <button
+          onClick={() => setPhoneVerifiedFilter(v => v === true ? null : true)}
+          className={cn(
+            'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+            phoneVerifiedFilter === true
+              ? 'bg-emerald-500 text-white border-emerald-500'
+              : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-emerald-400 hover:text-emerald-600'
+          )}
+        >
+          📱 Номер подтверждён
+        </button>
+        <button
+          onClick={() => setPhoneVerifiedFilter(v => v === false ? null : false)}
+          className={cn(
+            'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+            phoneVerifiedFilter === false
+              ? 'bg-rose-500 text-white border-rose-500'
+              : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-rose-400 hover:text-rose-500'
+          )}
+        >
+          📵 Номер не подтверждён
+        </button>
+
+        <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />
+
         {SORT_OPTIONS.map(opt => {
           const active = sortBy === opt.value
           return (
@@ -252,7 +298,6 @@ export function UsersView() {
         })}
       </div>
 
-      {/* ── List ── */}
       <div className="flex-1 overflow-y-auto px-6 py-4 bg-slate-50 dark:bg-slate-900">
         {isLoading && (
           <div className={view === 'grid' ? 'grid grid-cols-2 gap-3' : 'space-y-2'}>
@@ -326,15 +371,13 @@ export function UsersView() {
   )
 }
 
-// ─── User detail dialog ────────────────────────────────────────────────────
-
-function UserDialog({ userId, role, onClose }: { userId: number; role: string; onClose: () => void }) {
+export function UserDialog({ userId, role, onClose }: { userId: number; role: string; onClose: () => void }) {
   const qc = useQueryClient()
   const [banStep, setBanStep] = useState(false)
   const [banReason, setBanReason] = useState('')
   const [deleteStep, setDeleteStep] = useState(false)
+  const [selectedCabinetId, setSelectedCabinetId] = useState<number | null>(null)
 
-  // Admins/superadmins don't have a detail endpoint — show limited info
   const canFetchDetail = role === 'user' || role === 'operator'
 
   const { data: user, isLoading } = useQuery({
@@ -382,7 +425,6 @@ function UserDialog({ userId, role, onClose }: { userId: number; role: string; o
       {isLoading && canFetchDetail ? (
         <UserSkeleton />
       ) : !canFetchDetail ? (
-        // Admin/superadmin — no detail endpoint
         <div className="flex flex-col">
           <div className="bg-linear-to-r from-[#7C3AED] to-[#4C1D95] px-6 py-5 shrink-0">
             <div className="flex items-center gap-4">
@@ -450,8 +492,12 @@ function UserDialog({ userId, role, onClose }: { userId: number; role: string; o
                 <p className="text-xs text-slate-400 mb-2">Шкафы управления ({user.cabinets.length})</p>
                 <div className="space-y-1.5">
                   {user.cabinets.map(c => (
-                    <div key={c.cabinet_id} className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg px-3 py-2">
-                      <span className="text-sm font-medium text-slate-700 dark:text-slate-200 flex-1">
+                    <button
+                      key={c.cabinet_id}
+                      onClick={() => setSelectedCabinetId(c.cabinet_id)}
+                      className="w-full flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700/70 rounded-lg px-3 py-2 transition-colors cursor-pointer text-left group"
+                    >
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-200 flex-1 group-hover:text-[#1B3A72] dark:group-hover:text-blue-400 transition-colors">
                         {c.custom_name ?? `ШУ ${c.object_number}`}
                       </span>
                       {c.type && <span className="text-xs text-slate-400">{c.type}</span>}
@@ -460,7 +506,10 @@ function UserDialog({ userId, role, onClose }: { userId: number; role: string; o
                           Основной
                         </span>
                       )}
-                    </div>
+                      <svg className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 group-hover:text-[#1B3A72] dark:group-hover:text-blue-400 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                      </svg>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -535,11 +584,16 @@ function UserDialog({ userId, role, onClose }: { userId: number; role: string; o
           </div>
         </div>
       )}
+      {selectedCabinetId !== null && (
+        <CabinetDetailDialog
+          cabinetId={selectedCabinetId}
+          isAdmin
+          onClose={() => setSelectedCabinetId(null)}
+        />
+      )}
     </AppModal>
   )
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────
 
 function DRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -573,8 +627,6 @@ function UserSkeleton() {
     </div>
   )
 }
-
-// ─── Create modals ────────────────────────────────────────────────────────
 
 function CreateOperatorModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient()
@@ -713,8 +765,6 @@ function PasswordField({ label, hint, value, onChange, show, onToggle, error }: 
     </div>
   )
 }
-
-// ─── Icons ────────────────────────────────────────────────────────────────
 
 function ListIcon() {
   return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>

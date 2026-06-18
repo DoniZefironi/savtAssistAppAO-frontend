@@ -11,12 +11,12 @@ import { Button } from '@/components/ui/button'
 export default function AdminSettingsPage() {
   return (
     <div className="flex flex-col h-full overflow-y-auto bg-slate-50 dark:bg-slate-900">
-      <div className="px-6 pt-6 pb-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
+      <div className="px-6 pt-6 pb-5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
         <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Настройки</h1>
         <p className="text-sm text-slate-400 mt-0.5">Управление системой и инструменты администратора</p>
       </div>
 
-      <div className="px-6 py-6 space-y-5 max-w-3xl">
+      <div className="px-6 py-6 space-y-4 max-w-3xl">
         <BroadcastSection />
         <BotSection />
       </div>
@@ -24,12 +24,12 @@ export default function AdminSettingsPage() {
   )
 }
 
-// ─── Broadcast ────────────────────────────────────────────────────────────────
 
 const ROLES = [
-  { value: null, label: 'Всем' },
-  { value: 'user', label: 'Пользователям' },
-  { value: 'operator', label: 'Операторам' },
+  { value: null,      label: 'Всем',             color: 'blue' },
+  { value: 'user',    label: 'Пользователям',    color: 'blue' },
+  { value: 'operator',label: 'Операторам',       color: 'blue' },
+  { value: 'admin',   label: 'Администраторам',  color: 'blue' },
 ] as const
 
 function BroadcastSection() {
@@ -51,49 +51,42 @@ function BroadcastSection() {
   const canSend = title.trim().length > 0 && body.trim().length > 0 && !sendMut.isPending
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center gap-4 px-5 py-4 border-b border-slate-100 dark:border-slate-700/60">
-        <div className="w-10 h-10 rounded-xl bg-linear-to-br from-[#4A8FE7] to-[#1B3A72] flex items-center justify-center shrink-0">
-          <BellIcon className="w-5 h-5 text-white" />
-        </div>
+    <Card
+      icon={<BellIcon className="w-5 h-5 text-white" />}
+      iconBg="from-[#4A8FE7] to-[#1B3A72]"
+      title="Рассылка push-уведомлений"
+      subtitle="Отправка уведомлений в мобильное приложение"
+    >
+      <div className="space-y-4">
         <div>
-          <p className="font-semibold text-slate-800 dark:text-slate-100">Рассылка push-уведомлений</p>
-          <p className="text-xs text-slate-400 mt-0.5">Отправка уведомлений в мобильное приложение</p>
+          <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1.5">
+            Заголовок <span className="text-red-500">*</span>
+          </label>
+          <input
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder="Например: Новое обновление"
+            className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] placeholder:text-slate-400 transition-colors"
+          />
         </div>
-      </div>
 
-      {/* Form */}
-      <div className="px-5 pt-4 pb-5 space-y-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label className="text-xs font-medium text-slate-500 block mb-1.5">
-              Заголовок <span className="text-red-500">*</span>
-            </label>
-            <input
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              placeholder="Например: Новое обновление"
-              className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] placeholder:text-slate-400"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-slate-500 block mb-1.5">
-              Текст <span className="text-red-500">*</span>
-            </label>
-            <input
-              value={body}
-              onChange={e => setBody(e.target.value)}
-              placeholder="Краткое описание"
-              className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] placeholder:text-slate-400"
-            />
-          </div>
+        <div>
+          <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1.5">
+            Сообщение <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            value={body}
+            onChange={e => setBody(e.target.value)}
+            placeholder="Текст push-уведомления"
+            rows={3}
+            className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] placeholder:text-slate-400 resize-none transition-colors"
+          />
         </div>
 
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-medium text-slate-500">Получатели:</span>
-            <div className="flex gap-1.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">Получатели:</span>
+            <div className="flex gap-1.5 flex-wrap">
               {ROLES.map(r => (
                 <button
                   key={String(r.value)}
@@ -102,7 +95,7 @@ function BroadcastSection() {
                     'px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
                     role === r.value
                       ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
-                      : 'bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-[#1B3A72] hover:text-[#1B3A72]'
+                      : 'bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-[#1B3A72] hover:text-[#1B3A72] dark:hover:border-blue-400 dark:hover:text-blue-400'
                   )}
                 >
                   {r.label}
@@ -114,79 +107,161 @@ function BroadcastSection() {
           <Button
             onClick={() => sendMut.mutate()}
             disabled={!canSend}
-            className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
+            className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white shrink-0"
           >
-            {sendMut.isPending ? (
-              <><SpinnerIcon className="w-4 h-4 mr-2 animate-spin" />Отправка...</>
-            ) : (
-              <><SendIcon className="w-4 h-4 mr-2" />Отправить</>
-            )}
+            {sendMut.isPending
+              ? <><SpinnerIcon className="w-4 h-4 mr-2 animate-spin" />Отправка...</>
+              : <><SendIcon className="w-4 h-4 mr-2" />Отправить</>
+            }
           </Button>
         </div>
       </div>
-    </div>
+    </Card>
   )
 }
 
-// ─── Bot ──────────────────────────────────────────────────────────────────────
 
 function BotSection() {
   const [result, setResult] = useState<ReindexResult | null>(null)
+  const [lastForce, setLastForce] = useState(false)
 
   const reindexMut = useMutation({
-    mutationFn: botApi.reindex,
-    onSuccess: (data) => {
+    mutationFn: (force: boolean) => botApi.reindex(force),
+    onSuccess: (data, force) => {
       setResult(data)
-      toast.success('Реиндексация завершена')
+      setLastForce(force)
+      toast.success(force ? 'Полная переиндексация завершена' : 'Индексация завершена')
     },
-    onError: () => toast.error('Ошибка при реиндексации'),
+    onError: () => toast.error('Ошибка при индексации'),
   })
 
+  const run = (force: boolean) => {
+    setResult(null)
+    setLastForce(force)
+    reindexMut.mutate(force)
+  }
+
+  const isRunningNew   = reindexMut.isPending && !lastForce
+  const isRunningForce = reindexMut.isPending && lastForce
+
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-      {/* Header */}
+    <Card
+      icon={<BotIcon className="w-5 h-5 text-white" />}
+      iconBg="from-violet-500 to-violet-700"
+      title="Бот Ася"
+      subtitle="RAG-ассистент на базе YandexGPT"
+    >
+      <div className="space-y-4">
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Бот обрабатывает FAQ, статьи базы знаний и документы ШУ. Индексация происходит автоматически при создании и изменении записей — ручной запуск нужен только при массовом импорте.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <ActionCard
+            icon={<ZapIcon className="w-4 h-4" />}
+            iconCls="text-[#4A8FE7]"
+            title="Индексировать новое"
+            description="Только записи без эмбеддингов. Быстро."
+            action={
+              <Button
+                onClick={() => run(false)}
+                disabled={reindexMut.isPending}
+                className="w-full bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white"
+              >
+                {isRunningNew
+                  ? <><SpinnerIcon className="w-4 h-4 mr-2 animate-spin" />Индексация...</>
+                  : <><ZapIcon className="w-4 h-4 mr-2" />Запустить</>
+                }
+              </Button>
+            }
+          />
+
+          <ActionCard
+            icon={<RefreshIcon className="w-4 h-4" />}
+            iconCls="text-amber-500"
+            title="Полная переиндексация"
+            description="Все записи заново. Медленно."
+            warning
+            action={
+              <Button
+                onClick={() => run(true)}
+                disabled={reindexMut.isPending}
+                variant="outline"
+                className="w-full border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-400 dark:hover:bg-amber-900/20 cursor-pointer"
+              >
+                {isRunningForce
+                  ? <><SpinnerIcon className="w-4 h-4 mr-2 animate-spin" />Переиндексация...</>
+                  : <><RefreshIcon className="w-4 h-4 mr-2" />Запустить</>
+                }
+              </Button>
+            }
+          />
+        </div>
+
+        {result && (
+          <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/40">
+            <CheckIcon className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
+            <div className="text-xs text-green-700 dark:text-green-300">
+              <span className="font-medium">{lastForce ? 'Полная переиндексация' : 'Индексация'} завершена.</span>
+              {' '}FAQ: <b>{result.indexed.faq}</b>, KB: <b>{result.indexed.kb_article}</b>, документы: <b>{result.indexed.document}</b>
+              {result.indexed.skipped > 0 && <>, пропущено: <b>{result.indexed.skipped}</b></>}.
+            </div>
+          </div>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+function Card({ icon, iconBg, title, subtitle, children }: {
+  icon: React.ReactNode
+  iconBg: string
+  title: string
+  subtitle: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-xs">
       <div className="flex items-center gap-4 px-5 py-4 border-b border-slate-100 dark:border-slate-700/60">
-        <div className="w-10 h-10 rounded-xl bg-linear-to-br from-[#4A8FE7] to-[#1B3A72] flex items-center justify-center shrink-0">
-          <BotIcon className="w-5 h-5 text-white" />
+        <div className={cn('w-10 h-10 rounded-xl bg-linear-to-br flex items-center justify-center shrink-0', iconBg)}>
+          {icon}
         </div>
         <div>
-          <p className="font-semibold text-slate-800 dark:text-slate-100">Бот Ася</p>
-          <p className="text-xs text-slate-400 mt-0.5">RAG-ассистент на базе YandexGPT</p>
+          <p className="font-semibold text-slate-800 dark:text-slate-100">{title}</p>
+          <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>
         </div>
       </div>
-
-      {/* Row */}
-      <div className="px-5 py-4 flex items-center justify-between gap-6 flex-wrap">
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Реиндексация базы знаний</p>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Бот заново обработает FAQ, статьи KB и документы ШУ. Запускайте после массового обновления данных.
-          </p>
-          {result && (
-            <div className="flex items-center gap-1.5 mt-2 text-xs text-green-600 dark:text-green-400">
-              <CheckIcon className="w-3.5 h-3.5 shrink-0" />
-              <span>Проиндексировано — FAQ: {result.indexed.faq}, KB: {result.indexed.kb_article}, документы: {result.indexed.document}</span>
-            </div>
-          )}
-        </div>
-
-        <Button
-          onClick={() => { setResult(null); reindexMut.mutate() }}
-          disabled={reindexMut.isPending}
-          className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer shrink-0"
-        >
-          {reindexMut.isPending ? (
-            <><SpinnerIcon className="w-4 h-4 mr-2 animate-spin" />Индексация...</>
-          ) : (
-            <><RefreshIcon className="w-4 h-4 mr-2" />Реиндексировать</>
-          )}
-        </Button>
+      <div className="px-5 py-5">
+        {children}
       </div>
     </div>
   )
 }
 
-// ─── Icons ────────────────────────────────────────────────────────────────────
+function ActionCard({ icon, iconCls, title, description, warning, action }: {
+  icon: React.ReactNode
+  iconCls: string
+  title: string
+  description: string
+  warning?: boolean
+  action: React.ReactNode
+}) {
+  return (
+    <div className={cn(
+      'rounded-xl border p-4 flex flex-col gap-3',
+      warning
+        ? 'border-amber-200 dark:border-amber-800/40 bg-amber-50/50 dark:bg-amber-900/10'
+        : 'border-slate-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/50'
+    )}>
+      <div className="flex items-center gap-2">
+        <span className={iconCls}>{icon}</span>
+        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{title}</span>
+      </div>
+      <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed">{description}</p>
+      {action}
+    </div>
+  )
+}
 
 function BellIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>
@@ -199,6 +274,9 @@ function BotIcon({ className }: { className?: string }) {
 }
 function RefreshIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+}
+function ZapIcon({ className }: { className?: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>
 }
 function SpinnerIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
