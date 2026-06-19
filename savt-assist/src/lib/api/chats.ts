@@ -110,4 +110,11 @@ export const chatsApi = {
   returnToBot: async (chatId: number): Promise<void> => {
     await apiClient.post(`/operator/chats/${chatId}/return-to-bot`)
   },
+
+  setWallpaper: async (chatId: number, wallpaperId: string, wallpaperUrl?: string): Promise<void> => {
+    await apiClient.patch(`/chats/${chatId}/wallpaper`, {
+      wallpaper_id: wallpaperId,
+      ...(wallpaperUrl ? { wallpaper_url: wallpaperUrl } : {}),
+    })
+  },
 }
