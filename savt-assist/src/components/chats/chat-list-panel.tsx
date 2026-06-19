@@ -209,7 +209,10 @@ function ChatAvatar({ chat, selected }: { chat: Chat; selected: boolean }) {
 
 export function chatDisplayName(chat: Chat): string {
   const user = chat.user_name ?? null
-  if (chat.chat_type === 'cabinet') return chat.cabinet_name ?? `ШУ #${chat.id}`
+  if (chat.chat_type === 'cabinet') {
+    const cabinet = chat.cabinet_name ?? `ШУ #${chat.id}`
+    return chat.user_name ? `${cabinet} — ${chat.user_name}` : cabinet
+  }
   if (chat.chat_type === 'notes') return user ? `Заметки — ${user}` : `Заметки #${chat.id}`
   if (chat.chat_type === 'support') return user ? `Поддержка — ${user}` : `Поддержка #${chat.id}`
   return `Чат #${chat.id}`

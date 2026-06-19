@@ -974,14 +974,14 @@ function DetailRow({ label, value, editing, onChange, placeholder, multiline }: 
             onChange={onChange}
             placeholder={placeholder}
             rows={2}
-            className="flex-1 text-sm text-slate-700 bg-transparent border-b border-slate-200 focus:border-[#4A8FE7] outline-none placeholder:text-slate-300 placeholder:italic resize-none py-0"
+            className="flex-1 text-sm text-slate-700 dark:text-slate-400 bg-transparent border-b border-slate-200 focus:border-[#4A8FE7] outline-none placeholder:text-slate-300 placeholder:italic resize-none py-0"
           />
         ) : (
           <input
             value={value}
             onChange={onChange}
             placeholder={placeholder}
-            className="flex-1 text-sm text-slate-700 bg-transparent border-b border-slate-200 focus:border-[#4A8FE7] outline-none placeholder:text-slate-300 placeholder:italic"
+            className="flex-1 text-sm text-slate-700 dark:text-slate-400 bg-transparent border-b border-slate-200 focus:border-[#4A8FE7] outline-none placeholder:text-slate-300 placeholder:italic"
           />
         )
       ) : (
@@ -1008,7 +1008,7 @@ function DateRow({ label, value, editing, onChange }: {
           type="date"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="text-sm text-slate-700 border border-slate-200 rounded-lg px-2 py-0.5 focus:outline-none focus:border-[#4A8FE7]"
+          className="text-sm text-slate-700 dark:text-slate-400 border border-slate-200 rounded-lg px-2 py-0.5 focus:outline-none focus:border-[#4A8FE7]"
         />
       ) : (
         <span className={`text-sm ${display ? 'text-slate-700 dark:text-slate-200 font-medium' : 'text-slate-300 italic'}`}>

@@ -1,11 +1,25 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { AttachmentView } from './attachment-view'
 import type { ChatMessage } from '@/types'
 
 const QUICK_EMOJIS = ['👍', '👎', '❤️', '😂', '😮', '😢', '🔥', '🎉']
+
+function getContrastColor(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5 ? '#1e293b' : '#ffffff'
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgba(${r},${g},${b},${alpha})`
+}
 
 interface Props {
   message: ChatMessage
@@ -30,6 +44,14 @@ interface Props {
   transcription?: string
   transcribing?: boolean
   onTranscribe?: (msg: ChatMessage, url: string) => void
+  ownBubbleColor?: string
+  otherBubbleColor?: string
+  botBubbleColor?: string
+  nickColor?: string
+  fontSize?: number
+  ownTextColor?: string
+  otherTextColor?: string
+  botTextColor?: string
 }
 
 export function MessageBubble({
@@ -38,6 +60,8 @@ export function MessageBubble({
   onReply, onEdit, onDelete, onForward, onReact, onScrollToMessage,
   onPin, onSelect, isSelected, selectMode,
   transcription, transcribing, onTranscribe,
+  ownBubbleColor, otherBubbleColor, botBubbleColor, nickColor,
+  fontSize, ownTextColor, otherTextColor, botTextColor,
 }: Props) {
   const isDeleted = !!message.deleted_at
   const hasText = !!message.text
@@ -45,90 +69,85 @@ export function MessageBubble({
   const replyMsg = message.reply_to_message_id != null ? messagesById?.get(message.reply_to_message_id) : undefined
   const voiceAttachment = message.attachments?.find(a => a.mime_type.startsWith('audio/'))
   const isPinned = message.id === pinnedMessageId
+  const effectiveOwnText = ownTextColor ?? (ownBubbleColor ? getContrastColor(ownBubbleColor) : undefined)
+  const effectiveOtherText = otherTextColor ?? (otherBubbleColor ? getContrastColor(otherBubbleColor) : undefined)
+  const effectiveBotText = botTextColor ?? (botBubbleColor ? getContrastColor(botBubbleColor) : undefined)
+  const isMediaOnly = !hasText && !message.reply_to_message_id && !message.deleted_at &&
+    hasAttachments && message.attachments.every(a => a.mime_type.startsWith('image/') || a.mime_type.startsWith('video/'))
 
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const [ctxOpen, setCtxOpen] = useState(false)
-  const pickerRef = useRef<HTMLDivElement>(null)
-  const ctxRef = useRef<HTMLDivElement>(null)
+  const [ctxPos, setCtxPos] = useState<{ x: number; y: number } | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!pickerOpen && !ctxOpen) return
+    if (!ctxPos) return
     const handler = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(false)
-      if (ctxRef.current && !ctxRef.current.contains(e.target as Node)) setCtxOpen(false)
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setCtxPos(null)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [pickerOpen, ctxOpen])
+  }, [ctxPos])
+
+  const handleCtx = (e: React.MouseEvent) => {
+    if (selectMode) return
+    e.preventDefault()
+    const menuW = 210, menuH = 340
+    const x = Math.min(e.clientX, window.innerWidth - menuW - 8)
+    const y = Math.min(e.clientY, window.innerHeight - menuH - 8)
+    setCtxPos({ x: Math.max(8, x), y: Math.max(8, y) })
+  }
 
   const copyText = () => {
     if (message.text) navigator.clipboard.writeText(message.text).catch(() => {})
-    setCtxOpen(false)
+    setCtxPos(null)
   }
 
   const grouped = groupReactions(message.reactions ?? [])
 
-  const toolbar = !selectMode && (
-    <div className={cn(
-      'absolute -top-9 flex items-center gap-0.5 bg-white dark:bg-slate-700 rounded-xl shadow-md border border-slate-100 dark:border-slate-600 px-1 py-0.5 z-10',
-      'opacity-0 group-hover/msg:opacity-100 transition-opacity pointer-events-none group-hover/msg:pointer-events-auto',
-      isBot ? 'left-1/2 -translate-x-1/2' : isOwn ? 'right-0' : 'left-0'
-    )}>
+  const ctxMenu = ctxPos && (
+    <div
+      ref={menuRef}
+      className="fixed z-[100] bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-100 dark:border-slate-700 py-1 min-w-[210px] overflow-hidden"
+      style={{ top: ctxPos.y, left: ctxPos.x }}
+      onClick={e => e.stopPropagation()}
+    >
       {!isDeleted && onReact && (
-        <div className="relative" ref={pickerRef}>
-          <ActionBtn title="Реакция" onClick={() => setPickerOpen(v => !v)}><SmileIcon /></ActionBtn>
-          {pickerOpen && (
-            <div className={cn(
-              'absolute top-8 z-20 bg-white dark:bg-slate-700 rounded-xl shadow-lg border border-slate-200 dark:border-slate-600 p-1.5 flex gap-0.5',
-              isOwn ? 'right-0' : 'left-0'
-            )}>
-              {QUICK_EMOJIS.map(e => (
-                <button key={e} onClick={() => { onReact(message, e); setPickerOpen(false) }}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-600 text-lg cursor-pointer transition-colors">
-                  {e}
-                </button>
-              ))}
-            </div>
-          )}
+        <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-slate-100 dark:border-slate-700">
+          {QUICK_EMOJIS.map(em => (
+            <button key={em} onClick={() => { onReact(message, em); setCtxPos(null) }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-base cursor-pointer transition-colors">
+              {em}
+            </button>
+          ))}
         </div>
       )}
-      {!isDeleted && <ActionBtn title="Ответить" onClick={() => onReply?.(message)}><ReplyIcon /></ActionBtn>}
-      {!isDeleted && <ActionBtn title="Переслать" onClick={() => onForward?.(message)}><ForwardIcon /></ActionBtn>}
-      {onSelect && <ActionBtn title="Выбрать" onClick={() => onSelect(message)}><SelectIcon /></ActionBtn>}
-      <div className="relative" ref={ctxRef}>
-        <ActionBtn title="Ещё" onClick={() => setCtxOpen(v => !v)}><DotsIcon /></ActionBtn>
-        {ctxOpen && (
-          <div className={cn(
-            'absolute top-8 z-20 bg-white dark:bg-slate-700 rounded-xl shadow-xl border border-slate-200 dark:border-slate-600 py-1 min-w-44',
-            isOwn ? 'right-0' : 'left-0'
-          )}>
-            {hasText && <CtxItem onClick={copyText}><CopyIcon />Копировать</CtxItem>}
-            {!isDeleted && onPin && (
-              <CtxItem onClick={() => { onPin(message); setCtxOpen(false) }}>
-                <PinIcon />{isPinned ? 'Открепить' : 'Закрепить'}
-              </CtxItem>
-            )}
-            {!isDeleted && !hasAttachments && isOwn && onEdit && (
-              <CtxItem onClick={() => { onEdit(message); setCtxOpen(false) }}><PencilIcon />Редактировать</CtxItem>
-            )}
-            {isOwn && onDelete && (
-              <CtxItem onClick={() => { onDelete(message); setCtxOpen(false) }} danger><TrashIcon />Удалить</CtxItem>
-            )}
-          </div>
-        )}
-      </div>
+      {!isDeleted && onReply && <CtxItem onClick={() => { onReply(message); setCtxPos(null) }}><ReplyIcon />Ответить</CtxItem>}
+      {hasText && <CtxItem onClick={copyText}><CopyIcon />Копировать</CtxItem>}
+      {!isDeleted && onForward && <CtxItem onClick={() => { onForward(message); setCtxPos(null) }}><ForwardIcon />Переслать</CtxItem>}
+      {!isDeleted && onPin && (
+        <CtxItem onClick={() => { onPin(message); setCtxPos(null) }}>
+          <PinIcon />{isPinned ? 'Открепить' : 'Закрепить'}
+        </CtxItem>
+      )}
+      {!isDeleted && !hasAttachments && isOwn && onEdit && (
+        <CtxItem onClick={() => { onEdit(message); setCtxPos(null) }}><PencilIcon />Редактировать</CtxItem>
+      )}
+      {onSelect && <CtxItem onClick={() => { onSelect(message); setCtxPos(null) }}><SelectIcon />Выбрать</CtxItem>}
+      {isOwn && onDelete && (
+        <CtxItem onClick={() => { onDelete(message); setCtxPos(null) }} danger><TrashIcon />Удалить</CtxItem>
+      )}
     </div>
   )
 
   if (isBot) {
     return (
-      <div
-        id={`msg-${message.id}`}
-        className={cn('flex justify-center my-1 px-4 group/msg', selectMode && 'cursor-pointer')}
-        onClick={selectMode ? (e) => { e.stopPropagation(); onSelect?.(message) } : undefined}
-      >
-        <div className="relative max-w-[75%]">
-          {toolbar}
+      <>
+        <div
+          id={`msg-${message.id}`}
+          className={cn('flex justify-center my-1 px-4 py-1', selectMode && 'cursor-pointer')}
+          onClick={selectMode ? (e) => { e.stopPropagation(); onSelect?.(message) } : undefined}
+          onContextMenu={handleCtx}
+        >
+          <div className="relative max-w-[75%]">
           {selectMode && (
             <div className={cn(
               'absolute -left-7 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full border-2 flex items-center justify-center z-20 transition-all',
@@ -137,28 +156,36 @@ export function MessageBubble({
               {isSelected && <MiniCheckIcon />}
             </div>
           )}
-          <div className={cn(
-            'bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200/70 dark:border-indigo-700/40 rounded-2xl px-4 py-3 shadow-sm',
-            selectMode && isSelected && 'ring-2 ring-[#1B3A72]'
-          )}>
+          <div
+            className={cn(
+              'rounded-2xl px-2 py-2 shadow-sm border',
+              !botBubbleColor && 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200/70 dark:border-indigo-700/40',
+              botBubbleColor && 'border-transparent',
+              selectMode && isSelected && 'ring-2 ring-[#1B3A72]'
+            )}
+            style={botBubbleColor ? { backgroundColor: botBubbleColor, color: effectiveBotText } : undefined}
+          >
             <div className="flex items-center justify-center gap-1.5 mb-2">
               <span className="text-base leading-none">🤖</span>
-              <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">{message.sender_name}</span>
+              <span className={cn('text-xs font-semibold', !botBubbleColor && 'text-indigo-600 dark:text-indigo-400')} style={{ opacity: botBubbleColor ? 0.8 : undefined }}>{message.sender_name}</span>
             </div>
             {isDeleted ? (
-              <p className="text-sm text-center italic text-slate-400">Сообщение удалено</p>
+              <p className="text-sm text-center italic" style={{ opacity: 0.6 }}>Сообщение удалено</p>
             ) : (
               <>
                 {message.reply_to_message_id != null && replyMsg && (
-                  <div className="mb-2 pl-2 border-l-2 border-indigo-300 dark:border-indigo-600 bg-indigo-100/50 dark:bg-indigo-900/30 rounded py-0.5 cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/50"
-                    onClick={() => onScrollToMessage?.(message.reply_to_message_id!)}>
-                    <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 truncate">{replyMsg.sender_name}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                  <div
+                    className={cn('mb-2 pl-2 border-l-2 rounded py-0.5 cursor-pointer overflow-hidden min-w-0', !botBubbleColor && 'border-indigo-300 dark:border-indigo-600 bg-indigo-100/50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50')}
+                    style={botBubbleColor && effectiveBotText ? { borderColor: hexToRgba(effectiveBotText, 0.4), backgroundColor: hexToRgba(effectiveBotText, 0.12) } : undefined}
+                    onClick={() => onScrollToMessage?.(message.reply_to_message_id!)}
+                  >
+                    <p className={cn('text-xs font-semibold truncate', !botBubbleColor && 'text-indigo-600 dark:text-indigo-400')} style={{ opacity: botBubbleColor ? 0.85 : undefined }}>{replyMsg.sender_name}</p>
+                    <p className={cn('text-xs truncate', !botBubbleColor && 'text-slate-500 dark:text-slate-400')} style={{ opacity: botBubbleColor ? 0.65 : undefined }}>
                       {replyMsg.deleted_at ? 'Сообщение удалено' : replyMsg.text || (replyMsg.attachments?.length ? '📎 Вложение' : '')}
                     </p>
                   </div>
                 )}
-                {hasText && <p className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed text-center">{message.text}</p>}
+                {hasText && <p className="text-sm whitespace-pre-wrap leading-relaxed text-center" style={{ ...(fontSize ? { fontSize: `${fontSize}px` } : {}), ...(effectiveBotText ? { color: effectiveBotText } : {}) }}>{message.text}</p>}
                 {hasAttachments && (
                   <div className={cn('space-y-1.5', hasText && 'mt-2')}>
                     {message.attachments.map((a, i) => (
@@ -196,20 +223,24 @@ export function MessageBubble({
             )}
           </div>
         </div>
-      </div>
+        </div>
+        {ctxMenu}
+      </>
     )
   }
 
   return (
-    <div
-      id={`msg-${message.id}`}
-      className={cn(
-        'flex gap-2 max-w-[78%] group/msg',
-        isOwn ? 'ml-auto flex-row-reverse' : 'mr-auto',
-        selectMode && 'cursor-pointer'
-      )}
-      onClick={selectMode ? (e) => { e.stopPropagation(); onSelect?.(message) } : undefined}
-    >
+    <>
+      <div
+        id={`msg-${message.id}`}
+        className={cn(
+          'flex gap-2 max-w-[78%] py-1',
+          isOwn ? 'ml-auto flex-row-reverse' : 'mr-auto',
+          selectMode && 'cursor-pointer'
+        )}
+        onClick={selectMode ? (e) => { e.stopPropagation(); onSelect?.(message) } : undefined}
+        onContextMenu={handleCtx}
+      >
       {selectMode && (
         <div className={cn(
           'self-center w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all',
@@ -227,57 +258,91 @@ export function MessageBubble({
         )}
       </div>
 
-      <div className={cn('flex flex-col', isOwn ? 'items-end' : 'items-start')}>
+      <div className={cn('flex flex-col flex-1 min-w-0', isOwn ? 'items-end' : 'items-start')}>
         {showName && !isOwn && (
-          <span className="text-xs font-semibold text-[#1B3A72] dark:text-blue-400 px-1 mb-1">
+          <span
+            className={cn('text-xs font-semibold px-1 mb-1', !nickColor && 'text-[#1B3A72] dark:text-blue-400')}
+            style={nickColor ? { color: nickColor } : undefined}
+          >
             {message.sender_name}
           </span>
         )}
 
-        <div className="relative">
-          {toolbar}
-
+        <div className="relative w-full">
           {isDeleted ? (
-            <div className={cn(
-              'px-3 py-2 text-sm rounded-2xl shadow-sm opacity-60 italic',
-              isOwn ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-700 text-slate-500 dark:text-slate-400'
-            )}>
+            <div
+              className={cn(
+                'px-3 py-2 text-sm shadow-sm opacity-60 italic w-fit',
+                isOwn
+                  ? [!ownBubbleColor && 'bg-[#1B3A72]', !effectiveOwnText && 'text-white', 'ml-auto', isLastInGroup ? 'rounded-2xl rounded-br-sm' : 'rounded-2xl']
+                  : [!otherBubbleColor && 'bg-white dark:bg-slate-700', !effectiveOtherText && 'text-slate-500 dark:text-slate-400', isLastInGroup ? 'rounded-2xl rounded-bl-sm' : 'rounded-2xl']
+              )}
+              style={isOwn && ownBubbleColor ? { backgroundColor: ownBubbleColor, color: effectiveOwnText } : !isOwn && otherBubbleColor ? { backgroundColor: otherBubbleColor, color: effectiveOtherText } : undefined}
+            >
               Сообщение удалено
             </div>
+          ) : isMediaOnly ? (
+            <div className={cn('relative rounded-2xl overflow-hidden shadow-sm w-fit max-w-full', isOwn && 'ml-auto', selectMode && isSelected && 'ring-2 ring-[#1B3A72]')}>
+              {message.attachments.map((a, i) => (
+                <AttachmentView
+                  key={i}
+                  attachment={a}
+                  isOwn={isOwn}
+                  transcription={a === voiceAttachment ? transcription : undefined}
+                  transcribing={a === voiceAttachment ? transcribing : undefined}
+                  onTranscribe={a === voiceAttachment && voiceAttachment && onTranscribe ? () => onTranscribe(message, voiceAttachment.file_url) : undefined}
+                />
+              ))}
+              <div className="absolute bottom-1 right-2 text-[10px] text-white/80 drop-shadow px-1">
+                {message.edited_at && <span className="mr-1">ред.</span>}
+                {new Date(message.created_at).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}
+              </div>
+            </div>
           ) : (
-            <div className={cn(
-              'relative px-3 py-2 text-sm break-words shadow-sm',
-              isOwn
-                ? ['bg-[#1B3A72] text-white', isLastInGroup ? 'rounded-2xl rounded-br-sm' : 'rounded-2xl']
-                : ['bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100', isLastInGroup ? 'rounded-2xl rounded-bl-sm' : 'rounded-2xl'],
-              selectMode && isSelected && 'ring-2 ring-[#1B3A72]'
-            )}>
+            <div
+              className={cn(
+                'relative px-2 py-2 text-sm break-all shadow-sm w-fit max-w-full',
+                isOwn
+                  ? [!ownBubbleColor && 'bg-[#1B3A72]', !effectiveOwnText && 'text-white', isLastInGroup ? 'rounded-2xl rounded-br-sm' : 'rounded-2xl', 'ml-auto']
+                  : [!otherBubbleColor && 'bg-white dark:bg-slate-700', !effectiveOtherText && 'text-slate-800 dark:text-slate-100', isLastInGroup ? 'rounded-2xl rounded-bl-sm' : 'rounded-2xl'],
+                selectMode && isSelected && 'ring-2 ring-[#1B3A72]'
+              )}
+              style={isOwn && ownBubbleColor ? { backgroundColor: ownBubbleColor, color: effectiveOwnText } : !isOwn && otherBubbleColor ? { backgroundColor: otherBubbleColor, color: effectiveOtherText } : undefined}
+            >
               {isPinned && (
-                <div className={cn('flex items-center gap-1 text-[10px] mb-1.5', isOwn ? 'text-white/60' : 'text-[#1B3A72]/60 dark:text-blue-400/60')}>
+                <div className="flex items-center gap-1 text-[10px] mb-1.5" style={{ opacity: 0.6 }}>
                   <PinIcon size={10} />закреплено
                 </div>
               )}
-              {message.reply_to_message_id != null && (
-                <div
-                  className={cn(
-                    'mb-2 pl-2 border-l-2 rounded py-0.5 cursor-pointer',
-                    isOwn ? 'border-white/50 bg-white/10 hover:bg-white/20' : 'border-[#1B3A72]/40 bg-slate-50 dark:bg-slate-600/50 hover:bg-slate-100 dark:hover:bg-slate-600'
-                  )}
-                  onClick={(e) => { e.stopPropagation(); onScrollToMessage?.(message.reply_to_message_id!) }}
-                >
-                  {replyMsg ? (
-                    <>
-                      <p className={cn('text-xs font-semibold truncate', isOwn ? 'text-white/80' : 'text-[#1B3A72] dark:text-blue-400')}>{replyMsg.sender_name}</p>
-                      <p className={cn('text-xs truncate', isOwn ? 'text-white/60' : 'text-slate-500 dark:text-slate-400')}>
-                        {replyMsg.deleted_at ? 'Сообщение удалено' : replyMsg.text || (replyMsg.attachments?.length ? '📎 Вложение' : '')}
-                      </p>
-                    </>
-                  ) : (
-                    <p className={cn('text-xs italic', isOwn ? 'text-white/50' : 'text-slate-400')}>Сообщение недоступно</p>
-                  )}
-                </div>
-              )}
-              {hasText && <p className="whitespace-pre-wrap leading-relaxed">{message.text}</p>}
+              {message.reply_to_message_id != null && (() => {
+                const effText = isOwn ? effectiveOwnText : effectiveOtherText
+                const replyStyle: React.CSSProperties = {
+                  maxWidth: '100%', minWidth: 0,
+                  ...(effText ? { borderColor: hexToRgba(effText, 0.4), backgroundColor: hexToRgba(effText, 0.12) } : {}),
+                }
+                return (
+                  <div
+                    className={cn(
+                      'mb-2 pl-2 border-l-2 rounded py-0.5 cursor-pointer overflow-hidden',
+                      isOwn ? 'border-white/50 bg-white/10 hover:bg-white/20' : 'border-[#1B3A72]/40 bg-slate-50 dark:bg-slate-600/50 hover:bg-slate-100 dark:hover:bg-slate-600'
+                    )}
+                    style={replyStyle}
+                    onClick={(e) => { e.stopPropagation(); onScrollToMessage?.(message.reply_to_message_id!) }}
+                  >
+                    {replyMsg ? (
+                      <>
+                        <p className="text-xs font-semibold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '240px', opacity: 0.85 }}>{replyMsg.sender_name}</p>
+                        <p className="text-xs" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '240px', opacity: 0.65 }}>
+                          {replyMsg.deleted_at ? 'Сообщение удалено' : replyMsg.text || (replyMsg.attachments?.length ? '📎 Вложение' : '')}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-xs italic" style={{ opacity: 0.5 }}>Сообщение недоступно</p>
+                    )}
+                  </div>
+                )
+              })()}
+              {hasText && <p className="whitespace-pre-wrap leading-relaxed break-all" style={{ ...(fontSize ? { fontSize: `${fontSize}px` } : {}), ...(effectiveOwnText && isOwn ? { color: effectiveOwnText } : effectiveOtherText && !isOwn ? { color: effectiveOtherText } : {}) }}>{renderLinks(message.text!, isOwn)}</p>}
               {hasAttachments && (
                 <div className={cn('space-y-1.5', hasText && 'mt-2')}>
                   {message.attachments.map((a, i) => (
@@ -292,7 +357,7 @@ export function MessageBubble({
                   ))}
                 </div>
               )}
-              <TimeStamp message={message} isOwn={isOwn} />
+              <TimeStamp message={message} />
             </div>
           )}
 
@@ -314,7 +379,36 @@ export function MessageBubble({
         </div>
       </div>
     </div>
+    {ctxMenu}
+  </>
   )
+}
+
+function renderLinks(text: string, isOwn: boolean): React.ReactNode[] {
+  const URL_RE = /https?:\/\/[^\s]+/g
+  const parts: React.ReactNode[] = []
+  let last = 0
+  let match: RegExpExecArray | null
+  URL_RE.lastIndex = 0
+  while ((match = URL_RE.exec(text)) !== null) {
+    if (match.index > last) parts.push(text.slice(last, match.index))
+    const url = match[0]
+    parts.push(
+      <a
+        key={match.index}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={cn('underline hover:opacity-80 break-all', isOwn ? 'text-white/90' : 'text-[#1B3A72] dark:text-blue-400')}
+        onClick={e => e.stopPropagation()}
+      >
+        {url}
+      </a>
+    )
+    last = match.index + url.length
+  }
+  if (last < text.length) parts.push(text.slice(last))
+  return parts
 }
 
 function groupReactions(reactions: { emoji: string; user_id: number }[]) {
@@ -326,14 +420,6 @@ function groupReactions(reactions: { emoji: string; user_id: number }[]) {
   return [...map.entries()].map(([emoji, userIds]) => ({ emoji, userIds, count: userIds.length }))
 }
 
-function ActionBtn({ title, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button title={title} onClick={(e) => { e.stopPropagation(); onClick() }}
-      className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 dark:text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors cursor-pointer">
-      {children}
-    </button>
-  )
-}
 
 function CtxItem({ onClick, danger, children }: { onClick: () => void; danger?: boolean; children: React.ReactNode }) {
   return (
@@ -349,9 +435,9 @@ function CtxItem({ onClick, danger, children }: { onClick: () => void; danger?: 
   )
 }
 
-function TimeStamp({ message, isOwn }: { message: ChatMessage; isOwn: boolean }) {
+function TimeStamp({ message }: { message: ChatMessage }) {
   return (
-    <div className={cn('flex items-center gap-1 text-[10px] justify-end mt-1 -mb-0.5', isOwn ? 'text-white/60' : 'text-slate-400 dark:text-slate-500')}>
+    <div className="flex items-center gap-1 text-[10px] justify-end mt-1 -mb-0.5" style={{ opacity: 0.55 }}>
       {message.edited_at && <span>ред.</span>}
       <span>{new Date(message.created_at).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}</span>
     </div>
@@ -379,9 +465,7 @@ export function DateSeparator({ date }: { date: Date }) {
   )
 }
 
-function SmileIcon() {
-  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.182 15.182a4.5 4.5 0 01-6.364 0M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm5.25 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75z" /></svg>
-}
+
 function ReplyIcon() {
   return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg>
 }
@@ -391,9 +475,7 @@ function ForwardIcon() {
 function SelectIcon() {
   return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><rect x="3" y="3" width="18" height="18" rx="3" strokeLinecap="round" /><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" /></svg>
 }
-function DotsIcon() {
-  return <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
-}
+
 function CopyIcon() {
   return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" /></svg>
 }

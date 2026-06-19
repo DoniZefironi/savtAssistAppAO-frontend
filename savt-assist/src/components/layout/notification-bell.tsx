@@ -14,7 +14,7 @@ export function NotificationBell() {
   const { data, isLoading } = useQuery({
     queryKey: ['notifications'],
     queryFn: () => notificationsApi.getList({ size: 50 }),
-    refetchInterval: 30_000,
+    refetchInterval: 10_000,
   })
 
   const markReadMut = useMutation({

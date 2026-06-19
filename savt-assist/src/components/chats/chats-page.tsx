@@ -82,7 +82,7 @@ export function ChatsPage() {
   const { data: rawChats = [], isLoading } = useQuery({
     queryKey: ['operator-chats', chatSearch],
     queryFn: () => chatsApi.getChats(chatSearch || undefined),
-    refetchInterval: 10_000,
+    refetchInterval: 2000,
     refetchIntervalInBackground: false,
   })
 

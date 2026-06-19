@@ -13,12 +13,20 @@ export function useVoiceRecorder(onFinish: (blob: Blob, duration: number) => voi
   const start = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mr = new MediaRecorder(stream)
+      const supportedMime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
+        ? 'audio/ogg;codecs=opus'
+        : ''
+      const mr = new MediaRecorder(stream, supportedMime ? { mimeType: supportedMime } : undefined)
+      const actualMime = mr.mimeType || supportedMime || 'audio/webm'
       chunksRef.current = []
       mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data) }
       mr.onstop = () => {
         stream.getTracks().forEach((t) => t.stop())
-        const blob = new Blob(chunksRef.current, { type: 'audio/ogg; codecs=opus' })
+        const blob = new Blob(chunksRef.current, { type: actualMime })
         const duration = Math.round((Date.now() - startTimeRef.current) / 1000)
         onFinish(blob, duration)
         setSeconds(0)

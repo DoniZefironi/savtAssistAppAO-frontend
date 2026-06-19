@@ -59,13 +59,13 @@ export function AdminDashboard() {
   const { data: stats, isLoading: statsLoading, refetch, dataUpdatedAt } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: cabinetsApi.getStats,
-    refetchInterval: 60_000,
+    refetchInterval: 15_000,
   })
 
   const { data: activity, isLoading: activityLoading } = useQuery({
     queryKey: ['dashboard-activity'],
     queryFn: cabinetsApi.getRecentActivity,
-    refetchInterval: 60_000,
+    refetchInterval: 15_000,
   })
 
   return (

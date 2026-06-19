@@ -40,6 +40,8 @@ interface Props {
 
 type MsgPages = InfiniteData<ChatMessage[]>
 
+type ChatColors = { ownBubble?: string; otherBubble?: string; botBubble?: string; nickColor?: string; fontSize?: number; ownText?: string; otherText?: string; botText?: string }
+
 function patchPages(old: MsgPages | undefined, fn: (m: ChatMessage) => ChatMessage): MsgPages | undefined {
   if (!old) return old
   return { ...old, pages: old.pages.map(page => page.map(fn)) }
@@ -61,6 +63,10 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const fileInputRef = useRef<HTMLInputElement>(null)
   const prevScrollHeightRef = useRef<number | null>(null)
   const headerMenuRef = useRef<HTMLDivElement>(null)
+  const scrolledRef = useRef(false)
+  const scrolledToUnreadRef = useRef(false)
+
+  const [firstUnreadId, setFirstUnreadId] = useState<number | undefined>(undefined)
 
   const [text, setText] = useState('')
   const [pendingAttachments, setPendingAttachments] = useState<(MessageAttachment & { name: string })[]>([])
@@ -75,12 +81,28 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-  const [wallpaper, setWallpaper] = useState<string>(() =>
-    typeof window !== 'undefined' ? (localStorage.getItem(`chat-wallpaper-${chat.id}`) ?? 'default') : 'default'
-  )
-  const [wallpaperOpen, setWallpaperOpen] = useState(false)
+  const [wallpaper, setWallpaper] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'default'
+    if (chat.wallpaper_id && chat.wallpaper_id !== 'custom') return chat.wallpaper_id
+    return localStorage.getItem(`chat-wallpaper-${chat.id}`) ?? 'default'
+  })
+  const [customWallpaperUrl, setCustomWallpaperUrl] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    if (chat.wallpaper_id === 'custom' && chat.wallpaper_url) return chat.wallpaper_url
+    return localStorage.getItem(`chat-wallpaper-custom-${chat.id}`)
+  })
+  const [uploadingWallpaper, setUploadingWallpaper] = useState(false)
   const [attachmentsOpen, setAttachmentsOpen] = useState(false)
-  const [attachTab, setAttachTab] = useState<'media' | 'files' | 'voice'>('media')
+  const [attachTab, setAttachTab] = useState<'media' | 'files' | 'voice' | 'colors' | 'wallpaper'>('media')
+  const [chatColors, setChatColors] = useState<ChatColors>(() => {
+    if (typeof window === 'undefined') return {}
+    try {
+      const g = localStorage.getItem('chat-colors-global')
+      const p = localStorage.getItem(`chat-colors-${chat.id}`)
+      return { ...(g ? JSON.parse(g) : {}), ...(p ? JSON.parse(p) : {}) }
+    } catch { return {} }
+  })
+  const [colorScope, setColorScope] = useState<'chat' | 'global'>('chat')
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
   const [confirmModal, setConfirmModal] = useState<null | 'clear' | 'delete'>(null)
   const [stickerPickerOpen, setStickerPickerOpen] = useState(false)
@@ -108,14 +130,17 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (selectMode) { setSelectMode(false); setSelectedIds(new Set()) }
-        if (searchOpen) toggleSearch()
-      }
+      if (e.key !== 'Escape') return
+      if (confirmModal) { setConfirmModal(null); return }
+      if (forwardTarget) { setForwardTarget(null); return }
+      if (attachmentsOpen) { setAttachmentsOpen(false); return }
+      if (stickerPickerOpen) { setStickerPickerOpen(false); return }
+      if (selectMode) { setSelectMode(false); setSelectedIds(new Set()); return }
+      if (searchOpen) toggleSearch()
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [selectMode, searchOpen]) 
+  }, [selectMode, searchOpen, attachmentsOpen, stickerPickerOpen, confirmModal, forwardTarget])
 
   useEffect(() => {
     const t = setTimeout(() => setSearchQuery(searchInput), 300)
@@ -127,7 +152,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     initialPageParam: undefined as number | undefined,
     queryFn: ({ pageParam }) => chatsApi.getMessages(chat.id, pageParam),
     getNextPageParam: (lastPage) => lastPage.length < 30 ? undefined : lastPage[lastPage.length - 1]?.id,
-    refetchInterval: 3000,
+    refetchInterval: 1500,
     refetchIntervalInBackground: false,
   })
 
@@ -149,14 +174,38 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   const displayMessages = searchOpen && searchQuery ? [...searchResults].reverse() : messages
 
-  useEffect(() => { if (messages.length > 0) onMessagesLoaded?.() }, [messages.length]) 
   useEffect(() => {
+    scrolledRef.current = false
+    scrolledToUnreadRef.current = false
+    setFirstUnreadId(undefined)
+  }, [chat.id])
+  useEffect(() => { if (messages.length > 0) onMessagesLoaded?.() }, [messages.length])
+  useEffect(() => {
+    if (messages.length === 0) return
+    if (!scrolledRef.current) {
+      scrolledRef.current = true
+      if (chat.unread_count > 0) {
+        const firstUnread = messages.find(m => !m.is_read)
+        if (firstUnread) {
+          setFirstUnreadId(firstUnread.id)
+          return
+        }
+      }
+      bottomRef.current?.scrollIntoView()
+      return
+    }
     const el = listRef.current
     if (!el) return
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120
     if (atBottom) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length])
-  useEffect(() => { setTimeout(() => bottomRef.current?.scrollIntoView(), 60) }, [chat.id])
+  useEffect(() => {
+    if (!firstUnreadId || scrolledToUnreadRef.current) return
+    scrolledToUnreadRef.current = true
+    const el = document.getElementById('unread-divider')
+    if (el) el.scrollIntoView({ block: 'start' })
+    else bottomRef.current?.scrollIntoView()
+  }, [firstUnreadId])
   useEffect(() => {
     const el = listRef.current
     if (!el || prevScrollHeightRef.current === null) return
@@ -194,10 +243,10 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         if (!old) return old
         return { ...old, pages: [[msg, ...(old.pages[0] ?? [])], ...old.pages.slice(1)] }
       })
-      qc.setQueryData<Chat[]>(['operator-chats'], (prev) =>
+      qc.setQueriesData<Chat[]>({ queryKey: ['operator-chats'] }, (prev) =>
         prev?.map((c) => c.id === chat.id
-          ? { ...c, last_message_text: msg.text || msg.attachments?.[0]?.file_name || c.last_message_text, last_message_at: msg.created_at }
-          : c) ?? []
+          ? { ...c, last_message_text: msg.text || msg.attachments?.[0]?.file_name || c.last_message_text, last_message_at: msg.created_at, unread_count: 0 }
+          : c) ?? prev
       )
       setText(''); setPendingAttachments([]); setReplyTo(null)
       if (textareaRef.current) textareaRef.current.style.height = 'auto'
@@ -338,6 +387,18 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     if (e.key === 'Escape') cancelContext()
   }
 
+  const saveColor = (key: keyof ChatColors, value: string | number | undefined) => {
+    const next = { ...chatColors } as Record<string, string | number | undefined>
+    if (value === undefined) delete next[key]
+    else next[key] = value
+    setChatColors(next as ChatColors)
+    const storageKey = colorScope === 'global' ? 'chat-colors-global' : `chat-colors-${chat.id}`
+    const existing: Record<string, unknown> = (() => { try { return JSON.parse(localStorage.getItem(storageKey) ?? '{}') } catch { return {} } })()
+    if (value === undefined) delete existing[key]
+    else existing[key] = value
+    localStorage.setItem(storageKey, JSON.stringify(existing))
+  }
+
   const handleReply = (msg: ChatMessage) => { setReplyTo(msg); setEditingMessage(null); textareaRef.current?.focus() }
   const handleEdit = (msg: ChatMessage) => {
     setEditingMessage(msg); setReplyTo(null); setText(msg.text ?? '')
@@ -402,7 +463,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const canSend = !sendMutation.isPending && !editMutation.isPending && !voice.recording && !uploadingFile
   const inputDisabled = voice.recording || uploadingFile
   const botActive = chat.bot_active
-  const renderItems = buildRenderItems(displayMessages, currentUser?.id ?? -1)
+  const renderItems = buildRenderItems(displayMessages, currentUser?.id ?? -1, firstUnreadId)
   const name = chatDisplayName(chat)
   const avatarEmoji = chat.chat_type === 'cabinet' ? '📦' : chat.chat_type === 'notes' ? '📝' : '💬'
   const avatarBg = chat.chat_type === 'cabinet' ? 'bg-[#1B3A72]' : 'bg-slate-500'
@@ -413,6 +474,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     const files: { msg: ChatMessage; name: string; url: string; mime: string; size: number }[] = []
     const voices: { msg: ChatMessage; url: string; duration: number | null }[] = []
     for (const msg of messages) {
+      if (msg.deleted_at) continue
       for (const a of msg.attachments ?? []) {
         if (a.mime_type.startsWith('image/') || a.mime_type.startsWith('video/')) {
           media.push({ msg, url: a.file_url, mime: a.mime_type })
@@ -428,7 +490,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700/60 shrink-0 shadow-sm">
+      <div className="flex items-center gap-3 px-3 py-2 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700/60 shrink-0 shadow-sm">
         {onBack && (
           <button onClick={onBack} className="md:hidden text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mr-1 cursor-pointer">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
@@ -489,7 +551,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
             {headerMenuOpen && (
               <div className="absolute top-full right-0 mt-1 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 min-w-52 z-50">
                 <HeaderMenuItem icon="📎" onClick={() => { setAttachmentsOpen(true); setHeaderMenuOpen(false) }}>Вложения чата</HeaderMenuItem>
-                <HeaderMenuItem icon="🖼" onClick={() => { setWallpaperOpen(true); setHeaderMenuOpen(false) }}>Обои</HeaderMenuItem>
+                <HeaderMenuItem icon="🖼" onClick={() => { setAttachTab('wallpaper'); setAttachmentsOpen(true); setHeaderMenuOpen(false) }}>Обои</HeaderMenuItem>
                 {pinnedMessage && (
                   <HeaderMenuItem icon="📌" onClick={() => { handleScrollToMessage(pinnedMessage.id); setHeaderMenuOpen(false) }}>Перейти к закреплённому</HeaderMenuItem>
                 )}
@@ -527,8 +589,11 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
       <div
         ref={listRef}
-        style={{ background: isDarkMode ? currentWallpaper.dark : currentWallpaper.light }}
-        className={cn('flex-1 overflow-y-auto px-4 py-3 space-y-1 relative', isDragOver && 'ring-2 ring-inset ring-[#4A8FE7]')}
+        style={customWallpaperUrl
+          ? { backgroundImage: `url(${customWallpaperUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+          : { background: isDarkMode ? currentWallpaper.dark : currentWallpaper.light }
+        }
+        className={cn('flex-1 overflow-y-auto px-2 py-1 space-y-1 relative', isDragOver && 'ring-2 ring-inset ring-[#4A8FE7]')}
         onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
       >
         {isDragOver && (
@@ -557,6 +622,12 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         {renderItems.map((item, i) =>
           item.type === 'date' ? (
             <DateSeparator key={`d-${i}`} date={item.date} />
+          ) : item.type === 'unread-divider' ? (
+            <div key="unread-divider" id="unread-divider" className="flex items-center gap-3 my-2 px-2">
+              <div className="flex-1 h-px bg-blue-300 dark:bg-blue-700" />
+              <span className="text-xs font-medium text-blue-500 dark:text-blue-400 shrink-0">Новые сообщения</span>
+              <div className="flex-1 h-px bg-blue-300 dark:bg-blue-700" />
+            </div>
           ) : (
             <MessageBubble
               key={item.message.id}
@@ -582,6 +653,14 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
               transcription={transcriptions.get(item.message.id)?.text}
               transcribing={transcriptions.get(item.message.id)?.loading}
               onTranscribe={handleTranscribe}
+              ownBubbleColor={chatColors.ownBubble}
+              otherBubbleColor={chatColors.otherBubble}
+              botBubbleColor={chatColors.botBubble}
+              nickColor={chatColors.nickColor}
+              fontSize={chatColors.fontSize}
+              ownTextColor={chatColors.ownText}
+              otherTextColor={chatColors.otherText}
+              botTextColor={chatColors.botText}
             />
           )
         )}
@@ -589,7 +668,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
       </div>
 
       {botActive && !searchOpen && !selectMode && (
-        <div className="border-t border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 shrink-0">
+        <div className="border-t border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 shrink-0">
           <div className="flex items-center gap-3">
             <span className="text-2xl">🤖</span>
             <div className="flex-1">
@@ -738,48 +817,34 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         <ForwardDialog message={forwardTarget} currentChatId={chat.id} onClose={() => setForwardTarget(null)} />
       )}
 
-      {wallpaperOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setWallpaperOpen(false)}>
-          <div className="absolute inset-0 bg-black/50" />
-          <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
-            <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-100 mb-4">Обои чата</h3>
-            <div className="grid grid-cols-3 gap-3">
-              {WALLPAPERS.map(wp => (
-                <button key={wp.id}
-                  onClick={() => { setWallpaper(wp.id); localStorage.setItem(`chat-wallpaper-${chat.id}`, wp.id) }}
-                  className={cn('h-20 rounded-xl border-2 flex items-end justify-center pb-2 transition-all cursor-pointer overflow-hidden', wallpaper === wp.id ? 'border-[#1B3A72] scale-95 shadow-md' : 'border-transparent hover:scale-95')}
-                  style={{ background: isDarkMode ? wp.dark : wp.light }}>
-                  <span className="text-[10px] font-semibold text-white drop-shadow px-1.5 py-0.5 rounded-full bg-black/25">{wp.label}</span>
-                </button>
-              ))}
-            </div>
-            <button onClick={() => setWallpaperOpen(false)} className="mt-4 w-full py-2.5 bg-[#1B3A72] text-white rounded-xl font-medium text-sm hover:bg-[#1B3A72]/90 transition-colors cursor-pointer">
-              Готово
-            </button>
-          </div>
-        </div>
-      )}
-
       {attachmentsOpen && (
-        <div className="fixed inset-0 z-50 flex" onClick={() => setAttachmentsOpen(false)}>
-          <div className="absolute inset-0 bg-black/40" />
-          <div className="relative ml-auto h-full w-full max-w-sm bg-white dark:bg-slate-900 flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setAttachmentsOpen(false)}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div className="relative w-full max-w-lg mx-4 max-h-[85vh] bg-white dark:bg-slate-900 rounded-2xl flex flex-col shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 shrink-0">
-              <h3 className="font-semibold text-slate-800 dark:text-slate-100">Информация</h3>
-              <button onClick={() => setAttachmentsOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer text-lg">✕</button>
+              <h3 className="font-semibold text-slate-800 dark:text-slate-100">Информация о чате</h3>
+              <button onClick={() => setAttachmentsOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer text-lg leading-none">✕</button>
             </div>
-            <div className="flex flex-col items-center py-5 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
-              <div className={cn('w-16 h-16 rounded-full flex items-center justify-center text-3xl mb-3', avatarBg)}>
+            <div className="flex items-center gap-4 px-5 py-4 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
+              <div className={cn('w-14 h-14 rounded-full flex items-center justify-center text-2xl shrink-0', avatarBg)}>
                 {avatarEmoji}
               </div>
-              <p className="font-semibold text-slate-800 dark:text-slate-100 text-base">{name}</p>
-              <p className="text-xs text-slate-400 mt-1">
-                {botActive ? '🤖 Бот отвечает' : '👤 Оператор отвечает'}
-              </p>
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-800 dark:text-slate-100 text-base truncate">{name}</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {botActive ? '🤖 Бот отвечает' : '👤 Оператор отвечает'}
+                </p>
+              </div>
             </div>
-            <div className="flex gap-1 px-4 py-2 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
-              {(['media', 'files', 'voice'] as const).map(tab => {
-                const labels = { media: `Медиа (${allAttachments.media.length})`, files: `Файлы (${allAttachments.files.length})`, voice: `Голосовые (${allAttachments.voices.length})` }
+            <div className="flex gap-1 px-4 py-2 border-b border-slate-100 dark:border-slate-700/60 shrink-0 flex-wrap">
+              {(['media', 'files', 'voice', 'colors', 'wallpaper'] as const).map(tab => {
+                const labels: Record<string, string> = {
+                  media: `Медиа (${allAttachments.media.length})`,
+                  files: `Файлы (${allAttachments.files.length})`,
+                  voice: `Голосовые (${allAttachments.voices.length})`,
+                  colors: 'Цвета',
+                  wallpaper: 'Обои',
+                }
                 return (
                   <button key={tab} onClick={() => setAttachTab(tab)}
                     className={cn('px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer', attachTab === tab ? 'bg-[#1B3A72] text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800')}>
@@ -866,6 +931,151 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
                     ))}
                   </div>
               )}
+              {attachTab === 'colors' && (
+                <div className="p-4 space-y-5">
+                  <div className="flex gap-2">
+                    <button onClick={() => setColorScope('chat')}
+                      className={cn('flex-1 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer', colorScope === 'chat' ? 'bg-[#1B3A72] text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700')}>
+                      Этот чат
+                    </button>
+                    <button onClick={() => setColorScope('global')}
+                      className={cn('flex-1 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer', colorScope === 'global' ? 'bg-[#1B3A72] text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700')}>
+                      Все чаты
+                    </button>
+                  </div>
+                  <ColorSection
+                    title="Мои сообщения"
+                    value={chatColors.ownBubble}
+                    onChange={(v) => saveColor('ownBubble', v)}
+                    colors={['#1B3A72', '#1d4ed8', '#7c3aed', '#db2777', '#059669', '#0891b2', '#374151', '#dc2626']}
+                  />
+                  <ColorSection
+                    title="Сообщения собеседника"
+                    value={chatColors.otherBubble}
+                    onChange={(v) => saveColor('otherBubble', v)}
+                    colors={['#f1f5f9', '#fef3c7', '#d1fae5', '#e0e7ff', '#fce7f3', '#f0fdf4', '#fff7ed', '#fdf2f8']}
+                  />
+                  <ColorSection
+                    title="Сообщения бота"
+                    value={chatColors.botBubble}
+                    onChange={(v) => saveColor('botBubble', v)}
+                    colors={['#eef2ff', '#e0e7ff', '#ede9fe', '#fce7f3', '#dcfce7', '#cffafe', '#fef9c3', '#fee2e2']}
+                  />
+                  <ColorSection
+                    title="Текст моих сообщений"
+                    value={chatColors.ownText}
+                    onChange={(v) => saveColor('ownText', v)}
+                    colors={['#ffffff', '#f0f9ff', '#fef9c3', '#dcfce7', '#ffe4e6', '#f3e8ff', '#ffedd5', '#e0f2fe']}
+                  />
+                  <ColorSection
+                    title="Текст собеседника"
+                    value={chatColors.otherText}
+                    onChange={(v) => saveColor('otherText', v)}
+                    colors={['#1e293b', '#1e3a5f', '#3b0764', '#831843', '#14532d', '#164e63', '#713f12', '#7f1d1d']}
+                  />
+                  <ColorSection
+                    title="Текст бота"
+                    value={chatColors.botText}
+                    onChange={(v) => saveColor('botText', v)}
+                    colors={['#1e293b', '#3730a3', '#1e40af', '#5b21b6', '#065f46', '#0e7490', '#92400e', '#991b1b']}
+                  />
+                  <ColorSection
+                    title="Цвет никнеймов"
+                    value={chatColors.nickColor}
+                    onChange={(v) => saveColor('nickColor', v)}
+                    colors={['#1B3A72', '#2563eb', '#7c3aed', '#be185d', '#065f46', '#0e7490', '#92400e', '#dc2626']}
+                  />
+                  <div>
+                    <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Размер шрифта</p>
+                    <div className="flex items-center gap-2">
+                      {([12, 13, 14, 15, 16, 18] as const).map(size => (
+                        <button
+                          key={size}
+                          onClick={() => saveColor('fontSize', chatColors.fontSize === size ? undefined : size)}
+                          className={cn(
+                            'px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer border',
+                            chatColors.fontSize === size
+                              ? 'bg-[#1B3A72] text-white border-transparent'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
+                          )}
+                        >
+                          {size}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {attachTab === 'wallpaper' && (
+                <div className="p-4 space-y-4">
+                  <div className="grid grid-cols-3 gap-3">
+                    {WALLPAPERS.map(wp => (
+                      <button key={wp.id}
+                        onClick={() => {
+                          setWallpaper(wp.id)
+                          setCustomWallpaperUrl(null)
+                          localStorage.setItem(`chat-wallpaper-${chat.id}`, wp.id)
+                          localStorage.removeItem(`chat-wallpaper-custom-${chat.id}`)
+                          chatsApi.setWallpaper(chat.id, wp.id).catch(() => {})
+                        }}
+                        className={cn('h-20 rounded-xl border-2 flex items-end justify-center pb-2 transition-all cursor-pointer overflow-hidden', wallpaper === wp.id && !customWallpaperUrl ? 'border-[#1B3A72] scale-95 shadow-md' : 'border-transparent hover:scale-95')}
+                        style={{ background: isDarkMode ? wp.dark : wp.light }}>
+                        <span className="text-[10px] font-semibold text-white drop-shadow px-1.5 py-0.5 rounded-full bg-black/25">{wp.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-700">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Своё изображение</p>
+                    <div className="flex items-center gap-2">
+                      <label className={cn('flex-1 flex items-center justify-center gap-1.5 px-2 py-1 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 text-sm text-slate-500 dark:text-slate-400 hover:border-[#1B3A72] hover:text-[#1B3A72] dark:hover:border-blue-400 dark:hover:text-blue-400 cursor-pointer transition-colors', uploadingWallpaper && 'opacity-50 pointer-events-none')}>
+                        {uploadingWallpaper ? (
+                          <div className="w-4 h-4 border-2 border-[#1B3A72] border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+                        )}
+                        {uploadingWallpaper ? 'Загрузка...' : 'Загрузить'}
+                        <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                          const file = e.target.files?.[0]
+                          if (!file) return
+                          e.target.value = ''
+                          setUploadingWallpaper(true)
+                          try {
+                            const { url } = await chatsApi.uploadAttachment(file)
+                            const fullUrl = toFullUrl(url)
+                            setCustomWallpaperUrl(fullUrl)
+                            setWallpaper('custom')
+                            localStorage.setItem(`chat-wallpaper-${chat.id}`, 'custom')
+                            localStorage.setItem(`chat-wallpaper-custom-${chat.id}`, fullUrl)
+                            chatsApi.setWallpaper(chat.id, 'custom', fullUrl).catch(() => {})
+                          } catch {
+                            toast.error('Не удалось загрузить изображение')
+                          } finally {
+                            setUploadingWallpaper(false)
+                          }
+                        }} />
+                      </label>
+                      {customWallpaperUrl && (
+                        <>
+                          <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border-2 border-[#1B3A72]">
+                            <img src={customWallpaperUrl} alt="Custom" className="w-full h-full object-cover" />
+                          </div>
+                          <button
+                            onClick={() => {
+                              setCustomWallpaperUrl(null)
+                              setWallpaper('default')
+                              localStorage.removeItem(`chat-wallpaper-custom-${chat.id}`)
+                              localStorage.setItem(`chat-wallpaper-${chat.id}`, 'default')
+                              chatsApi.setWallpaper(chat.id, 'default').catch(() => {})
+                            }}
+                            className="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer text-sm">
+                            ✕
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -903,7 +1113,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 function ForwardDialog({ message, currentChatId, onClose }: { message: ChatMessage; currentChatId: number; onClose: () => void }) {
   const qc = useQueryClient()
   const [sending, setSending] = useState(false)
-  const chats = (qc.getQueryData<Chat[]>(['operator-chats']) ?? []).filter((c) => c.id !== currentChatId && !c.bot_active)
+  const chats = (qc.getQueryData<Chat[]>(['operator-chats']) ?? []).filter((c) => c.id !== currentChatId)
 
   const forward = async (chatId: number) => {
     setSending(true)
@@ -960,6 +1170,95 @@ function EmptyAttach({ label }: { label: string }) {
   )
 }
 
+function ColorSection({ title, value, onChange, colors }: {
+  title: string
+  value: string | undefined
+  onChange: (v: string | undefined) => void
+  colors: string[]
+}) {
+  const isCustom = value !== undefined && !colors.includes(value)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  return (
+    <div>
+      <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">{title}</p>
+      
+      <div className="flex flex-wrap gap-2 items-center">
+        {/* По умолчанию */}
+        <button
+          onClick={() => onChange(undefined)}
+          title="По умолчанию"
+          className={cn(
+            'w-8 h-8 rounded-lg border-2 text-xs font-bold flex items-center justify-center transition-all cursor-pointer shrink-0',
+            !value ? 'border-[#1B3A72] text-[#1B3A72] dark:text-blue-400 ring-2 ring-[#1B3A72]/20' : 'border-slate-300 dark:border-slate-600 text-slate-400 hover:border-slate-400'
+          )}
+        >✕</button>
+
+        {/* Пресеты */}
+        {colors.map(c => (
+          <button
+            key={c}
+            onClick={() => onChange(c)}
+            title={c}
+            className={cn(
+              'w-8 h-8 rounded-lg border-2 transition-all cursor-pointer shrink-0',
+              value === c ? 'border-[#1B3A72] scale-110 shadow-md ring-2 ring-[#1B3A72]/20' : 'border-transparent hover:scale-105 hover:shadow-sm'
+            )}
+            style={{ backgroundColor: c }}
+          />
+        ))}
+
+        {/* Активный кастомный цвет (если не в списке) */}
+        {isCustom && (
+          <button
+            onClick={() => inputRef.current?.click()}
+            title={value}
+            className="w-8 h-8 rounded-lg border-2 border-[#1B3A72] scale-110 shadow-md ring-2 ring-[#1B3A72]/20 transition-all shrink-0 cursor-pointer"
+            style={{ backgroundColor: value }}
+          />
+        )}
+
+        {/* Кнопка «+» с нативным color picker */}
+        <label
+          className={cn(
+            'w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer shrink-0 relative overflow-hidden',
+            isCustom
+              ? 'border-slate-300 dark:border-slate-600 hover:border-slate-400'
+              : 'border-dashed border-slate-400 dark:border-slate-500 hover:border-[#1B3A72] dark:hover:border-blue-400'
+          )}
+        >
+          <input
+            ref={inputRef}
+            type="color"
+            value={value || '#000000'}
+            onChange={(e) => onChange(e.target.value)}
+            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full p-0 border-0"
+          />
+          <span className="text-xs font-bold text-slate-500 dark:text-slate-400 select-none">+</span>
+        </label>
+      </div>
+
+      {/* Текстовый ввод HEX для кастомного цвета */}
+      {isCustom && (
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => {
+              const hex = e.target.value
+              if (/^#[0-9A-Fa-f]{6}$/.test(hex)) onChange(hex)
+            }}
+            className="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 w-24 font-mono uppercase focus:outline-none focus:ring-2 focus:ring-[#1B3A72]/20"
+            maxLength={7}
+            placeholder="#000000"
+          />
+          <span className="text-[10px] text-slate-400 font-medium">HEX</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function HeaderMenuItem({ icon, onClick, danger, children }: { icon: string; onClick: () => void; danger?: boolean; children: React.ReactNode }) {
   return (
     <button onClick={onClick}
@@ -975,9 +1274,10 @@ const BOT_NAMES = new Set(['Ася', 'Bot', 'bot', 'Asya'])
 
 type RenderItem =
   | { type: 'date'; date: Date }
+  | { type: 'unread-divider' }
   | { type: 'message'; message: ChatMessage; isOwn: boolean; isBot: boolean; showAvatar: boolean; showName: boolean; isLastInGroup: boolean }
 
-function buildRenderItems(messages: ChatMessage[], myId: number): RenderItem[] {
+function buildRenderItems(messages: ChatMessage[], myId: number, firstUnreadId?: number): RenderItem[] {
   const items: RenderItem[] = []
   let lastDate: string | null = null
   for (let i = 0; i < messages.length; i++) {
@@ -985,6 +1285,7 @@ function buildRenderItems(messages: ChatMessage[], myId: number): RenderItem[] {
     const prev = messages[i - 1] ?? null
     const next = messages[i + 1] ?? null
     const msgDate = new Date(msg.created_at).toDateString()
+    if (firstUnreadId && msg.id === firstUnreadId) items.push({ type: 'unread-divider' })
     if (msgDate !== lastDate) { items.push({ type: 'date', date: new Date(msg.created_at) }); lastDate = msgDate }
     const isOwn = msg.sender_id === myId
     const isBot = !isOwn && BOT_NAMES.has(msg.sender_name ?? '')

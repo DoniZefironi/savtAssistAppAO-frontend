@@ -241,7 +241,7 @@ export function RequestsView() {
         </div>
       </div>
 
-      <div className="px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60">
+      <div className="px-6 py-3 bg-white dark:bg-slate-900">
         <div className="relative">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
           <Input
@@ -256,7 +256,7 @@ export function RequestsView() {
         </div>
       </div>
 
-      <div className="px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
+      <div className="px-6 py-1 bg-white dark:bg-slate-900 flex flex-wrap items-center gap-2">
         {filters.map(f => (
           <button
             key={f.value}
@@ -271,10 +271,12 @@ export function RequestsView() {
             {f.label}
           </button>
         ))}
+      </div>
 
+      <div className="px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
+        <span className="text-xs text-slate-400 font-medium mr-0.5">Фильтр:</span>
         {sortOptions.length > 0 && (
           <>
-            <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />
             {sortOptions.map(opt => {
               const active = sortBy === opt.value
               return (
