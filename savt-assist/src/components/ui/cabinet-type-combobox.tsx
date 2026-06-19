@@ -86,14 +86,14 @@ export function CabinetTypeCombobox({ value, onChange, placeholder = 'Венти
       </div>
 
       {showDropdown && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+        <div className="absolute z-50 mt-1 w-full bg-white border dark:bg-gray-900 border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
           {filtered.map(tag => (
             <button
               key={tag.id}
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => handleSelect(tag.name)}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center justify-between gap-2 first:rounded-t-lg"
+              className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-900 flex items-center justify-between gap-2 first:rounded-t-lg"
             >
               <span>{tag.name}</span>
               {value.toLowerCase() === tag.name.toLowerCase() && (
