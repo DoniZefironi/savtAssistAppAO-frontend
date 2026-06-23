@@ -14,6 +14,9 @@ apiClient.interceptors.request.use((config) => {
   return config
 })
 
+// Shared promise to prevent concurrent refresh races: all 401s wait for a single refresh
+let refreshPromise: Promise<{ access_token: string; refresh_token: string }> | null = null
+
 apiClient.interceptors.response.use(
   (res) => res,
   async (error) => {
@@ -31,14 +34,19 @@ apiClient.interceptors.response.use(
       }
 
       try {
-        const { data } = await axios.post(`${API_URL}/auth/refresh`, {
-          refresh_token: refreshToken,
-        })
+        if (!refreshPromise) {
+          refreshPromise = axios
+            .post(`${API_URL}/auth/refresh`, { refresh_token: refreshToken })
+            .then((r) => r.data)
+            .finally(() => { refreshPromise = null })
+        }
+        const data = await refreshPromise
         Cookies.set('access_token', data.access_token, { sameSite: 'strict' })
         Cookies.set('refresh_token', data.refresh_token, { sameSite: 'strict' })
         original.headers.Authorization = `Bearer ${data.access_token}`
         return apiClient(original)
       } catch {
+        refreshPromise = null
         Cookies.remove('access_token')
         Cookies.remove('refresh_token')
         window.location.href = '/login'

@@ -19,6 +19,7 @@ import { UserDialog } from '@/components/users/users-view'
 import { formatDate } from '@/lib/warranty'
 import { cn } from '@/lib/utils'
 import type { Cabinet, ServiceRequest } from '@/types'
+import { LocationPicker } from '@/components/map/location-picker'
 
 type Tab = 'info' | 'docs' | 'photos' | 'users' | 'requests'
 
@@ -169,6 +170,12 @@ function DetailContent({ cabinetId, isAdmin, initialMode }: {
             <DetailRow label="Комментарий" value={fields.admin_comment} editing={editing} onChange={set('admin_comment')} placeholder="Добавить комментарий" multiline />
             <DateRow label="Гарантия с" value={fields.warranty_start} editing={editing} onChange={(v) => setFields((p) => p ? { ...p, warranty_start: v } : p)} />
             <DateRow label="Гарантия до" value={fields.warranty_end} editing={editing} onChange={(v) => setFields((p) => p ? { ...p, warranty_end: v } : p)} />
+            <LocationRow
+              lat={fields.latitude}
+              lng={fields.longitude}
+              editing={editing}
+              onChange={(lat, lng) => setFields((p) => p ? { ...p, latitude: lat, longitude: lng } : p)}
+            />
           </div>
         )}
         {tab === 'docs' && <DocsTab cabinetId={cabinetId} isAdmin={isAdmin} />}
@@ -1028,6 +1035,8 @@ interface FormFields {
   admin_comment: string
   warranty_start: string
   warranty_end: string
+  latitude: number | null
+  longitude: number | null
 }
 
 function cabinetToFields(c: Cabinet): FormFields {
@@ -1040,6 +1049,8 @@ function cabinetToFields(c: Cabinet): FormFields {
     admin_comment: c.admin_comment ?? '',
     warranty_start: c.warranty_starts_at?.slice(0, 10) ?? '',
     warranty_end: c.warranty_ends_at?.slice(0, 10) ?? '',
+    latitude: c.latitude ?? null,
+    longitude: c.longitude ?? null,
   }
 }
 
@@ -1053,7 +1064,37 @@ function fieldsToDto(f: FormFields): UpdateCabinetDto {
     admin_comment: f.admin_comment || null,
     warranty_starts_at: f.warranty_start ? new Date(f.warranty_start).toISOString() : null,
     warranty_ends_at: f.warranty_end ? new Date(f.warranty_end).toISOString() : null,
+    latitude: f.latitude,
+    longitude: f.longitude,
   }
+}
+
+function LocationRow({ lat, lng, editing, onChange }: {
+  lat: number | null
+  lng: number | null
+  editing: boolean
+  onChange: (lat: number | null, lng: number | null) => void
+}) {
+  const hasLocation = lat != null && lng != null
+  return (
+    <div className="flex gap-4 px-6 py-3">
+      <span className="text-xs text-slate-400 w-28 shrink-0 pt-0.5">Местоположение</span>
+      {editing ? (
+        <div className="flex-1 min-w-0">
+          <LocationPicker
+            value={hasLocation ? { lat: lat!, lng: lng! } : null}
+            onChange={(val) => onChange(val ? val.lat : null, val ? val.lng : null)}
+          />
+        </div>
+      ) : (
+        <span className={`flex-1 text-sm ${hasLocation ? 'text-slate-700 dark:text-slate-200 font-medium font-mono' : 'text-slate-300 italic'}`}>
+          {hasLocation
+            ? `${lat!.toFixed(5)}, ${lng!.toFixed(5)}`
+            : 'Не указано'}
+        </span>
+      )}
+    </div>
+  )
 }
 
 function fmtSize(bytes: number) {

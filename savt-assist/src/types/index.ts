@@ -29,6 +29,8 @@ export interface Cabinet {
   warranty_status: 'active' | 'expiring_soon' | 'expired' | null
   warranty_starts_at: string | null
   warranty_ends_at: string | null
+  latitude: number | null
+  longitude: number | null
   tags?: { id: number; name: string; scope: string }[]
   created_at: string
 }

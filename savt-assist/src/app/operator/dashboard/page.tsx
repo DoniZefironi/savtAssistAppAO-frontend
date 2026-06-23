@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useAuthStore } from '@/lib/store/auth'
+import { CabinetsMap } from '@/components/map/cabinets-map'
 
 const navCards = [
   {
@@ -32,6 +33,15 @@ export default function OperatorDashboardPage() {
           <div>
             <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Добрый день, {displayName}</h1>
             <p className="text-sm text-slate-400 mt-0.5">Панель оператора</p>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-700/60">
+            <span className="font-semibold text-sm text-slate-800 dark:text-slate-100">Карта расположения ШУ</span>
+          </div>
+          <div className="h-[500px] p-3">
+            <CabinetsMap isAdmin={false} />
           </div>
         </div>
 

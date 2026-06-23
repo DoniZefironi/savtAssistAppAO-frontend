@@ -24,6 +24,8 @@ export interface CreateCabinetDto {
   admin_comment?: string | null
   warranty_starts_at?: string | null
   warranty_ends_at?: string | null
+  latitude?: number | null
+  longitude?: number | null
 }
 
 export interface CabinetUser {
@@ -45,6 +47,8 @@ export interface UpdateCabinetDto {
   admin_comment?: string | null
   warranty_starts_at?: string | null
   warranty_ends_at?: string | null
+  latitude?: number | null
+  longitude?: number | null
 }
 
 export const cabinetsApi = {
@@ -89,8 +93,35 @@ export const cabinetsApi = {
     return data
   },
 
+  getCabinetsWithGeo: async (): Promise<{ cabinets: Cabinet[]; openCabinetIds: Set<number> }> => {
+    const [listRes, reqRes] = await Promise.allSettled([
+      apiClient.get('/admin/cabinets', { params: { size: 100 } }),
+      apiClient.get('/admin/service-requests', { params: { status: 'open', size: 100 } }),
+    ])
+
+    const listItems: { id: number }[] = listRes.status === 'fulfilled'
+      ? (listRes.value.data.items ?? [])
+      : []
+
+    // Fetch individual details to get latitude/longitude (not included in list response)
+    const detailResults = await Promise.allSettled(
+      listItems.map((c) => apiClient.get(`/admin/cabinets/${c.id}`).then((r) => r.data as Cabinet))
+    )
+    const cabinets = detailResults
+      .filter((r): r is PromiseFulfilledResult<Cabinet> => r.status === 'fulfilled')
+      .map((r) => r.value)
+
+    const openCabinetIds = new Set<number>()
+    if (reqRes.status === 'fulfilled') {
+      for (const req of reqRes.value.data.items ?? []) {
+        if (req.cabinet_id != null) openCabinetIds.add(req.cabinet_id)
+      }
+    }
+    return { cabinets, openCabinetIds }
+  },
+
   getStats: async () => {
-    const [serviceReqs, docReqs, shareReqs, additionReqs, chats] = await Promise.allSettled([
+    const [serviceReqs, docReqs, shareReqs, additionReqs, chats] = await Promise.all([
       apiClient.get('/admin/service-requests', { params: { status: 'open', page: 1, size: 1 } }),
       apiClient.get('/admin/document-requests', { params: { status: 'pending', page: 1, size: 1 } }),
       apiClient.get('/admin/cabinet-requests/shares', { params: { status: 'pending', page: 1, size: 1 } }),
@@ -98,24 +129,23 @@ export const cabinetsApi = {
       apiClient.get('/operator/chats'),
     ])
 
-    const getTotal = (r: PromiseSettledResult<{ data: unknown }>) => {
-      if (r.status !== 'fulfilled') return 0
-      const d = r.value.data as Record<string, unknown>
+    const getTotal = (data: unknown) => {
+      const d = data as Record<string, unknown>
       if (typeof d?.total === 'number') return d.total
       if (Array.isArray(d)) return d.length
       return 0
     }
 
-    const chatList = chats.status === 'fulfilled' && Array.isArray(chats.value.data)
-      ? (chats.value.data as { unread_count: number }[])
+    const chatList = Array.isArray(chats.data)
+      ? (chats.data as { unread_count: number }[])
       : []
 
     return {
       unreadChats: chatList.filter(c => c.unread_count > 0).length,
-      openServiceRequests: getTotal(serviceReqs),
-      pendingDocumentRequests: getTotal(docReqs),
-      pendingShareRequests: getTotal(shareReqs),
-      pendingAdditionRequests: getTotal(additionReqs),
+      openServiceRequests: getTotal(serviceReqs.data),
+      pendingDocumentRequests: getTotal(docReqs.data),
+      pendingShareRequests: getTotal(shareReqs.data),
+      pendingAdditionRequests: getTotal(additionReqs.data),
     }
   },
 

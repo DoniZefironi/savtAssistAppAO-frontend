@@ -12,7 +12,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <AdminSidebar mobileOpen={sidebarOpen} onMobileClose={() => setSidebarOpen(false)} />
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
         <AdminHeader onMenuClick={() => setSidebarOpen(true)} />
-        <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
           {children}
         </div>
       </main>

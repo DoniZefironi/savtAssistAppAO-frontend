@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { CabinetTypeCombobox } from '@/components/ui/cabinet-type-combobox'
 import { cabinetsApi, CreateCabinetDto } from '@/lib/api/cabinets'
 import { cn } from '@/lib/utils'
+import { LocationPicker } from '@/components/map/location-picker'
 
 interface Props {
   open: boolean
@@ -17,6 +18,8 @@ interface Props {
 }
 
 type FormErrors = Partial<Record<keyof CreateCabinetDto, string>>
+
+interface LatLng { lat: number; lng: number }
 
 const EMPTY: CreateCabinetDto = {
   type: '',
@@ -27,6 +30,8 @@ const EMPTY: CreateCabinetDto = {
   admin_comment: '',
   warranty_starts_at: '',
   warranty_ends_at: '',
+  latitude: null,
+  longitude: null,
 }
 
 function validate(form: CreateCabinetDto): FormErrors {
@@ -64,6 +69,8 @@ export function CreateCabinetDialog({ open, onClose }: Props) {
         warranty_ends_at: form.warranty_ends_at
           ? new Date(form.warranty_ends_at).toISOString()
           : null,
+        latitude: form.latitude ?? null,
+        longitude: form.longitude ?? null,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cabinets'] })
@@ -98,7 +105,7 @@ export function CreateCabinetDialog({ open, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Добавить ШУ</DialogTitle>
         </DialogHeader>
@@ -174,6 +181,18 @@ export function CreateCabinetDialog({ open, onClose }: Props) {
                 <p className="text-xs text-destructive">{errors.warranty_ends_at}</p>
               )}
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-slate-600 text-sm">Местоположение</Label>
+            <LocationPicker
+              value={form.latitude != null && form.longitude != null ? { lat: form.latitude, lng: form.longitude } : null}
+              onChange={(val) => setForm((prev) => ({
+                ...prev,
+                latitude: val ? val.lat : null,
+                longitude: val ? val.lng : null,
+              }))}
+            />
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t">

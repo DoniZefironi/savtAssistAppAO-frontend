@@ -8,6 +8,7 @@ import { useAuthStore } from '@/lib/store/auth'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import Image from 'next/image'
+import { CabinetsMap } from '@/components/map/cabinets-map'
 
 const statCards = [
   {
@@ -116,6 +117,15 @@ export function AdminDashboard() {
               </Link>
             )
           })}
+        </div>
+
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-700/60">
+            <span className="font-semibold text-sm text-slate-800 dark:text-slate-100">Карта расположения ШУ</span>
+          </div>
+          <div className="h-[500px] p-3">
+            <CabinetsMap isAdmin={true} />
+          </div>
         </div>
 
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
