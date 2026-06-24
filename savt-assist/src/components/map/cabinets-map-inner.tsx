@@ -6,7 +6,7 @@ import L from 'leaflet'
 import { useQuery } from '@tanstack/react-query'
 import { cabinetsApi } from '@/lib/api/cabinets'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
-import type { Cabinet } from '@/types'
+import type { CabinetGeoItem } from '@/lib/api/cabinets'
 import { formatDate, getWarrantyStatus } from '@/lib/warranty'
 
 interface Props {
@@ -42,8 +42,8 @@ const WARRANTY_DOT: Record<string, string> = {
   expired:       '#EF4444',
 }
 
-function getMarkerColor(cabinet: Cabinet, openIds: Set<number>): MarkerColor {
-  if (openIds.has(cabinet.id)) return 'red'
+function getMarkerColor(cabinet: CabinetGeoItem): MarkerColor {
+  if (cabinet.has_open_requests) return 'red'
   const status = cabinet.warranty_status ?? getWarrantyStatus(cabinet.warranty_ends_at ?? null)
   if (status === 'expiring_soon') return 'orange'
   if (status === 'expired')       return 'yellow'
@@ -65,7 +65,7 @@ function createPinIcon(color: string) {
   })
 }
 
-function FitBounds({ cabinets }: { cabinets: Cabinet[] }) {
+function FitBounds({ cabinets }: { cabinets: CabinetGeoItem[] }) {
   const map = useMap()
   useEffect(() => {
     if (cabinets.length === 0) return
@@ -80,15 +80,14 @@ function FitBounds({ cabinets }: { cabinets: Cabinet[] }) {
 }
 
 function PopupContent({
-  cabinet, openIds, onOpen,
+  cabinet, onOpen,
 }: {
-  cabinet: Cabinet
-  openIds: Set<number>
+  cabinet: CabinetGeoItem
   onOpen: (id: number) => void
 }) {
   const map = useMap()
   const name = cabinet.admin_internal_name || cabinet.object_number
-  const hasOpen = openIds.has(cabinet.id)
+  const hasOpen = cabinet.has_open_requests
   const warrantyStatus = cabinet.warranty_status ?? getWarrantyStatus(cabinet.warranty_ends_at ?? null)
 
   const handleOpen = () => {
@@ -99,10 +98,9 @@ function PopupContent({
   return (
     <div style={{ minWidth: 190, fontFamily: 'inherit' }}>
       <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 2, lineHeight: 1.3 }}>{name}</p>
-      <p style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>
-        {[cabinet.object_number !== name ? cabinet.object_number : null, cabinet.type]
-          .filter(Boolean).join(' · ')}
-      </p>
+      {cabinet.object_number !== name && (
+        <p style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>{cabinet.object_number}</p>
+      )}
 
       {warrantyStatus && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
@@ -142,13 +140,13 @@ export function CabinetsMapInner({ isAdmin }: Props) {
   const [selectedId, setSelectedId] = useState<number | null>(null)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['cabinets-map'],
-    queryFn: cabinetsApi.getCabinetsWithGeo,
+    queryKey: ['cabinets-geo'],
+    queryFn: cabinetsApi.getCabinetsGeo,
     refetchInterval: 30_000,
+    staleTime: 20_000,
   })
 
-  const cabinets = data?.cabinets ?? []
-  const openIds  = data?.openCabinetIds ?? new Set<number>()
+  const cabinets = data ?? []
   const withGeo  = cabinets.filter(c => c.latitude != null && c.longitude != null)
 
   return (
@@ -174,6 +172,7 @@ export function CabinetsMapInner({ isAdmin }: Props) {
           zoom={7}
           style={{ width: '100%', height: '100%', borderRadius: '0.75rem' }}
           scrollWheelZoom
+          attributionControl={false}
         >
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -184,10 +183,10 @@ export function CabinetsMapInner({ isAdmin }: Props) {
             <Marker
               key={cabinet.id}
               position={[cabinet.latitude!, cabinet.longitude!]}
-              icon={createPinIcon(MARKER_COLORS[getMarkerColor(cabinet, openIds)])}
+              icon={createPinIcon(MARKER_COLORS[getMarkerColor(cabinet)])}
             >
               <Popup>
-                <PopupContent cabinet={cabinet} openIds={openIds} onOpen={setSelectedId} />
+                <PopupContent cabinet={cabinet} onOpen={setSelectedId} />
               </Popup>
             </Marker>
           ))}

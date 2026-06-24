@@ -212,7 +212,7 @@ export function RequestsView() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 pt-6 pb-0 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60">
+      <div className="px-6 pt-6 pb-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60">
         <div className="flex items-end justify-between mb-4">
           <div>
             {total != null && <p className="text-xs text-slate-400 font-medium mb-0.5">{total} заявок</p>}
@@ -223,7 +223,7 @@ export function RequestsView() {
             <button onClick={() => { setView('grid'); localStorage.setItem('view-mode-requests', 'grid') }} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon /></button>
           </div>
         </div>
-        <div className="flex gap-0 -mb-px">
+        <div className="flex gap-0 mb-3">
           {TABS.map(t => (
             <button
               key={t.id}
@@ -239,10 +239,7 @@ export function RequestsView() {
             </button>
           ))}
         </div>
-      </div>
-
-      <div className="px-6 py-3 bg-white dark:bg-slate-900">
-        <div className="relative">
+        <div className="relative mb-3">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
           <Input
             value={searchInput}
@@ -254,49 +251,48 @@ export function RequestsView() {
             <button onClick={() => setSearchInput('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">✕</button>
           )}
         </div>
-      </div>
 
-      <div className="px-6 py-1 bg-white dark:bg-slate-900 flex flex-wrap items-center gap-2">
-        {filters.map(f => (
-          <button
-            key={f.value}
-            onClick={() => handleFilterChange(f.value)}
-            className={cn(
-              'px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
-              statusFilter === f.value
-                ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-            )}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
-        <span className="text-xs text-slate-400 font-medium mr-0.5">Фильтр:</span>
-        {sortOptions.length > 0 && (
-          <>
-            {sortOptions.map(opt => {
-              const active = sortBy === opt.value
-              return (
-                <button
-                  key={opt.value}
-                  onClick={() => handleSortClick(opt.value)}
-                  className={cn(
-                    'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
-                    active
-                      ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
-                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
-                  )}
-                >
-                  {opt.label}
-                  {active && <span className="opacity-70">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
-                </button>
-              )
-            })}
-          </>
-        )}
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          {sortOptions.length > 0 && (
+            <>
+              {sortOptions.map(opt => {
+                const active = sortBy === opt.value
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => handleSortClick(opt.value)}
+                    className={cn(
+                      'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+                      active
+                        ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
+                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                    )}
+                  >
+                    {opt.label}
+                    {active && <span className="opacity-70">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
+                  </button>
+                )
+              })}
+            </>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          <span className="text-xs text-slate-400 font-medium mr-0.5">Фильтр:</span>
+          {filters.map(f => (
+            <button
+              key={f.value}
+              onClick={() => handleFilterChange(f.value)}
+              className={cn(
+                'px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+                statusFilter === f.value
+                  ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-4 bg-slate-50 dark:bg-slate-900">

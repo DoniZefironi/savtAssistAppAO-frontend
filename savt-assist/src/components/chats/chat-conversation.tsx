@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { MessageBubble, DateSeparator, PinIcon } from './message-bubble'
+import { MessageBubble, DateSeparator } from './message-bubble'
 import { chatDisplayName } from './chat-list-panel'
 import { toFullUrl, downloadBlob } from './attachment-view'
 import { chatsApi } from '@/lib/api/chats'
@@ -162,12 +162,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     enabled: searchOpen && searchQuery.length > 0,
   })
 
-  const { data: pinnedMessage, refetch: refetchPinned } = useQuery({
-    queryKey: ['pinned-message', chat.id],
-    queryFn: () => chatsApi.getPinnedMessage(chat.id),
-    staleTime: 30_000,
-  })
-
   const messages = useMemo(() =>
     [...(messagesData?.pages ?? [])].reverse().flatMap(p => [...p].reverse())
   , [messagesData?.pages])
@@ -235,6 +229,23 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   const messagesById = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages])
 
+  const { data: fetchedPinnedMessage = null } = useQuery({
+    queryKey: ['pinned-message', chat.id],
+    queryFn: () => chatsApi.getPinnedMessage(chat.id),
+    enabled: !!chat.pinned_message_id,
+    staleTime: 60_000,
+  })
+  const pinnedMessage = chat.pinned_message_id
+    ? (fetchedPinnedMessage ?? messagesById.get(chat.pinned_message_id) ?? null)
+    : null
+
+  const { data: rawAttachments = [] } = useQuery({
+    queryKey: ['chat-attachments', chat.id],
+    queryFn: () => chatsApi.getAttachments(chat.id),
+    enabled: attachmentsOpen,
+    staleTime: 60_000,
+  })
+
   const sendMutation = useMutation({
     mutationFn: ({ t, attachments, replyToId }: { t: string; attachments?: MessageAttachment[]; replyToId?: number }) =>
       chatsApi.sendMessage(chat.id, t, attachments, replyToId),
@@ -288,13 +299,22 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   const pinMutation = useMutation({
     mutationFn: (messageId: number) => chatsApi.pinMessage(chat.id, messageId),
-    onSuccess: () => { refetchPinned(); toast.success('Сообщение закреплено') },
+    onSuccess: (_, messageId) => {
+      qc.setQueriesData<Chat[]>({ queryKey: ['operator-chats'] }, prev =>
+        prev?.map(c => c.id === chat.id ? { ...c, pinned_message_id: messageId } : c) ?? prev
+      )
+      toast.success('Сообщение закреплено')
+    },
     onError: () => toast.error('Не удалось закрепить'),
   })
 
   const unpinMutation = useMutation({
     mutationFn: () => chatsApi.unpinMessage(chat.id),
-    onSuccess: () => refetchPinned(),
+    onSuccess: () => {
+      qc.setQueriesData<Chat[]>({ queryKey: ['operator-chats'] }, prev =>
+        prev?.map(c => c.id === chat.id ? { ...c, pinned_message_id: null } : c) ?? prev
+      )
+    },
     onError: () => toast.error('Не удалось открепить'),
   })
 
@@ -421,9 +441,9 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const toggleSearch = () => { setSearchOpen(v => !v); setSearchInput(''); setSearchQuery('') }
 
   const handlePin = useCallback((msg: ChatMessage) => {
-    if (pinnedMessage?.id === msg.id) unpinMutation.mutate()
+    if (chat.pinned_message_id === msg.id) unpinMutation.mutate()
     else pinMutation.mutate(msg.id)
-  }, [pinnedMessage?.id, pinMutation, unpinMutation])
+  }, [chat.pinned_message_id, pinMutation, unpinMutation])
 
   const handleSelectMessage = (msg: ChatMessage) => {
     if (!selectMode) setSelectMode(true)
@@ -470,23 +490,20 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const currentWallpaper = WALLPAPERS.find(w => w.id === wallpaper) ?? WALLPAPERS[0]
 
   const allAttachments = useMemo(() => {
-    const media: { msg: ChatMessage; url: string; mime: string }[] = []
-    const files: { msg: ChatMessage; name: string; url: string; mime: string; size: number }[] = []
-    const voices: { msg: ChatMessage; url: string; duration: number | null }[] = []
-    for (const msg of messages) {
-      if (msg.deleted_at) continue
-      for (const a of msg.attachments ?? []) {
-        if (a.mime_type.startsWith('image/') || a.mime_type.startsWith('video/')) {
-          media.push({ msg, url: a.file_url, mime: a.mime_type })
-        } else if (a.mime_type.startsWith('audio/')) {
-          voices.push({ msg, url: a.file_url, duration: a.duration_seconds })
-        } else {
-          files.push({ msg, name: a.file_name, url: a.file_url, mime: a.mime_type, size: a.file_size_bytes })
-        }
+    const media: { message_id: number; url: string; mime: string }[] = []
+    const files: { message_id: number; name: string; url: string; mime: string; size: number }[] = []
+    const voices: { message_id: number; url: string; duration: number | null }[] = []
+    for (const a of rawAttachments) {
+      if (a.mime_type.startsWith('image/') || a.mime_type.startsWith('video/')) {
+        media.push({ message_id: a.message_id, url: a.file_url, mime: a.mime_type })
+      } else if (a.mime_type.startsWith('audio/')) {
+        voices.push({ message_id: a.message_id, url: a.file_url, duration: a.duration_seconds })
+      } else {
+        files.push({ message_id: a.message_id, name: a.file_name, url: a.file_url, mime: a.mime_type, size: a.file_size_bytes })
       }
     }
     return { media, files, voices }
-  }, [messages])
+  }, [rawAttachments])
 
   return (
     <div className="flex flex-col h-full">
@@ -552,8 +569,8 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
               <div className="absolute top-full right-0 mt-1 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 min-w-52 z-50">
                 <HeaderMenuItem icon="📎" onClick={() => { setAttachmentsOpen(true); setHeaderMenuOpen(false) }}>Вложения чата</HeaderMenuItem>
                 <HeaderMenuItem icon="🖼" onClick={() => { setAttachTab('wallpaper'); setAttachmentsOpen(true); setHeaderMenuOpen(false) }}>Обои</HeaderMenuItem>
-                {pinnedMessage && (
-                  <HeaderMenuItem icon="📌" onClick={() => { handleScrollToMessage(pinnedMessage.id); setHeaderMenuOpen(false) }}>Перейти к закреплённому</HeaderMenuItem>
+                {!!chat.pinned_message_id && (
+                  <HeaderMenuItem icon="📌" onClick={() => { if (pinnedMessage) handleScrollToMessage(pinnedMessage.id); setHeaderMenuOpen(false) }}>Перейти к закреплённому</HeaderMenuItem>
                 )}
                 <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
                 <HeaderMenuItem icon="🗑" onClick={() => { setConfirmModal('clear'); setHeaderMenuOpen(false) }} danger>Очистить историю</HeaderMenuItem>
@@ -564,13 +581,13 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         </div>
       </div>
 
-      {pinnedMessage && !searchOpen && (
+      {!!chat.pinned_message_id && !searchOpen && (
         <div className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-          onClick={() => handleScrollToMessage(pinnedMessage.id)}>
-          <div className="text-[#1B3A72] dark:text-blue-400 shrink-0"><PinIcon size={14} /></div>
+          onClick={() => { if (pinnedMessage) handleScrollToMessage(pinnedMessage.id) }}>
+          <div className="w-0.5 h-7 bg-[#1B3A72] dark:bg-blue-400 rounded-full shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-[10px] font-semibold text-[#1B3A72] dark:text-blue-400">Закреплённое сообщение</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{pinnedMessage.text || '📎 Вложение'}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{pinnedMessage?.text || '📎 Вложение'}</p>
           </div>
           <button onClick={(e) => { e.stopPropagation(); unpinMutation.mutate() }}
             className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-xs">
@@ -862,7 +879,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
                       const fullUrl = toFullUrl(item.url)
                       return (
                         <div key={i} className="aspect-square bg-slate-100 dark:bg-slate-800 overflow-hidden relative group cursor-pointer"
-                          onClick={() => { setAttachmentsOpen(false); setTimeout(() => handleScrollToMessage(item.msg.id), 100) }}>
+                          onClick={() => { setAttachmentsOpen(false); setTimeout(() => handleScrollToMessage(item.message_id), 100) }}>
                           {item.mime.startsWith('image/')
                             ? <img src={fullUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
                             : <div className="w-full h-full flex items-center justify-center text-2xl">🎬</div>
@@ -885,7 +902,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
                         <div key={i} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                           <span className="text-2xl shrink-0">{fileIcon(item.mime)}</span>
                           <div className="flex-1 min-w-0 cursor-pointer"
-                            onClick={() => { setAttachmentsOpen(false); setTimeout(() => handleScrollToMessage(item.msg.id), 100) }}>
+                            onClick={() => { setAttachmentsOpen(false); setTimeout(() => handleScrollToMessage(item.message_id), 100) }}>
                             <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{item.name}</p>
                             <p className="text-xs text-slate-400 mt-0.5">
                               {item.size > 0 ? `${(item.size / 1024).toFixed(0)} КБ` : ''}{' '}
@@ -921,7 +938,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
                             🎙 {item.duration != null ? `${Math.floor(item.duration / 60)}:${String(item.duration % 60).padStart(2, '0')}` : 'Голосовое'}
                           </p>
                           <button
-                            onClick={() => { setAttachmentsOpen(false); setTimeout(() => handleScrollToMessage(item.msg.id), 100) }}
+                            onClick={() => { setAttachmentsOpen(false); setTimeout(() => handleScrollToMessage(item.message_id), 100) }}
                             className="text-[10px] font-medium text-[#1B3A72] dark:text-blue-400 hover:underline cursor-pointer">
                             В чат ↗
                           </button>

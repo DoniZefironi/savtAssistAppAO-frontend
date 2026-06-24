@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { Chat, ChatMessage, MessageAttachment } from '@/types'
+import type { Chat, ChatAttachment, ChatMessage, MessageAttachment } from '@/types'
 
 export const chatsApi = {
   getChats: async (search?: string): Promise<Chat[]> => {
@@ -80,10 +80,15 @@ export const chatsApi = {
   getPinnedMessage: async (chatId: number): Promise<ChatMessage | null> => {
     try {
       const { data } = await apiClient.get<ChatMessage>(`/operator/chats/${chatId}/pinned`)
-      return data
+      return data ?? null
     } catch {
       return null
     }
+  },
+
+  getAttachments: async (chatId: number): Promise<ChatAttachment[]> => {
+    const { data } = await apiClient.get<ChatAttachment[]>(`/operator/chats/${chatId}/attachments`)
+    return data
   },
 
   clearHistory: async (chatId: number): Promise<void> => {

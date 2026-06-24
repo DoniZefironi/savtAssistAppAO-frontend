@@ -199,7 +199,7 @@ export function KbView() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 pt-6 pb-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
+      <div className="px-6 pt-6 pb-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
         <div className="flex items-end justify-between mb-4">
           <div>
             {total != null && <p className="text-xs text-slate-400 font-medium mb-0.5">{total} статей</p>}
@@ -227,7 +227,7 @@ export function KbView() {
           />
         </div>
 
-        <div className="flex flex-wrap gap-2 items-center">
+        <div className="flex flex-wrap gap-2 items-center mt-3">
           {SORT_OPTIONS.map(opt => {
             const active = sortBy === opt.value
             return (
@@ -246,10 +246,12 @@ export function KbView() {
               </button>
             )
           })}
+        </div>
 
+        <div className="flex flex-wrap gap-2 items-center mt-3">
+          <span className="text-xs text-slate-400 font-medium mr-0.5">Фильтр:</span>
           {docTags.length > 0 && (
             <>
-              <div className="w-px h-4 bg-slate-200 dark:bg-slate-700" />
               {docTags.map(tag => {
                 const active = selectedTagIds.includes(tag.id)
                 return (

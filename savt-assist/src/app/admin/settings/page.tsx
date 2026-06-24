@@ -16,7 +16,7 @@ export default function AdminSettingsPage() {
         <p className="text-sm text-slate-400 mt-0.5">Управление системой и инструменты администратора</p>
       </div>
 
-      <div className="px-6 py-6 space-y-4 max-w-3xl">
+      <div className="px-6 py-6 grid grid-cols-2 gap-4 items-start">
         <BroadcastSection />
         <BotSection />
       </div>
@@ -83,27 +83,17 @@ function BroadcastSection() {
           />
         </div>
 
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">Получатели:</span>
-            <div className="flex gap-1.5 flex-wrap">
-              {ROLES.map(r => (
-                <button
-                  key={String(r.value)}
-                  onClick={() => setRole(r.value)}
-                  className={cn(
-                    'px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
-                    role === r.value
-                      ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
-                      : 'bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-[#1B3A72] hover:text-[#1B3A72] dark:hover:border-blue-400 dark:hover:text-blue-400'
-                  )}
-                >
-                  {r.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">Получатели:</span>
+          <select
+            value={role ?? ''}
+            onChange={e => setRole(e.target.value || null)}
+            className="flex-1 h-9 px-3 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] cursor-pointer transition-colors"
+          >
+            {ROLES.map(r => (
+              <option key={String(r.value)} value={r.value ?? ''}>{r.label}</option>
+            ))}
+          </select>
           <Button
             onClick={() => sendMut.mutate()}
             disabled={!canSend}

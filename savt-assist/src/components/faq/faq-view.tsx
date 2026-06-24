@@ -192,7 +192,7 @@ export function FaqView() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 pt-6 pb-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
+      <div className="px-6 pt-6 pb-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
         <div className="flex items-end justify-between mb-4">
           <div>
             {total != null && <p className="text-xs text-slate-400 font-medium mb-0.5">{total} вопросов</p>}

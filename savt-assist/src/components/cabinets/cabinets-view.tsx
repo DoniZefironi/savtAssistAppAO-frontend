@@ -227,13 +227,12 @@ export function CabinetsView({ isAdmin }: Props) {
               <button
                 key={opt.value}
                 onClick={() => handleSortClick(opt.value)}
-                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium border transition-colors cursor-pointer ${
+                className={`flex items-center gap-1.5 px-4 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
                   active
                     ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
                     : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                 }`}
               >
-                {active && <span>✓</span>}
                 {opt.label}
                 {active && <span className="text-xs opacity-70">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
               </button>
@@ -241,7 +240,7 @@ export function CabinetsView({ isAdmin }: Props) {
           })}
         </div>
 
-        <div className="flex gap-1.5 mt-2 flex-wrap items-center">
+        <div className="flex gap-1.5 mt-3 flex-wrap items-center">
           <span className="text-xs text-slate-400 font-medium mr-0.5">Фильтр:</span>
           {([
             { key: 'has_documents', label: 'Документы', icon: '📄' },

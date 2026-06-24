@@ -1,5 +1,5 @@
 import Cookies from 'js-cookie'
-import { apiClient, API_URL } from './client'
+import { apiClient } from './client'
 import type { PaginatedResponse } from '@/types'
 
 export interface KbCategory {
@@ -54,7 +54,7 @@ export interface Tag {
 
 async function multipartPost<T>(path: string, form: FormData): Promise<T> {
   const token = Cookies.get('access_token')
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`/backend${path}`, {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: form,
@@ -108,7 +108,7 @@ export const kbApi = {
 
   downloadAttachment: async (articleId: number, attId: number, filename: string) => {
     const token = Cookies.get('access_token')
-    const url = `${API_URL}/kb/articles/${articleId}/attachments/${attId}/download`
+    const url = `/backend/kb/articles/${articleId}/attachments/${attId}/download`
     try {
       const res = await fetch(url, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},

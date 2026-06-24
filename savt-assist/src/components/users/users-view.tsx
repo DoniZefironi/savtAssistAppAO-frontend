@@ -154,7 +154,7 @@ export function UsersView() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 pt-6 pb-0 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
+      <div className="px-6 pt-6 pb-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
         <div className="flex items-end justify-between mb-4">
           <div>
             {total != null && (
@@ -179,8 +179,7 @@ export function UsersView() {
             </Button>
           </div>
         </div>
-
-        <div className="flex gap-0 -mb-px">
+        <div className="flex gap-0 mb-3">
           {ROLE_TABS.map(t => (
             <button
               key={t.value}
@@ -196,10 +195,7 @@ export function UsersView() {
             </button>
           ))}
         </div>
-      </div>
-
-      <div className="px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
-        <div className="relative">
+        <div className="relative mb-3">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
           <Input
             value={searchInput}
@@ -211,91 +207,92 @@ export function UsersView() {
             <button onClick={() => setSearchInput('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">✕</button>
           )}
         </div>
-      </div>
 
-      <div className="px-6 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0 flex flex-wrap items-center gap-2">
-        {STATUS_FILTERS.map(f => (
-          <button
-            key={f.value}
-            onClick={() => setStatusFilter(f.value)}
-            className={cn(
-              'px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
-              statusFilter === f.value
-                ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
-            )}
-          >
-            {f.label}
-          </button>
-        ))}
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          {SORT_OPTIONS.map(opt => {
+            const active = sortBy === opt.value
+            return (
+              <button
+                key={opt.value}
+                onClick={() => handleSortClick(opt.value)}
+                className={cn(
+                  'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+                  active
+                    ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
+                    : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                )}
+              >
+                {opt.label}
+                {active && <span className="opacity-70">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
+              </button>
+            )
+          })}
+        </div>
 
-        <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />
-
-        <button
-          onClick={() => setVerifiedFilter(v => v === true ? null : true)}
-          className={cn(
-            'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
-            verifiedFilter === true
-              ? 'bg-emerald-500 text-white border-emerald-500'
-              : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-emerald-400 hover:text-emerald-600'
-          )}
-        >
-          ✓ Верифицированные
-        </button>
-        <button
-          onClick={() => setVerifiedFilter(v => v === false ? null : false)}
-          className={cn(
-            'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
-            verifiedFilter === false
-              ? 'bg-rose-500 text-white border-rose-500'
-              : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-rose-400 hover:text-rose-500'
-          )}
-        >
-          ✗ Не верифицированные
-        </button>
-        <button
-          onClick={() => setPhoneVerifiedFilter(v => v === true ? null : true)}
-          className={cn(
-            'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
-            phoneVerifiedFilter === true
-              ? 'bg-emerald-500 text-white border-emerald-500'
-              : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-emerald-400 hover:text-emerald-600'
-          )}
-        >
-          📱 Номер подтверждён
-        </button>
-        <button
-          onClick={() => setPhoneVerifiedFilter(v => v === false ? null : false)}
-          className={cn(
-            'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
-            phoneVerifiedFilter === false
-              ? 'bg-rose-500 text-white border-rose-500'
-              : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-rose-400 hover:text-rose-500'
-          )}
-        >
-          📵 Номер не подтверждён
-        </button>
-
-        <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />
-
-        {SORT_OPTIONS.map(opt => {
-          const active = sortBy === opt.value
-          return (
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          <span className="text-xs text-slate-400 font-medium mr-0.5">Фильтр:</span>
+          {STATUS_FILTERS.map(f => (
             <button
-              key={opt.value}
-              onClick={() => handleSortClick(opt.value)}
+              key={f.value}
+              onClick={() => setStatusFilter(f.value)}
               className={cn(
-                'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
-                active
+                'px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+                statusFilter === f.value
                   ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
-                  : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
               )}
             >
-              {opt.label}
-              {active && <span className="opacity-70">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
+              {f.label}
             </button>
-          )
-        })}
+          ))}
+
+          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />
+
+          <button
+            onClick={() => setVerifiedFilter(v => v === true ? null : true)}
+            className={cn(
+              'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+              verifiedFilter === true
+                ? 'bg-emerald-500 text-white border-emerald-500'
+                : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-emerald-400 hover:text-emerald-600'
+            )}
+          >
+            ✓ Верифицированные
+          </button>
+          <button
+            onClick={() => setVerifiedFilter(v => v === false ? null : false)}
+            className={cn(
+              'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+              verifiedFilter === false
+                ? 'bg-rose-500 text-white border-rose-500'
+                : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-rose-400 hover:text-rose-500'
+            )}
+          >
+            ✗ Не верифицированные
+          </button>
+          <button
+            onClick={() => setPhoneVerifiedFilter(v => v === true ? null : true)}
+            className={cn(
+              'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+              phoneVerifiedFilter === true
+                ? 'bg-emerald-500 text-white border-emerald-500'
+                : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-emerald-400 hover:text-emerald-600'
+            )}
+          >
+            📱 Номер подтверждён
+          </button>
+          <button
+            onClick={() => setPhoneVerifiedFilter(v => v === false ? null : false)}
+            className={cn(
+              'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+              phoneVerifiedFilter === false
+                ? 'bg-rose-500 text-white border-rose-500'
+                : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-rose-400 hover:text-rose-500'
+            )}
+          >
+            📵 Номер не подтверждён
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-4 bg-slate-50 dark:bg-slate-900">

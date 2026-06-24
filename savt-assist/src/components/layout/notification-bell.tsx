@@ -1,52 +1,86 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { notificationsApi } from '@/lib/api/notifications'
-import type { Notification, NotifType } from '@/lib/api/notifications'
+import type { NotifType } from '@/lib/api/notifications'
+
+type Tab = 'unread' | 'read'
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const [tab, setTab] = useState<Tab>('unread')
+  const [dropPos, setDropPos] = useState<{ top: number; right: number } | null>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const dropRef = useRef<HTMLDivElement>(null)
   const qc = useQueryClient()
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['notifications'],
-    queryFn: () => notificationsApi.getList({ size: 50 }),
+  const { data: unreadData, isLoading: unreadLoading } = useQuery({
+    queryKey: ['notifications', 'unread'],
+    queryFn: () => notificationsApi.getList({ is_read: false, size: 50 }),
     refetchInterval: 10_000,
   })
 
+  const { data: readData, isLoading: readLoading } = useQuery({
+    queryKey: ['notifications', 'read'],
+    queryFn: () => notificationsApi.getList({ is_read: true, size: 50 }),
+    enabled: open && tab === 'read',
+    staleTime: 30_000,
+  })
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['notifications'] })
+
   const markReadMut = useMutation({
     mutationFn: notificationsApi.markRead,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+    onSuccess: invalidate,
   })
 
   const markAllMut = useMutation({
     mutationFn: notificationsApi.markAllRead,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+    onSuccess: invalidate,
+  })
+
+  const clearAllMut = useMutation({
+    mutationFn: notificationsApi.clearAll,
+    onSuccess: invalidate,
   })
 
   useEffect(() => {
+    if (!open) return
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      if (
+        dropRef.current && !dropRef.current.contains(e.target as Node) &&
+        buttonRef.current && !buttonRef.current.contains(e.target as Node)
+      ) setOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [])
+  }, [open])
 
-  const items = data?.items ?? []
-  const unreadCount = items.filter(n => !n.is_read).length
-  const hasUnread = unreadCount > 0
-
-  const handleItem = (n: Notification) => {
-    if (!n.is_read) markReadMut.mutate(n.id)
+  const handleToggle = () => {
+    if (!open && buttonRef.current) {
+      const r = buttonRef.current.getBoundingClientRect()
+      setDropPos({ top: r.bottom + 6, right: window.innerWidth - r.right })
+      setTab('unread')
+    }
+    setOpen(v => !v)
   }
 
+  const unreadItems = unreadData?.items ?? []
+  const readItems = readData?.items ?? []
+  const unreadCount = unreadData?.total ?? unreadItems.length
+  const hasUnread = unreadCount > 0
+
+  const currentItems = tab === 'unread' ? unreadItems : readItems
+  const currentLoading = tab === 'unread' ? unreadLoading : readLoading
+
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative">
       <button
-        onClick={() => setOpen(v => !v)}
+        ref={buttonRef}
+        onClick={handleToggle}
         title="Уведомления"
         className="relative w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
       >
@@ -56,49 +90,92 @@ export function NotificationBell() {
         )}
       </button>
 
-      {open && (
-        <div className="absolute right-0 top-full mt-1.5 w-96 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 overflow-hidden z-50">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-sm text-slate-800 dark:text-slate-100">Уведомления</span>
+      {open && dropPos && createPortal(
+        <div
+          ref={dropRef}
+          className="fixed w-96 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 overflow-hidden"
+          style={{ top: dropPos.top, right: dropPos.right, zIndex: 9999 }}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 pt-3 pb-0">
+            <span className="font-semibold text-sm text-slate-800 dark:text-slate-100">Уведомления</span>
+            <div className="flex items-center gap-3">
+              {currentItems.length > 0 && (
+                <button
+                  onClick={() => clearAllMut.mutate()}
+                  disabled={clearAllMut.isPending}
+                  className="text-xs text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 font-medium transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  Очистить всё
+                </button>
+              )}
+              {tab === 'unread' && hasUnread && (
+                <button
+                  onClick={() => markAllMut.mutate()}
+                  disabled={markAllMut.isPending}
+                  className="text-xs text-[#4A8FE7] hover:text-[#1B3A72] dark:text-blue-400 dark:hover:text-blue-300 font-medium transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  Прочитать все
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex gap-1 px-4 pt-2 pb-0">
+            <button
+              onClick={() => setTab('unread')}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-t-lg text-xs font-medium border-b-2 transition-colors cursor-pointer',
+                tab === 'unread'
+                  ? 'border-[#4A8FE7] text-[#1B3A72] dark:text-blue-300 bg-blue-50/50 dark:bg-blue-900/10'
+                  : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
+              )}
+            >
+              Новые
               {hasUnread && (
-                <span className="px-1.5 py-0.5 rounded-full text-xs font-bold bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400">
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 leading-none">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
-            </div>
-            {hasUnread && (
-              <button
-                onClick={() => markAllMut.mutate()}
-                disabled={markAllMut.isPending}
-                className="text-xs text-[#4A8FE7] hover:text-[#1B3A72] dark:text-blue-400 dark:hover:text-blue-300 font-medium transition-colors cursor-pointer disabled:opacity-50"
-              >
-                Прочитать все
-              </button>
-            )}
+            </button>
+            <button
+              onClick={() => setTab('read')}
+              className={cn(
+                'px-3 py-1.5 rounded-t-lg text-xs font-medium border-b-2 transition-colors cursor-pointer',
+                tab === 'read'
+                  ? 'border-[#4A8FE7] text-[#1B3A72] dark:text-blue-300 bg-blue-50/50 dark:bg-blue-900/10'
+                  : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
+              )}
+            >
+              Прочитанные
+            </button>
           </div>
 
-          <div className="max-h-[420px] overflow-y-auto">
-            {isLoading ? (
+          <div className="border-t border-slate-100 dark:border-slate-700" />
+
+          {/* List */}
+          <div className="max-h-105 overflow-y-auto">
+            {currentLoading ? (
               <div className="py-8 flex justify-center">
                 <SpinnerIcon className="w-5 h-5 text-slate-400 animate-spin" />
               </div>
-            ) : items.length === 0 ? (
+            ) : currentItems.length === 0 ? (
               <div className="py-10 flex flex-col items-center gap-2 text-slate-400">
                 <BellOffIcon className="w-8 h-8" />
-                <p className="text-sm">Нет уведомлений</p>
+                <p className="text-sm">{tab === 'unread' ? 'Нет новых уведомлений' : 'Нет прочитанных уведомлений'}</p>
               </div>
             ) : (
               <ul>
-                {items.map(n => (
+                {currentItems.map(n => (
                   <li key={n.id}>
                     <button
-                      onClick={() => handleItem(n)}
+                      onClick={() => { if (!n.is_read) markReadMut.mutate(n.id) }}
                       className={cn(
-                        'w-full flex items-start gap-3 px-4 py-3 text-left transition-colors cursor-pointer',
-                        n.is_read
-                          ? 'hover:bg-slate-50 dark:hover:bg-slate-700/40'
-                          : 'bg-blue-50/60 dark:bg-blue-900/10 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                        'w-full flex items-start gap-3 px-4 py-3 text-left transition-colors',
+                        tab === 'unread'
+                          ? 'bg-blue-50/60 dark:bg-blue-900/10 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer'
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-700/40 cursor-default'
                       )}
                     >
                       <div className={cn(
@@ -109,10 +186,15 @@ export function NotificationBell() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
-                          <p className={cn('text-sm leading-tight', n.is_read ? 'text-slate-600 dark:text-slate-300' : 'font-semibold text-slate-800 dark:text-slate-100')}>
+                          <p className={cn(
+                            'text-sm leading-tight',
+                            tab === 'unread'
+                              ? 'font-semibold text-slate-800 dark:text-slate-100'
+                              : 'text-slate-500 dark:text-slate-400'
+                          )}>
                             {n.title}
                           </p>
-                          {!n.is_read && (
+                          {tab === 'unread' && (
                             <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0 mt-1.5" />
                           )}
                         </div>
@@ -125,7 +207,8 @@ export function NotificationBell() {
               </ul>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

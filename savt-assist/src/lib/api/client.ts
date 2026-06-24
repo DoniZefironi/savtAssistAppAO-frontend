@@ -4,7 +4,7 @@ import Cookies from 'js-cookie'
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://helper.savt.by'
 
 export const apiClient = axios.create({
-  baseURL: API_URL,
+  baseURL: '/backend',
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -36,7 +36,7 @@ apiClient.interceptors.response.use(
       try {
         if (!refreshPromise) {
           refreshPromise = axios
-            .post(`${API_URL}/auth/refresh`, { refresh_token: refreshToken })
+            .post('/backend/auth/refresh', { refresh_token: refreshToken })
             .then((r) => r.data)
             .finally(() => { refreshPromise = null })
         }

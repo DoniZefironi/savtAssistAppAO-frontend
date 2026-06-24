@@ -60,6 +60,7 @@ export interface Chat {
   operator_requested: boolean
   wallpaper_id?: string | null
   wallpaper_url?: string | null
+  pinned_message_id?: number | null
 }
 
 export interface ChatMessage {
@@ -75,6 +76,18 @@ export interface ChatMessage {
   deleted_at: string | null
   attachments: MessageAttachment[]
   reactions: { emoji: string; user_id: number }[]
+}
+
+export interface ChatAttachment {
+  id: number
+  message_id: number
+  file_url: string
+  file_name: string
+  mime_type: string
+  file_size_bytes: number
+  duration_seconds: number | null
+  created_at: string
+  attachment_type: string
 }
 
 export interface MessageAttachment {

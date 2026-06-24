@@ -33,7 +33,7 @@ function toFullUrl(url: string) {
 
 async function uploadMultipart<T>(path: string, form: FormData): Promise<T> {
   const token = Cookies.get('access_token')
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`/backend${path}`, {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: form,

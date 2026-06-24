@@ -66,7 +66,7 @@ export function CabinetTypeCombobox({ value, onChange, placeholder = 'Венти
         <input
           value={search}
           onChange={handleInputChange}
-          onFocus={() => setOpen(true)}
+          onClick={() => setOpen(true)}
           placeholder={placeholder}
           autoComplete="off"
           className={cn(

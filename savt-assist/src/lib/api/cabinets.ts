@@ -93,116 +93,33 @@ export const cabinetsApi = {
     return data
   },
 
-  getCabinetsWithGeo: async (): Promise<{ cabinets: Cabinet[]; openCabinetIds: Set<number> }> => {
-    const [listRes, reqRes] = await Promise.allSettled([
-      apiClient.get('/admin/cabinets', { params: { size: 100 } }),
-      apiClient.get('/admin/service-requests', { params: { status: 'open', size: 100 } }),
-    ])
-
-    const listItems: { id: number }[] = listRes.status === 'fulfilled'
-      ? (listRes.value.data.items ?? [])
-      : []
-
-    // Fetch individual details to get latitude/longitude (not included in list response)
-    const detailResults = await Promise.allSettled(
-      listItems.map((c) => apiClient.get(`/admin/cabinets/${c.id}`).then((r) => r.data as Cabinet))
-    )
-    const cabinets = detailResults
-      .filter((r): r is PromiseFulfilledResult<Cabinet> => r.status === 'fulfilled')
-      .map((r) => r.value)
-
-    const openCabinetIds = new Set<number>()
-    if (reqRes.status === 'fulfilled') {
-      for (const req of reqRes.value.data.items ?? []) {
-        if (req.cabinet_id != null) openCabinetIds.add(req.cabinet_id)
-      }
-    }
-    return { cabinets, openCabinetIds }
+  getCabinetsGeo: async (): Promise<CabinetGeoItem[]> => {
+    const { data } = await apiClient.get('/admin/cabinets/geo')
+    return data
   },
 
-  getStats: async () => {
-    const [serviceReqs, docReqs, shareReqs, additionReqs, chats] = await Promise.all([
-      apiClient.get('/admin/service-requests', { params: { status: 'open', page: 1, size: 1 } }),
-      apiClient.get('/admin/document-requests', { params: { status: 'pending', page: 1, size: 1 } }),
-      apiClient.get('/admin/cabinet-requests/shares', { params: { status: 'pending', page: 1, size: 1 } }),
-      apiClient.get('/admin/cabinet-requests/additions', { params: { status: 'pending', page: 1, size: 1 } }),
-      apiClient.get('/operator/chats'),
-    ])
-
-    const getTotal = (data: unknown) => {
-      const d = data as Record<string, unknown>
-      if (typeof d?.total === 'number') return d.total
-      if (Array.isArray(d)) return d.length
-      return 0
-    }
-
-    const chatList = Array.isArray(chats.data)
-      ? (chats.data as { unread_count: number }[])
-      : []
-
+  getDashboard: async (): Promise<DashboardData> => {
+    const { data } = await apiClient.get('/admin/dashboard')
+    const s = data.stats ?? {}
+    const activity: ActivityItem[] = (data.recent_activity ?? []).map((item: DashboardActivityRaw) => ({
+      id: item.id,
+      type: item.type,
+      label: ACTIVITY_LABELS[item.type] ?? item.type,
+      user: item.user_full_name ?? null,
+      detail: item.detail ?? '',
+      status: item.status,
+      created_at: item.created_at,
+    }))
     return {
-      unreadChats: chatList.filter(c => c.unread_count > 0).length,
-      openServiceRequests: getTotal(serviceReqs.data),
-      pendingDocumentRequests: getTotal(docReqs.data),
-      pendingShareRequests: getTotal(shareReqs.data),
-      pendingAdditionRequests: getTotal(additionReqs.data),
+      stats: {
+        unreadChats: s.unread_chats ?? 0,
+        openServiceRequests: s.open_service_requests ?? 0,
+        pendingDocumentRequests: s.pending_document_requests ?? 0,
+        pendingShareRequests: s.pending_share_requests ?? 0,
+        pendingAdditionRequests: s.pending_addition_requests ?? 0,
+      },
+      activity,
     }
-  },
-
-  getRecentActivity: async (): Promise<ActivityItem[]> => {
-    const [serviceReqs, docReqs, shareReqs, additionReqs] = await Promise.allSettled([
-      apiClient.get('/admin/service-requests', { params: { page: 1, size: 6, sort_order: 'desc' } }),
-      apiClient.get('/admin/document-requests', { params: { page: 1, size: 6, sort_order: 'desc' } }),
-      apiClient.get('/admin/cabinet-requests/shares', { params: { page: 1, size: 6, sort_order: 'desc' } }),
-      apiClient.get('/admin/cabinet-requests/additions', { params: { page: 1, size: 6, sort_order: 'desc' } }),
-    ])
-
-    const items: ActivityItem[] = []
-
-    const extract = <T extends { id: number; created_at: string }>(
-      r: PromiseSettledResult<{ data: { items?: T[] } }>,
-      map: (item: T) => Omit<ActivityItem, 'id' | 'created_at'>
-    ) => {
-      if (r.status !== 'fulfilled') return
-      const list = r.value.data?.items ?? []
-      for (const item of list) {
-        items.push({ id: item.id, created_at: item.created_at, ...map(item) })
-      }
-    }
-
-    extract(serviceReqs as PromiseSettledResult<{ data: { items?: ServiceReqRaw[] } }>, (item) => ({
-      type: 'service',
-      label: 'Сервисная заявка',
-      user: item.user_full_name,
-      detail: item.cabinet_object_number ?? '',
-      status: item.status,
-    }))
-
-    extract(docReqs as PromiseSettledResult<{ data: { items?: DocReqRaw[] } }>, (item) => ({
-      type: 'document',
-      label: 'Запрос на документ',
-      user: item.user_full_name,
-      detail: item.doc_type ?? '',
-      status: item.status,
-    }))
-
-    extract(shareReqs as PromiseSettledResult<{ data: { items?: ShareReqRaw[] } }>, (item) => ({
-      type: 'share',
-      label: 'Доступ к ШУ',
-      user: item.user_full_name,
-      detail: item.cabinet_object_number ?? '',
-      status: item.status,
-    }))
-
-    extract(additionReqs as PromiseSettledResult<{ data: { items?: AdditionReqRaw[] } }>, (item) => ({
-      type: 'addition',
-      label: 'Добавление ШУ',
-      user: item.user_full_name,
-      detail: '',
-      status: item.status,
-    }))
-
-    return items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 20)
   },
 }
 
@@ -216,7 +133,42 @@ export interface ActivityItem {
   created_at: string
 }
 
-interface ServiceReqRaw  { id: number; created_at: string; user_full_name: string | null; cabinet_object_number: string | null; status: string }
-interface DocReqRaw      { id: number; created_at: string; user_full_name: string | null; doc_type: string | null; status: string }
-interface ShareReqRaw    { id: number; created_at: string; user_full_name: string | null; cabinet_object_number: string | null; status: string }
-interface AdditionReqRaw { id: number; created_at: string; user_full_name: string | null; status: string }
+export interface DashboardStats {
+  unreadChats: number
+  openServiceRequests: number
+  pendingDocumentRequests: number
+  pendingShareRequests: number
+  pendingAdditionRequests: number
+}
+
+export interface DashboardData {
+  stats: DashboardStats
+  activity: ActivityItem[]
+}
+
+interface DashboardActivityRaw {
+  id: number
+  type: 'service' | 'document' | 'share' | 'addition'
+  status: string
+  user_full_name?: string | null
+  detail?: string
+  created_at: string
+}
+
+export interface CabinetGeoItem {
+  id: number
+  object_number: string
+  admin_internal_name: string | null
+  warranty_ends_at: string | null
+  warranty_status: 'active' | 'expiring_soon' | 'expired' | null
+  latitude: number | null
+  longitude: number | null
+  has_open_requests: boolean
+}
+
+const ACTIVITY_LABELS: Record<string, string> = {
+  service: 'Сервисная заявка',
+  document: 'Запрос на документ',
+  share: 'Доступ к ШУ',
+  addition: 'Добавление ШУ',
+}

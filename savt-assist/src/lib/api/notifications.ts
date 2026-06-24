@@ -32,4 +32,7 @@ export const notificationsApi = {
 
   markAllRead: (): Promise<void> =>
     apiClient.post('/notifications/read-all').then(() => undefined),
+
+  clearAll: (): Promise<void> =>
+    apiClient.delete('/notifications').then(() => undefined),
 }
