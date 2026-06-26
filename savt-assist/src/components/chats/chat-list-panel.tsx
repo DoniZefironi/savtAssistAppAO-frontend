@@ -1,12 +1,18 @@
 'use client'
 
+import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
+import { chatsApi } from '@/lib/api/chats'
+import type { MessageSearchResult } from '@/lib/api/chats'
+import { useChatNavStore } from '@/lib/store/chat-nav'
 import type { Chat } from '@/types'
 
 interface Props {
   chats: Chat[]
   selectedId: number | null
   onSelect: (chat: Chat) => void
+  onSelectChatId: (id: number) => void
   loading: boolean
   compact?: boolean
   searchValue: string
@@ -14,12 +20,30 @@ interface Props {
   onCollapse?: () => void
 }
 
-export function ChatListPanel({ chats, selectedId, onSelect, loading, compact, searchValue, onSearchChange, onCollapse }: Props) {
+export function ChatListPanel({ chats, selectedId, onSelect, onSelectChatId, loading, compact, searchValue, onSearchChange, onCollapse }: Props) {
+  const setPending = useChatNavStore((s) => s.setPending)
   const sorted = [...chats].sort((a, b) => {
     if (a.operator_requested && !b.operator_requested) return -1
     if (!a.operator_requested && b.operator_requested) return 1
     return new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime()
   })
+
+  const trimmed = searchValue.trim()
+
+  const { data: msgData, isFetching: msgLoading } = useQuery({
+    queryKey: ['global-search', trimmed],
+    queryFn: () => chatsApi.searchAllMessages(trimmed, 1, 50),
+    enabled: trimmed.length >= 2,
+    staleTime: 30_000,
+  })
+  const msgResults = useMemo(() => {
+    const seen = new Set<number>()
+    return (msgData?.items ?? [] as MessageSearchResult[]).filter((item: MessageSearchResult) => {
+      if (seen.has(item.chat_id)) return false
+      seen.add(item.chat_id)
+      return true
+    })
+  }, [msgData?.items])
 
   if (compact) {
     return (
@@ -87,21 +111,76 @@ export function ChatListPanel({ chats, selectedId, onSelect, loading, compact, s
           </div>
         )}
 
-        {!loading && sorted.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-32 text-slate-400 text-sm gap-2">
-            <span className="text-3xl">💬</span>
-            {searchValue ? 'Ничего не найдено' : 'Нет чатов'}
-          </div>
-        )}
+        {!loading && trimmed.length >= 2 ? (
+          <>
+            {/* Chats section */}
+            {sorted.length > 0 && (
+              <>
+                <div className="px-3 py-1.5 mt-1">
+                  <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Чаты</span>
+                </div>
+                {sorted.map((chat) => (
+                  <ChatRow key={chat.id} chat={chat} selected={chat.id === selectedId} onSelect={() => onSelect(chat)} />
+                ))}
+              </>
+            )}
 
-        {!loading && sorted.map((chat) => (
-          <ChatRow
-            key={chat.id}
-            chat={chat}
-            selected={chat.id === selectedId}
-            onSelect={() => onSelect(chat)}
-          />
-        ))}
+            {/* Messages section */}
+            <div className="px-3 py-1.5 mt-1">
+              <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Сообщения</span>
+            </div>
+            {msgLoading ? (
+              <div className="flex justify-center py-4">
+                <div className="w-4 h-4 border-2 border-[#1B3A72] border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : msgResults.length === 0 ? (
+              <div className="px-3 py-3 text-xs text-slate-400">Сообщения не найдены</div>
+            ) : (
+              msgResults.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => { setPending(item.chat_id, item.id); onSearchChange(''); onSelectChatId(item.chat_id) }}
+                  className="w-full text-left flex items-start gap-3 px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer border-b border-slate-50 dark:border-slate-800"
+                >
+                  <div className="w-10 h-10 rounded-full bg-[#1B3A72]/10 dark:bg-blue-900/30 flex items-center justify-center shrink-0 text-base mt-0.5">
+                    {item.chat_type === 'cabinet' ? '📦' : '💬'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1 mb-0.5">
+                      <span className="text-xs font-semibold text-[#1B3A72] dark:text-blue-400 truncate">
+                        {item.chat_type === 'cabinet' && item.cabinet_object_number
+                          ? `ШУ ${item.cabinet_object_number}`
+                          : item.sender_name}
+                      </span>
+                      <span className="text-[10px] text-slate-400 shrink-0">{formatTime(item.created_at)}</span>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-0.5 truncate">{item.sender_name}</p>
+                    <p className="text-sm text-slate-700 dark:text-slate-200 line-clamp-2 leading-snug">{item.text}</p>
+                  </div>
+                </button>
+              ))
+            )}
+
+            {!sorted.length && !msgLoading && msgResults.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-32 text-slate-400 text-sm gap-2">
+                <span className="text-3xl">🔍</span>
+                Ничего не найдено
+              </div>
+            )}
+          </>
+        ) : !loading && (
+          <>
+            {sorted.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-32 text-slate-400 text-sm gap-2">
+                <span className="text-3xl">💬</span>
+                Нет чатов
+              </div>
+            )}
+            {sorted.map((chat) => (
+              <ChatRow key={chat.id} chat={chat} selected={chat.id === selectedId} onSelect={() => onSelect(chat)} />
+            ))}
+          </>
+        )}
       </div>
     </div>
   )

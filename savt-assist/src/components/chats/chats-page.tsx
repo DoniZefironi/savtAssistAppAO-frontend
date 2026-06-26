@@ -6,6 +6,7 @@ import { ChatListPanel } from './chat-list-panel'
 import { ChatConversation } from './chat-conversation'
 import { chatsApi } from '@/lib/api/chats'
 import { cabinetsApi } from '@/lib/api/cabinets'
+import { useChatNavStore } from '@/lib/store/chat-nav'
 import type { Chat, ChatMessage } from '@/types'
 
 const DEFAULT_WIDTH = 288
@@ -17,6 +18,9 @@ export function ChatsPage() {
   const qc = useQueryClient()
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null)
   const [showConversation, setShowConversation] = useState(false)
+
+  const pendingChatId = useChatNavStore((s) => s.pendingChatId)
+  const setPendingChatId = useChatNavStore((s) => s.setPendingChatId)
   const [chatSearchInput, setChatSearchInput] = useState('')
   const [chatSearch, setChatSearch] = useState('')
 
@@ -114,6 +118,16 @@ export function ChatsPage() {
 
   const enrichedSelected = selectedChat ? (chats.find((c) => c.id === selectedChat.id) ?? selectedChat) : null
 
+  useEffect(() => {
+    if (!pendingChatId || chats.length === 0) return
+    const chat = chats.find((c) => c.id === pendingChatId)
+    if (chat) {
+      setSelectedChat(chat)
+      setShowConversation(true)
+      setPendingChatId(null)
+    }
+  }, [pendingChatId, chats])
+
   const handleSelect = useCallback((chat: Chat) => {
     setSelectedChat(chat)
     setShowConversation(true)
@@ -132,6 +146,11 @@ export function ChatsPage() {
           chats={chats}
           selectedId={enrichedSelected?.id ?? null}
           onSelect={handleSelect}
+          onSelectChatId={(id) => {
+            const chat = chats.find((c) => c.id === id)
+            if (chat) handleSelect(chat)
+            else setPendingChatId(id)
+          }}
           loading={isLoading}
           compact={isCompact && isDesktop}
           searchValue={chatSearchInput}

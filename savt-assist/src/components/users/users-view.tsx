@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { cn, isSuperadminRole } from '@/lib/utils'
 import { usersApi } from '@/lib/api/users'
 import type { AdminUser } from '@/lib/api/users'
 import { useAuthStore } from '@/lib/store/auth'
@@ -29,13 +29,13 @@ type SortValue = (typeof SORT_OPTIONS)[number]['value']
 type RoleTab = 'user' | 'operator' | 'admin'
 
 function roleLabel(r: string) {
-  if (r === 'superadmin') return 'Суперадмин'
+  if (isSuperadminRole(r)) return 'Суперадмин'
   if (r === 'admin') return 'Администратор'
   if (r === 'operator') return 'Оператор'
   return 'Пользователь'
 }
 function roleCls(r: string) {
-  if (r === 'superadmin') return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+  if (isSuperadminRole(r)) return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
   if (r === 'admin') return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
   if (r === 'operator') return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
   return 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
@@ -70,7 +70,8 @@ function getListFn(role: RoleTab) {
 
 export function UsersView() {
   const currentUser = useAuthStore(s => s.user)
-  const isSuperadmin = currentUser?.role === 'superadmin'
+  const isSuperadmin = isSuperadminRole(currentUser?.role)
+  const isReadOnly = currentUser?.role === 'operator'
 
   const [roleTab, setRoleTab] = useState<RoleTab>('user')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -148,7 +149,7 @@ export function UsersView() {
 
   const ROLE_TABS: { value: RoleTab; label: string }[] = [
     { value: 'user', label: 'Пользователи' },
-    { value: 'operator', label: 'Операторы' },
+    ...(!isReadOnly ? [{ value: 'operator' as RoleTab, label: 'Операторы' }] : []),
     ...(isSuperadmin ? [{ value: 'admin' as RoleTab, label: 'Администраторы' }] : []),
   ]
 
@@ -167,16 +168,18 @@ export function UsersView() {
               <button onClick={() => { setView('list'); localStorage.setItem('view-mode-users', 'list') }} title="Список" className={`p-2 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon /></button>
               <button onClick={() => { setView('grid'); localStorage.setItem('view-mode-users', 'grid') }} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon /></button>
             </div>
-            {isSuperadmin && (
+            {!isReadOnly && isSuperadmin && (
               <Button onClick={() => setCreateAdminOpen(true)} className="bg-purple-600 hover:bg-purple-700 cursor-pointer dark:text-white">
                 <PlusIcon className="w-4 h-4 mr-1.5" />
                 Создать администратора
               </Button>
             )}
-            <Button onClick={() => setCreateOperatorOpen(true)} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white">
-              <PlusIcon className="w-4 h-4 mr-1.5" />
-              Создать оператора
-            </Button>
+            {!isReadOnly && (
+              <Button onClick={() => setCreateOperatorOpen(true)} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white">
+                <PlusIcon className="w-4 h-4 mr-1.5" />
+                Создать оператора
+              </Button>
+            )}
           </div>
         </div>
         <div className="flex gap-0 mb-3">
@@ -370,16 +373,21 @@ export function UsersView() {
 
 export function UserDialog({ userId, role, onClose }: { userId: number; role: string; onClose: () => void }) {
   const qc = useQueryClient()
+  const currentUser = useAuthStore(s => s.user)
+  const isReadOnly = currentUser?.role === 'operator'
   const [banStep, setBanStep] = useState(false)
   const [banReason, setBanReason] = useState('')
   const [deleteStep, setDeleteStep] = useState(false)
   const [selectedCabinetId, setSelectedCabinetId] = useState<number | null>(null)
 
-  const canFetchDetail = role === 'user' || role === 'operator'
+  // Админ/суперадмин в списке — это staff-карточка: только просмотр, без действий
+  // (на управление админами серверных эндпоинтов нет, есть лишь GET /admin/admins/{id}).
+  const isStaffAdmin = role === 'admin' || isSuperadminRole(role)
+  const canFetchDetail = role === 'user' || role === 'operator' || isStaffAdmin
 
   const { data: user, isLoading } = useQuery({
     queryKey: ['admin-user', userId],
-    queryFn: () => usersApi.getOne(userId),
+    queryFn: () => isStaffAdmin ? usersApi.getAdminOne(userId) : usersApi.getOne(userId),
     enabled: canFetchDetail,
   })
 
@@ -484,7 +492,7 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
               <DRow label="Зарегистрирован" value={fmtDate(user.created_at)} />
             </div>
 
-            {user.cabinets.length > 0 && (
+            {(user.cabinets?.length ?? 0) > 0 && (
               <div className="px-6 py-3 border-t border-slate-100 dark:border-slate-700">
                 <p className="text-xs text-slate-400 mb-2">Шкафы управления ({user.cabinets.length})</p>
                 <div className="space-y-1.5">
@@ -513,7 +521,7 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
             )}
           </div>
 
-          <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 shrink-0">
+          {!isReadOnly && !isStaffAdmin && <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 shrink-0">
             {deleteStep ? (
               <div className="space-y-2">
                 <p className="text-sm text-slate-600 dark:text-slate-300">
@@ -578,7 +586,7 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
                 )}
               </div>
             )}
-          </div>
+          </div>}
         </div>
       )}
       {selectedCabinetId !== null && (
@@ -667,7 +675,7 @@ function CreateOperatorModal({ onClose }: { onClose: () => void }) {
           <StaffField label="ФИО" value={fullName} onChange={setFullName} placeholder="Иванов Иван Иванович" />
         </div>
         <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end shrink-0">
-          <Button onClick={() => createMut.mutate()} disabled={!canSave} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer">
+          <Button onClick={() => createMut.mutate()} disabled={!canSave} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white">
             {createMut.isPending ? 'Создание...' : 'Создать'}
           </Button>
         </div>
@@ -718,7 +726,7 @@ function CreateStaffModal({ onClose }: { onClose: () => void }) {
           <StaffField label="ФИО" value={fullName} onChange={setFullName} placeholder="Иванов Иван Иванович" />
         </div>
         <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end shrink-0">
-          <Button onClick={() => createMut.mutate()} disabled={!canSave} className="bg-purple-600 hover:bg-purple-700 cursor-pointer">
+          <Button onClick={() => createMut.mutate()} disabled={!canSave} className="bg-purple-600 hover:bg-purple-700 cursor-pointer dark:text-white">
             {createMut.isPending ? 'Создание...' : 'Создать'}
           </Button>
         </div>

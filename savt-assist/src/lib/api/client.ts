@@ -6,6 +6,18 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://helper.savt.by
 export const apiClient = axios.create({
   baseURL: '/backend',
   headers: { 'Content-Type': 'application/json' },
+  paramsSerializer: (params) => {
+    const searchParams = new URLSearchParams()
+    for (const [key, val] of Object.entries(params)) {
+      if (val === undefined || val === null) continue
+      if (Array.isArray(val)) {
+        for (const item of val) searchParams.append(key, String(item))
+      } else {
+        searchParams.append(key, String(val))
+      }
+    }
+    return searchParams.toString()
+  },
 })
 
 apiClient.interceptors.request.use((config) => {

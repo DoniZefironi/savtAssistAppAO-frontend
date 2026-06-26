@@ -10,22 +10,25 @@ import { useAuthStore } from '@/lib/store/auth'
 import { authApi } from '@/lib/api/auth'
 import Image from 'next/image'
 
-const navItems = [
-  { href: '/admin/dashboard', label: 'Дашборд', icon: SquaresIcon },
-  { href: '/admin/cabinets', label: 'Шкафы управления', icon: BoardIcon },
-  { href: '/admin/requests', label: 'Заявки', icon: ClipboardIcon },
-  { href: '/admin/chats', label: 'Чаты', icon: ChatIcon },
-  { href: '/admin/users', label: 'Пользователи', icon: UsersIcon },
-  { href: '/admin/kb', label: 'База знаний', icon: BookIcon },
-  { href: '/admin/faq', label: 'FAQ', icon: QuestionIcon },
-  { href: '/admin/settings', label: 'Настройки', icon: SettingsIcon },
-]
-
 export function AdminSidebar({ mobileOpen, onMobileClose }: { mobileOpen: boolean; onMobileClose: () => void }) {
   const [collapsed, setCollapsed] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
   const { user, logout } = useAuthStore()
+
+  const isOperator = user?.role === 'operator'
+  const base = isOperator ? '/operator' : '/admin'
+
+  const navItems = [
+    { href: `${base}/dashboard`, label: 'Дашборд', icon: SquaresIcon },
+    { href: `${base}/cabinets`, label: 'Шкафы управления', icon: BoardIcon },
+    { href: `${base}/requests`, label: 'Заявки', icon: ClipboardIcon },
+    { href: `${base}/chats`, label: 'Чаты', icon: ChatIcon },
+    { href: `${base}/users`, label: 'Пользователи', icon: UsersIcon },
+    { href: `${base}/kb`, label: 'База знаний', icon: BookIcon },
+    { href: `${base}/faq`, label: 'FAQ', icon: QuestionIcon },
+    ...(!isOperator ? [{ href: `${base}/settings`, label: 'Настройки', icon: SettingsIcon }] : []),
+  ]
 
   const handleLogout = async () => {
     try {
@@ -74,7 +77,7 @@ export function AdminSidebar({ mobileOpen, onMobileClose }: { mobileOpen: boolea
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-white font-bold text-sm leading-none">SavtAssist</p>
-                <p className="text-white/50 text-xs mt-0.5">Admin Panel</p>
+                <p className="text-white/50 text-xs mt-0.5">{isOperator ? 'Оператор' : 'Admin Panel'}</p>
               </div>
               <button
                 onClick={() => setCollapsed(true)}
@@ -115,7 +118,7 @@ export function AdminSidebar({ mobileOpen, onMobileClose }: { mobileOpen: boolea
           <div />
         ) : (
           <div className='pb-4 pl-4'>
-            <Link href='/admin/dashboard' onClick={onMobileClose} className='cursor-pointer'>
+            <Link href={`${base}/dashboard`} onClick={onMobileClose} className='cursor-pointer'>
               <Image
                 src='/logo-small.png'
                 width={225}

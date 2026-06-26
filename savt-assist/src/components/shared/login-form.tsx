@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { authApi } from '@/lib/api/auth'
 import { useAuthStore } from '@/lib/store/auth'
+import { isEndUserRole } from '@/lib/utils'
 
 export function LoginForm() {
   const router = useRouter()
@@ -18,22 +19,35 @@ export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!login.trim() || !password) return
+    const fd = new FormData(e.currentTarget)
+    const loginVal = (fd.get('login') as string)?.trim() || login.trim()
+    const passVal = (fd.get('password') as string) || password
+
+    if (!loginVal || !passVal) return
 
     setLoading(true)
     try {
-      const tokens = await authApi.login(login.trim(), password)
+      const tokens = await authApi.login(loginVal, passVal)
       Cookies.set('access_token', tokens.access_token, { sameSite: 'strict' })
       Cookies.set('refresh_token', tokens.refresh_token, { sameSite: 'strict' })
 
       const user = await authApi.me()
+
+      // Эндпоинт /auth/admin-login сам пропускает только персонал, поэтому роль
+      // обычного пользователя сюда дойти не должна. Отсекаем её на всякий случай,
+      // а операторов уводим в свою панель. Остальные staff-роли (admin, superadmin
+      // и любые их варианты написания) — в админ-панель.
+      if (isEndUserRole(user.role)) {
+        toast.error('Доступ запрещён. Только для администраторов и операторов.')
+        return
+      }
+
       setUser(user)
 
-      if (user.role === 'admin') router.push('/admin/dashboard')
-      else if (user.role === 'operator') router.push('/operator/dashboard')
-      else toast.error('Доступ запрещён. Только для администраторов и операторов.')
+      if (user.role === 'operator') router.push('/operator/dashboard')
+      else router.push('/admin/dashboard')
     } catch {
       toast.error('Неверный логин или пароль')
     } finally {
@@ -42,20 +56,19 @@ export function LoginForm() {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-2xl p-8">
-      <h2 className="text-xl font-bold text-center text-slate-800 mb-1">Вход в аккаунт</h2>
-      <p className="text-sm text-slate-400 text-center mb-7">Введите логин и пароль</p>
+    <div className="bg-white/95 rounded-2xl shadow-2xl p-8">
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="login" className="text-slate-600 text-sm">Логин</Label>
           <Input
             id="login"
+            name="login"
             value={login}
             onChange={(e) => setLogin(e.target.value)}
             placeholder="Введите логин"
             autoComplete="username"
-            className="h-12 bg-slate-50 border-slate-200 focus-visible:ring-[#4A8FE7]"
+            className="h-12 bg-slate-50 border-slate-200 focus-visible:ring-[#4A8FE7] text-black"
           />
         </div>
 
@@ -64,12 +77,13 @@ export function LoginForm() {
           <div className="relative">
             <Input
               id="password"
+              name="password"
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Введите пароль"
               autoComplete="current-password"
-              className="h-12 bg-slate-50 border-slate-200 focus-visible:ring-[#4A8FE7] pr-10"
+              className="h-12 bg-slate-50 border-slate-200 focus-visible:ring-[#4A8FE7] pr-10 text-black"
             />
             <button
               type="button"

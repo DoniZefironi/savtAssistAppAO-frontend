@@ -20,23 +20,23 @@ import { formatDate } from '@/lib/warranty'
 import { cn } from '@/lib/utils'
 import type { Cabinet, ServiceRequest } from '@/types'
 import { LocationPicker } from '@/components/map/location-picker'
+import { useAuthStore } from '@/lib/store/auth'
 
 type Tab = 'info' | 'docs' | 'photos' | 'users' | 'requests'
 
 interface Props {
   cabinetId: number | null
-  isAdmin: boolean
+  isAdmin?: boolean
   initialMode?: 'view' | 'edit'
   onClose: () => void
 }
 
-export function CabinetDetailDialog({ cabinetId, isAdmin, initialMode = 'view', onClose }: Props) {
+export function CabinetDetailDialog({ cabinetId, initialMode = 'view', onClose }: Props) {
   return (
     <AppModal open={cabinetId !== null} onClose={onClose}>
       {cabinetId !== null && (
         <DetailContent
           cabinetId={cabinetId}
-          isAdmin={isAdmin}
           initialMode={initialMode}
         />
       )}
@@ -44,11 +44,12 @@ export function CabinetDetailDialog({ cabinetId, isAdmin, initialMode = 'view', 
   )
 }
 
-function DetailContent({ cabinetId, isAdmin, initialMode }: {
+function DetailContent({ cabinetId, initialMode }: {
   cabinetId: number
-  isAdmin: boolean
   initialMode: 'view' | 'edit'
 }) {
+  const currentUser = useAuthStore(s => s.user)
+  const isAdmin = currentUser?.role !== 'operator'
   const qc = useQueryClient()
   const [tab, setTab] = useState<Tab>('info')
   const [editing, setEditing] = useState(initialMode === 'edit')
@@ -203,7 +204,7 @@ function DetailContent({ cabinetId, isAdmin, initialMode }: {
               <Button
                 onClick={handleSave}
                 disabled={updateMutation.isPending}
-                className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
+                className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white"
               >
                 {updateMutation.isPending ? 'Сохранение...' : 'Сохранить'}
               </Button>
@@ -500,7 +501,7 @@ function DocRow({ doc, allTags, isAdmin, onOpen, onDownload, onDelete, deleting 
 
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={cancelEdit} className="h-6 text-xs px-2 cursor-pointer">Отмена</Button>
-            <Button onClick={() => tagMut.mutate()} disabled={tagMut.isPending} className="h-6 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer">
+            <Button onClick={() => tagMut.mutate()} disabled={tagMut.isPending} className="h-6 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white">
               {tagMut.isPending ? 'Сохранение...' : 'Сохранить'}
             </Button>
           </div>
@@ -1225,7 +1226,7 @@ function CabinetTagsRow({ cabinetId, cabinet, isAdmin }: {
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={cancel} className="h-6 text-xs px-2 cursor-pointer">Отмена</Button>
-              <Button onClick={() => tagMut.mutate()} disabled={tagMut.isPending} className="h-6 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer">
+              <Button onClick={() => tagMut.mutate()} disabled={tagMut.isPending} className="h-6 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white">
                 {tagMut.isPending ? 'Сохранение...' : 'Сохранить'}
               </Button>
             </div>
@@ -1349,6 +1350,8 @@ function ServiceRequestRow({ req, onSelect, onStatusChange, pending }: {
   pending: boolean
 }) {
   const next = REQUEST_STATUS_NEXT[req.status]
+  const currentUser = useAuthStore(s => s.user)
+  const canChangeStatus = currentUser?.role !== 'operator'
 
   return (
     <div className="px-6 py-3 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group">
@@ -1372,7 +1375,7 @@ function ServiceRequestRow({ req, onSelect, onStatusChange, pending }: {
           <span className="text-xs text-slate-400">{formatDate(req.created_at)}</span>
         </div>
       </button>
-      {next && (
+      {next && canChangeStatus && (
         <button
           onClick={(e) => { e.stopPropagation(); onStatusChange(next) }}
           disabled={pending}

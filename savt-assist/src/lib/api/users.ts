@@ -60,6 +60,10 @@ export const usersApi = {
   getOne: (id: number): Promise<AdminUserDetail> =>
     apiClient.get(`/admin/users/${id}`).then(r => r.data),
 
+  /** Деталь админа — только для суперадмина (GET /admin/admins/{id}). */
+  getAdminOne: (id: number): Promise<AdminUserDetail> =>
+    apiClient.get(`/admin/admins/${id}`).then(r => r.data),
+
   createOperator: (data: { login: string; password: string; full_name?: string | null }): Promise<AdminUser> =>
     apiClient.post('/admin/operators', data).then(r => r.data),
 

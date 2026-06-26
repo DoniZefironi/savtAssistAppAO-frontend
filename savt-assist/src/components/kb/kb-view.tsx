@@ -10,6 +10,7 @@ import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { API_URL } from '@/lib/api/client'
+import { useAuthStore } from '@/lib/store/auth'
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -44,6 +45,8 @@ const CAT_MAX = 360
 const CAT_SNAP = 56  
 
 export function KbView() {
+  const currentUser = useAuthStore(s => s.user)
+  const isReadOnly = currentUser?.role === 'operator'
   const qc = useQueryClient()
   const sentinelRef = useRef<HTMLDivElement>(null)
 
@@ -107,6 +110,7 @@ export function KbView() {
   const [editArticle, setEditArticle] = useState<KbArticleList | null>(null)
   const [createArticleOpen, setCreateArticleOpen] = useState(false)
   const [createCatOpen, setCreateCatOpen] = useState(false)
+  const [createCatParentId, setCreateCatParentId] = useState<number | null>(null)
   const [editCat, setEditCat] = useState<KbCategory | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirm | null>(null)
 
@@ -119,6 +123,8 @@ export function KbView() {
 
   const categoriesQ = useQuery({ queryKey: ['kb-categories'], queryFn: kbApi.listCategories })
   const tagsQ = useQuery({ queryKey: ['kb-tags', 'document'], queryFn: () => kbApi.listTags('document') })
+  const docTags = tagsQ.data ?? []
+  const toggleTag = (id: number) => setSelectedTagIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
 
   const articlesQ = useInfiniteQuery({
     queryKey: ['kb-articles', selectedCatId, search, sortBy, sortOrder, selectedTagIds],
@@ -151,11 +157,21 @@ export function KbView() {
   }, [articlesQ.hasNextPage, articlesQ.isFetchingNextPage, articlesQ.fetchNextPage])
 
   const deleteCatMut = useMutation({
-    mutationFn: (id: number) => kbApi.deleteCategory(id),
+    mutationFn: async (id: number) => {
+      const children = categories.filter(c => c.parent_id === id)
+      for (const child of children) {
+        await kbApi.deleteCategory(child.id)
+      }
+      await kbApi.deleteCategory(id)
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['kb-categories'] })
       qc.invalidateQueries({ queryKey: ['kb-articles'] })
-      if (selectedCatId === deleteConfirm?.id) setSelectedCatId(null)
+      const deletedId = deleteConfirm?.id
+      if (deletedId != null) {
+        const childIds = categories.filter(c => c.parent_id === deletedId).map(c => c.id)
+        if (selectedCatId === deletedId || childIds.includes(selectedCatId!)) setSelectedCatId(null)
+      }
       toast.success('Категория удалена')
       setDeleteConfirm(null)
     },
@@ -183,14 +199,7 @@ export function KbView() {
     else { setSortBy(val); setSortOrder('desc') }
   }
 
-  const toggleTag = (id: number) => {
-    setSelectedTagIds(prev =>
-      prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]
-    )
-  }
-
   const categories = categoriesQ.data ?? []
-  const docTags = tagsQ.data ?? []
   const allArticles = articlesQ.data?.pages.flatMap(p => p.items) ?? []
   const total = articlesQ.data?.pages[0]?.total
 
@@ -210,10 +219,12 @@ export function KbView() {
               <button onClick={() => { setView('list'); localStorage.setItem('view-mode-kb', 'list') }} title="Список" className={`p-1.5 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon className="w-4 h-4" /></button>
               <button onClick={() => { setView('grid'); localStorage.setItem('view-mode-kb', 'grid') }} title="Сетка" className={`p-1.5 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon className="w-4 h-4" /></button>
             </div>
-            <Button onClick={() => setCreateArticleOpen(true)} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white">
-              <PlusIcon className="w-4 h-4 mr-1.5" />
-              Новая статья
-            </Button>
+            {!isReadOnly && (
+              <Button onClick={() => setCreateArticleOpen(true)} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white">
+                <PlusIcon className="w-4 h-4 mr-1.5" />
+                Новая статья
+              </Button>
+            )}
           </div>
         </div>
 
@@ -248,30 +259,34 @@ export function KbView() {
           })}
         </div>
 
-        <div className="flex flex-wrap gap-2 items-center mt-3">
-          <span className="text-xs text-slate-400 font-medium mr-0.5">Фильтр:</span>
-          {docTags.length > 0 && (
-            <>
-              {docTags.map(tag => {
-                const active = selectedTagIds.includes(tag.id)
-                return (
-                  <button
-                    key={tag.id}
-                    onClick={() => toggleTag(tag.id)}
-                    className={cn(
-                      'px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
-                      active
-                        ? 'bg-[#4A8FE7] text-white border-[#4A8FE7]'
-                        : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300'
-                    )}
-                  >
-                    {tag.name}
-                  </button>
-                )
-              })}
-            </>
-          )}
-        </div>
+        {docTags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 items-center mt-2">
+            <span className="text-xs text-slate-400 shrink-0">Теги:</span>
+            {docTags.map(tag => {
+              const active = selectedTagIds.includes(tag.id)
+              return (
+                <button
+                  key={tag.id}
+                  onClick={() => toggleTag(tag.id)}
+                  className={cn(
+                    'px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+                    active
+                      ? 'bg-[#1B3A72]/10 text-[#1B3A72] dark:text-blue-400 border-[#1B3A72]/30 dark:border-blue-400/30'
+                      : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                  )}
+                >
+                  #{tag.name}
+                </button>
+              )
+            })}
+            {selectedTagIds.length > 0 && (
+              <button onClick={() => setSelectedTagIds([])} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer ml-1">
+                сбросить
+              </button>
+            )}
+          </div>
+        )}
+
       </div>
 
       <div className="flex flex-1 overflow-hidden">
@@ -302,13 +317,19 @@ export function KbView() {
                     selected={selectedCatId === root.id}
                     indent={0}
                     onSelect={() => handleCatSelect(root.id)}
-                    onEdit={() => setEditCat(root)}
-                    onDelete={() => setDeleteConfirm({
-                      type: 'category',
-                      id: root.id,
-                      name: root.name,
-                      warning: 'Все статьи и вложения в этой категории будут удалены безвозвратно.',
-                    })}
+                    onEdit={!isReadOnly ? () => setEditCat(root) : undefined}
+                    onAddChild={!isReadOnly ? () => { setCreateCatParentId(root.id); setCreateCatOpen(true) } : undefined}
+                    onDelete={!isReadOnly ? () => {
+                      const childCount = childrenOf(root.id).length
+                      setDeleteConfirm({
+                        type: 'category',
+                        id: root.id,
+                        name: root.name,
+                        warning: childCount > 0
+                          ? `Также будут удалены ${childCount} подкатегор${childCount === 1 ? 'ия' : 'ии'} и все статьи.`
+                          : 'Все статьи и вложения в этой категории будут удалены безвозвратно.',
+                      })
+                    } : undefined}
                   />
                   {children.map(child => (
                     <CategoryRow
@@ -317,13 +338,13 @@ export function KbView() {
                       selected={selectedCatId === child.id}
                       indent={1}
                       onSelect={() => handleCatSelect(child.id)}
-                      onEdit={() => setEditCat(child)}
-                      onDelete={() => setDeleteConfirm({
+                      onEdit={!isReadOnly ? () => setEditCat(child) : undefined}
+                      onDelete={!isReadOnly ? () => setDeleteConfirm({
                         type: 'category',
                         id: child.id,
                         name: child.name,
                         warning: 'Все статьи и вложения в этой категории будут удалены безвозвратно.',
-                      })}
+                      }) : undefined}
                     />
                   ))}
                 </div>
@@ -331,15 +352,17 @@ export function KbView() {
             })}
           </div>
 
-          <div className="p-2 border-t border-slate-100 dark:border-slate-700/60">
-            <button
-              onClick={() => setCreateCatOpen(true)}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-            >
-              <PlusIcon className="w-3.5 h-3.5" />
-              Новая категория
-            </button>
-          </div>
+          {!isReadOnly && (
+            <div className="p-2 border-t border-slate-100 dark:border-slate-700/60">
+              <button
+                onClick={() => setCreateCatOpen(true)}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <PlusIcon className="w-3.5 h-3.5" />
+                Новая категория
+              </button>
+            </div>
+          )}
         </div>
         )}
 
@@ -374,9 +397,11 @@ export function KbView() {
               <div className="flex flex-col items-center justify-center h-64 text-slate-400">
                 <BookIcon className="w-10 h-10 mb-3 opacity-30" />
                 <p className="text-sm">Статей не найдено</p>
-                <button onClick={() => setCreateArticleOpen(true)} className="mt-3 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline cursor-pointer">
-                  Создать первую статью
-                </button>
+                {!isReadOnly && (
+                  <button onClick={() => setCreateArticleOpen(true)} className="mt-3 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline cursor-pointer">
+                    Создать первую статью
+                  </button>
+                )}
               </div>
             )}
             {allArticles.length > 0 && (
@@ -390,7 +415,7 @@ export function KbView() {
                       categoryName={cat?.name}
                       view={view}
                       onEdit={() => setEditArticle(article)}
-                      onDelete={() => setDeleteConfirm({ type: 'article', id: article.id, name: article.title })}
+                      onDelete={!isReadOnly ? () => setDeleteConfirm({ type: 'article', id: article.id, name: article.title }) : undefined}
                     />
                   )
                 })}
@@ -415,16 +440,16 @@ export function KbView() {
         </div>
       </div>
 
-      {createArticleOpen && (
+      {createArticleOpen && !isReadOnly && (
         <ArticleModal article={null} categories={categories} defaultCategoryId={selectedCatId} onClose={() => setCreateArticleOpen(false)} />
       )}
       {editArticle && (
-        <ArticleModal article={editArticle} categories={categories} defaultCategoryId={null} onClose={() => setEditArticle(null)} />
+        <ArticleModal article={editArticle} categories={categories} defaultCategoryId={null} onClose={() => setEditArticle(null)} isReadOnly={isReadOnly} />
       )}
-      {createCatOpen && <CategoryModal cat={null} onClose={() => setCreateCatOpen(false)} />}
-      {editCat && <CategoryModal cat={editCat} onClose={() => setEditCat(null)} />}
+      {createCatOpen && !isReadOnly && <CategoryModal cat={null} parentId={createCatParentId} onClose={() => { setCreateCatOpen(false); setCreateCatParentId(null) }} />}
+      {editCat && !isReadOnly && <CategoryModal cat={editCat} onClose={() => setEditCat(null)} />}
 
-      {deleteConfirm && (
+      {deleteConfirm && !isReadOnly && (
         <AppModal open onClose={() => setDeleteConfirm(null)}>
           <div className="px-6 py-5">
             <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-2">
@@ -457,13 +482,14 @@ export function KbView() {
   )
 }
 
-function CategoryRow({ cat, selected, indent, onSelect, onEdit, onDelete }: {
+function CategoryRow({ cat, selected, indent, onSelect, onEdit, onDelete, onAddChild }: {
   cat: KbCategory
   selected: boolean
   indent: number
   onSelect: () => void
-  onEdit: () => void
-  onDelete: () => void
+  onEdit?: () => void
+  onDelete?: () => void
+  onAddChild?: () => void
 }) {
   return (
     <div
@@ -478,18 +504,31 @@ function CategoryRow({ cat, selected, indent, onSelect, onEdit, onDelete }: {
     >
       {indent > 0 && <span className="text-slate-300 dark:text-slate-600 shrink-0">└</span>}
       <span className="flex-1 truncate">{cat.name}</span>
-      <button
-        onClick={e => { e.stopPropagation(); onEdit() }}
-        className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded hover:text-slate-700 dark:hover:text-slate-200 transition-all cursor-pointer shrink-0"
-      >
-        <PencilIcon className="w-3 h-3" />
-      </button>
-      <button
-        onClick={e => { e.stopPropagation(); onDelete() }}
-        className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded hover:text-red-500 transition-all cursor-pointer shrink-0"
-      >
-        <TrashIcon className="w-3 h-3" />
-      </button>
+      {indent === 0 && onAddChild && (
+        <button
+          onClick={e => { e.stopPropagation(); onAddChild() }}
+          title="Добавить подкатегорию"
+          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded hover:text-[#1B3A72] dark:hover:text-blue-400 transition-all cursor-pointer shrink-0"
+        >
+          <PlusIcon className="w-3 h-3" />
+        </button>
+      )}
+      {onEdit && (
+        <button
+          onClick={e => { e.stopPropagation(); onEdit() }}
+          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded hover:text-slate-700 dark:hover:text-slate-200 transition-all cursor-pointer shrink-0"
+        >
+          <PencilIcon className="w-3 h-3" />
+        </button>
+      )}
+      {onDelete && (
+        <button
+          onClick={e => { e.stopPropagation(); onDelete() }}
+          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded hover:text-red-500 transition-all cursor-pointer shrink-0"
+        >
+          <TrashIcon className="w-3 h-3" />
+        </button>
+      )}
     </div>
   )
 }
@@ -499,7 +538,7 @@ function ArticleCard({ article, categoryName, view = 'list', onEdit, onDelete }:
   categoryName?: string
   view?: 'list' | 'grid'
   onEdit: () => void
-  onDelete: () => void
+  onDelete?: () => void
 }) {
   if (view === 'grid') {
     return (
@@ -508,14 +547,13 @@ function ArticleCard({ article, categoryName, view = 'list', onEdit, onDelete }:
           <div className="w-9 h-9 bg-[#1B3A72] rounded-lg flex items-center justify-center shrink-0">
             <BookIcon className="w-4 h-4 text-white" />
           </div>
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={e => { e.stopPropagation(); onEdit() }} className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer">
-              <PencilIcon className="w-3.5 h-3.5" />
-            </button>
-            <button onClick={e => { e.stopPropagation(); onDelete() }} className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer">
-              <TrashIcon className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          {onDelete && (
+            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={e => { e.stopPropagation(); onDelete() }} className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer">
+                <TrashIcon className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
         <p className="font-semibold text-slate-800 dark:text-slate-100 leading-snug line-clamp-2">{article.title}</p>
         {article.description && (
@@ -543,14 +581,13 @@ function ArticleCard({ article, categoryName, view = 'list', onEdit, onDelete }:
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <p className="font-semibold text-slate-800 dark:text-slate-100 leading-snug">{article.title}</p>
-            <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onClick={e => { e.stopPropagation(); onEdit() }} className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer">
-                <PencilIcon className="w-3.5 h-3.5" />
-              </button>
-              <button onClick={e => { e.stopPropagation(); onDelete() }} className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer">
-                <TrashIcon className="w-3.5 h-3.5" />
-              </button>
-            </div>
+            {onDelete && (
+              <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={e => { e.stopPropagation(); onDelete() }} className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer">
+                  <TrashIcon className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
           </div>
           {article.description && (
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">{article.description}</p>
@@ -576,11 +613,12 @@ function ArticleCard({ article, categoryName, view = 'list', onEdit, onDelete }:
   )
 }
 
-function ArticleModal({ article, categories, defaultCategoryId, onClose }: {
+function ArticleModal({ article, categories, defaultCategoryId, onClose, isReadOnly = false }: {
   article: KbArticleList | null
   categories: KbCategory[]
   defaultCategoryId: number | null
   onClose: () => void
+  isReadOnly?: boolean
 }) {
   const qc = useQueryClient()
   const isEdit = article !== null
@@ -655,7 +693,7 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose }: {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-bold text-lg text-white leading-tight">
-                {isEdit ? 'Редактирование статьи' : 'Новая статья'}
+                {isReadOnly ? 'Просмотр статьи' : isEdit ? 'Редактирование статьи' : 'Новая статья'}
               </p>
               {isEdit && <p className="text-sm text-white/60 mt-0.5 truncate">{article.title}</p>}
             </div>
@@ -691,7 +729,8 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose }: {
                 <select
                   value={categoryId}
                   onChange={e => setCategoryId(Number(e.target.value))}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+                  disabled={isReadOnly}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] disabled:opacity-60 disabled:cursor-default"
                 >
                   <option value={0} disabled>Выберите категорию</option>
                   {categories.map(c => (
@@ -707,7 +746,8 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose }: {
                   value={title}
                   onChange={e => setTitle(e.target.value)}
                   placeholder="Введите заголовок статьи"
-                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+                  readOnly={isReadOnly}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] read-only:opacity-60 read-only:cursor-default"
                 />
               </div>
               <div>
@@ -718,7 +758,8 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose }: {
                   placeholder="Текст статьи"
                   rows={8}
                   maxLength={5000}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] resize-none"
+                  readOnly={isReadOnly}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] resize-none read-only:opacity-60 read-only:cursor-default"
                 />
                 <p className="text-xs text-slate-400 mt-1 text-right">{description.length}/5000</p>
               </div>
@@ -741,9 +782,9 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose }: {
           )}
         </div>
 
-        {tab === 'content' && (
+        {tab === 'content' && !isReadOnly && (
           <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-2 shrink-0">
-            <Button onClick={() => saveMut.mutate()} disabled={!canSave || saveMut.isPending} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer">
+            <Button onClick={() => saveMut.mutate()} disabled={!canSave || saveMut.isPending} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white">
               {saveMut.isPending ? 'Сохранение...' : isEdit ? 'Сохранить' : 'Создать'}
             </Button>
           </div>
@@ -756,6 +797,9 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose }: {
 function AttachmentsTab({ article }: { article: KbArticleDetail }) {
   const qc = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
+  const [isDragOver, setIsDragOver] = useState(false)
+  const currentUser = useAuthStore(s => s.user)
+  const isReadOnly = currentUser?.role === 'operator'
 
   const uploadMut = useMutation({
     mutationFn: (file: File) => kbApi.uploadAttachment(article.id, file),
@@ -779,24 +823,45 @@ function AttachmentsTab({ article }: { article: KbArticleDetail }) {
     e.target.value = ''
   }
 
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file && !uploadMut.isPending) uploadMut.mutate(file)
+  }
+
   return (
-    <div>
-      <div className="px-6 py-3 border-b border-slate-50 dark:border-slate-700/30">
-        <input ref={fileRef} type="file" className="hidden" onChange={handleFile} />
-        <button
-          onClick={() => fileRef.current?.click()}
-          disabled={uploadMut.isPending}
-          className="flex items-center gap-2 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline disabled:opacity-50 cursor-pointer"
-        >
-          <UploadIcon className="w-4 h-4" />
-          {uploadMut.isPending ? 'Загрузка...' : 'Добавить вложение'}
-        </button>
-      </div>
+    <div
+      onDragOver={e => { e.preventDefault(); setIsDragOver(true) }}
+      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false) }}
+      onDrop={handleDrop}
+      className={cn('relative transition-colors', isDragOver && 'bg-blue-50/60 dark:bg-blue-900/10')}
+    >
+      {isDragOver && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none border-2 border-dashed border-[#4A8FE7] rounded-lg m-2">
+          <p className="text-sm font-medium text-[#1B3A72] dark:text-blue-400">Отпустите файл для загрузки</p>
+        </div>
+      )}
+
+      {!isReadOnly && (
+        <div className="px-6 py-3 border-b border-slate-50 dark:border-slate-700/30">
+          <input ref={fileRef} type="file" className="hidden" onChange={handleFile} />
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={uploadMut.isPending}
+            className="flex items-center gap-2 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline disabled:opacity-50 cursor-pointer"
+          >
+            <UploadIcon className="w-4 h-4" />
+            {uploadMut.isPending ? 'Загрузка...' : 'Добавить вложение'}
+          </button>
+        </div>
+      )}
 
       {article.attachments.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-10 text-slate-400">
           <PaperclipIcon className="w-8 h-8 mb-2 opacity-40" />
           <p className="text-sm">Нет вложений</p>
+          {!isReadOnly && <p className="text-xs mt-1 opacity-60">Перетащите файл сюда или нажмите «Добавить вложение»</p>}
         </div>
       ) : (
         <div className="divide-y divide-slate-50 dark:divide-slate-700/30">
@@ -805,7 +870,7 @@ function AttachmentsTab({ article }: { article: KbArticleDetail }) {
               key={att.id}
               att={att}
               articleId={article.id}
-              onDelete={() => deleteMut.mutate(att.id)}
+              onDelete={isReadOnly ? undefined : () => deleteMut.mutate(att.id)}
               deleting={deleteMut.isPending}
             />
           ))}
@@ -818,7 +883,7 @@ function AttachmentsTab({ article }: { article: KbArticleDetail }) {
 function AttachmentRow({ att, articleId, onDelete, deleting }: {
   att: KbAttachment
   articleId: number
-  onDelete: () => void
+  onDelete?: () => void
   deleting: boolean
 }) {
   return (
@@ -852,20 +917,22 @@ function AttachmentRow({ att, articleId, onDelete, deleting }: {
         >
           <DownloadIcon className="w-4 h-4" />
         </button>
-        <button
-          onClick={e => { e.stopPropagation(); onDelete() }}
-          disabled={deleting}
-          title="Удалить"
-          className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
-        >
-          <TrashIcon className="w-4 h-4" />
-        </button>
+        {onDelete && (
+          <button
+            onClick={e => { e.stopPropagation(); onDelete() }}
+            disabled={deleting}
+            title="Удалить"
+            className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+          >
+            <TrashIcon className="w-4 h-4" />
+          </button>
+        )}
       </div>
     </div>
   )
 }
 
-function CategoryModal({ cat, onClose }: { cat: KbCategory | null; onClose: () => void }) {
+function CategoryModal({ cat, parentId, onClose }: { cat: KbCategory | null; parentId?: number | null; onClose: () => void }) {
   const qc = useQueryClient()
   const [name, setName] = useState(cat?.name ?? '')
   const [description, setDescription] = useState(cat?.description ?? '')
@@ -874,7 +941,7 @@ function CategoryModal({ cat, onClose }: { cat: KbCategory | null; onClose: () =
   const saveMut = useMutation({
     mutationFn: () => isEdit
       ? kbApi.updateCategory(cat.id, { name: name || undefined, description: description || null })
-      : kbApi.createCategory(name, null, description || null),
+      : kbApi.createCategory(name, parentId ?? null, description || null),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['kb-categories'] })
       toast.success(isEdit ? 'Категория обновлена' : 'Категория создана')
@@ -892,7 +959,7 @@ function CategoryModal({ cat, onClose }: { cat: KbCategory | null; onClose: () =
               <FolderIcon className="w-6 h-6 text-white" />
             </div>
             <div>
-              <p className="font-bold text-lg text-white">{isEdit ? 'Редактировать категорию' : 'Новая категория'}</p>
+              <p className="font-bold text-lg text-white">{isEdit ? 'Редактировать категорию' : parentId ? 'Новая подкатегория' : 'Новая категория'}</p>
               {isEdit && <p className="text-sm text-white/60 mt-0.5">{cat.name}</p>}
             </div>
           </div>
@@ -919,7 +986,7 @@ function CategoryModal({ cat, onClose }: { cat: KbCategory | null; onClose: () =
           </div>
         </div>
         <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end shrink-0">
-          <Button onClick={() => saveMut.mutate()} disabled={!name.trim() || saveMut.isPending} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer">
+          <Button onClick={() => saveMut.mutate()} disabled={!name.trim() || saveMut.isPending} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white">
             {saveMut.isPending ? 'Сохранение...' : isEdit ? 'Сохранить' : 'Создать'}
           </Button>
         </div>

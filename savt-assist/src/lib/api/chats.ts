@@ -1,6 +1,19 @@
 import { apiClient } from './client'
 import type { Chat, ChatAttachment, ChatMessage, MessageAttachment } from '@/types'
 
+export interface MessageSearchResult {
+  id: number
+  chat_id: number
+  chat_type: string
+  cabinet_object_number: string | null
+  chat_user_id: number
+  sender_id: number
+  sender_name: string
+  text: string
+  created_at: string
+  attachments: unknown[]
+}
+
 export const chatsApi = {
   getChats: async (search?: string): Promise<Chat[]> => {
     const { data } = await apiClient.get<Chat[]>('/operator/chats', {
@@ -9,11 +22,12 @@ export const chatsApi = {
     return data
   },
 
-  getMessages: async (chatId: number, beforeId?: number, search?: string): Promise<ChatMessage[]> => {
+  getMessages: async (chatId: number, beforeId?: number, afterId?: number, search?: string): Promise<ChatMessage[]> => {
     const { data } = await apiClient.get<ChatMessage[]>(`/operator/chats/${chatId}/messages`, {
       params: {
         limit: 30,
         ...(beforeId ? { before_id: beforeId } : {}),
+        ...(afterId ? { after_id: afterId } : {}),
         ...(search ? { search } : {}),
       },
     })
@@ -97,6 +111,18 @@ export const chatsApi = {
 
   deleteChat: async (chatId: number): Promise<void> => {
     await apiClient.delete(`/chats/${chatId}`)
+  },
+
+  getMessagesAround: async (chatId: number, aroundId: number, limit = 30): Promise<ChatMessage[]> => {
+    const { data } = await apiClient.get<ChatMessage[]>(`/operator/chats/${chatId}/messages`, {
+      params: { around_id: aroundId, limit },
+    })
+    return data
+  },
+
+  searchAllMessages: async (q: string, page = 1, size = 20): Promise<{ items: MessageSearchResult[]; total: number; page: number; pages: number }> => {
+    const { data } = await apiClient.get('/operator/messages', { params: { q, page, size } })
+    return data
   },
 
   transcribeVoice: async (audioUrl: string): Promise<{ text: string }> => {

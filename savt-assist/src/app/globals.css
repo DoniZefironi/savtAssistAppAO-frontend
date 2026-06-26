@@ -129,6 +129,23 @@
   }
 }
 
+/* Fix browser autofill overriding background/text color */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: oklch(0.145 0 0);
+  -webkit-box-shadow: 0 0 0px 1000px #f8fafc inset;
+  caret-color: oklch(0.145 0 0);
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Hide browser native password reveal button (Edge/Chrome) */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

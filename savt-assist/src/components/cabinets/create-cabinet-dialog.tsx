@@ -209,7 +209,7 @@ export function CreateCabinetDialog({ open, onClose }: Props) {
             <Button
               type="submit"
               disabled={mutation.isPending}
-              className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
+              className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white"
             >
               {mutation.isPending ? 'Создание...' : 'Добавить'}
             </Button>

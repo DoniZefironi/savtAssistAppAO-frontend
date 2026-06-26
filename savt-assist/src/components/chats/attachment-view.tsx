@@ -293,7 +293,7 @@ function FileAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean }) 
   )
 }
 
-function ImageLightbox({ url, name, onClose }: { url: string; name: string; onClose: () => void }) {
+export function ImageLightbox({ url, name, onClose }: { url: string; name: string; onClose: () => void }) {
   return (
     <div
       className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center"

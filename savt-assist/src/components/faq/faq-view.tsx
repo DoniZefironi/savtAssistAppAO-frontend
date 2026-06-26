@@ -9,6 +9,7 @@ import type { FaqCategory, FaqEntry } from '@/lib/api/faq'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useAuthStore } from '@/lib/store/auth'
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -26,9 +27,12 @@ interface DeleteConfirm {
   type: 'category' | 'entry'
   id: number
   name: string
+  warning?: string
 }
 
 export function FaqView() {
+  const currentUser = useAuthStore(s => s.user)
+  const isReadOnly = currentUser?.role === 'operator'
   const qc = useQueryClient()
   const sentinelRef = useRef<HTMLDivElement>(null)
 
@@ -94,6 +98,7 @@ export function FaqView() {
   const [editEntry, setEditEntry] = useState<FaqEntry | null>(null)
   const [createEntryOpen, setCreateEntryOpen] = useState(false)
   const [createCatOpen, setCreateCatOpen] = useState(false)
+  const [createCatParentId, setCreateCatParentId] = useState<number | null>(null)
   const [editCat, setEditCat] = useState<FaqCategory | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirm | null>(null)
 
@@ -139,11 +144,21 @@ export function FaqView() {
   }, [entriesQ.hasNextPage, entriesQ.isFetchingNextPage, entriesQ.fetchNextPage])
 
   const deleteCatMut = useMutation({
-    mutationFn: (id: number) => faqApi.deleteCategory(id),
+    mutationFn: async (id: number) => {
+      const children = categories.filter(c => c.parent_id === id)
+      for (const child of children) {
+        await faqApi.deleteCategory(child.id)
+      }
+      await faqApi.deleteCategory(id)
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['faq-categories'] })
       qc.invalidateQueries({ queryKey: ['faq-entries'] })
-      if (selectedCatId === deleteConfirm?.id) setSelectedCatId(null)
+      const deletedId = deleteConfirm?.id
+      if (deletedId != null) {
+        const childIds = categories.filter(c => c.parent_id === deletedId).map(c => c.id)
+        if (selectedCatId === deletedId || childIds.includes(selectedCatId!)) setSelectedCatId(null)
+      }
       toast.success('Категория удалена')
       setDeleteConfirm(null)
     },
@@ -203,10 +218,12 @@ export function FaqView() {
               <button onClick={() => { setView('list'); localStorage.setItem('view-mode-faq', 'list') }} title="Список" className={`p-1.5 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon className="w-4 h-4" /></button>
               <button onClick={() => { setView('grid'); localStorage.setItem('view-mode-faq', 'grid') }} title="Сетка" className={`p-1.5 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon className="w-4 h-4" /></button>
             </div>
-            <Button onClick={() => setCreateEntryOpen(true)} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white">
-              <PlusIcon className="w-4 h-4 mr-1.5" />
-              Новый вопрос
-            </Button>
+            {!isReadOnly && (
+              <Button onClick={() => setCreateEntryOpen(true)} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white">
+                <PlusIcon className="w-4 h-4 mr-1.5" />
+                Новый вопрос
+              </Button>
+            )}
           </div>
         </div>
 
@@ -268,21 +285,32 @@ export function FaqView() {
                 selected={selectedCatId === cat.id}
                 indent={indent}
                 onSelect={() => handleCatSelect(cat.id)}
-                onEdit={() => setEditCat(cat)}
-                onDelete={() => setDeleteConfirm({ type: 'category', id: cat.id, name: cat.name })}
+                onEdit={!isReadOnly ? () => setEditCat(cat) : undefined}
+                onAddChild={!isReadOnly && indent === 0 ? () => { setCreateCatParentId(cat.id); setCreateCatOpen(true) } : undefined}
+                onDelete={!isReadOnly ? () => {
+                  const childCount = indent === 0 ? childrenOf(cat.id).length : 0
+                  setDeleteConfirm({
+                    type: 'category',
+                    id: cat.id,
+                    name: cat.name,
+                    ...(childCount > 0 ? { warning: `Также будут удалены ${childCount} подкатегор${childCount === 1 ? 'ия' : 'ии'} и все вопросы.` } : {}),
+                  })
+                } : undefined}
               />
             ))}
           </div>
 
-          <div className="p-2 border-t border-slate-100 dark:border-slate-700/60">
-            <button
-              onClick={() => setCreateCatOpen(true)}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-            >
-              <PlusIcon className="w-3.5 h-3.5" />
-              Новая категория
-            </button>
-          </div>
+          {!isReadOnly && (
+            <div className="p-2 border-t border-slate-100 dark:border-slate-700/60">
+              <button
+                onClick={() => setCreateCatOpen(true)}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <PlusIcon className="w-3.5 h-3.5" />
+                Новая категория
+              </button>
+            </div>
+          )}
         </div>
         )}
 
@@ -317,9 +345,11 @@ export function FaqView() {
               <div className="flex flex-col items-center justify-center h-64 text-slate-400">
                 <QuestionIcon className="w-10 h-10 mb-3 opacity-30" />
                 <p className="text-sm">Вопросов не найдено</p>
-                <button onClick={() => setCreateEntryOpen(true)} className="mt-3 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline cursor-pointer">
-                  Добавить первый вопрос
-                </button>
+                {!isReadOnly && (
+                  <button onClick={() => setCreateEntryOpen(true)} className="mt-3 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline cursor-pointer">
+                    Добавить первый вопрос
+                  </button>
+                )}
               </div>
             )}
             {allEntries.length > 0 && (
@@ -333,7 +363,7 @@ export function FaqView() {
                       categoryName={cat?.name}
                       view={view}
                       onEdit={() => setEditEntry(entry)}
-                      onDelete={() => setDeleteConfirm({ type: 'entry', id: entry.id, name: entry.question })}
+                      onDelete={!isReadOnly ? () => setDeleteConfirm({ type: 'entry', id: entry.id, name: entry.question }) : undefined}
                     />
                   )
                 })}
@@ -358,25 +388,27 @@ export function FaqView() {
         </div>
       </div>
 
-      {createEntryOpen && (
+      {createEntryOpen && !isReadOnly && (
         <EntryModal entry={null} categories={categories} defaultCategoryId={selectedCatId} onClose={() => setCreateEntryOpen(false)} />
       )}
       {editEntry && (
-        <EntryModal entry={editEntry} categories={categories} defaultCategoryId={null} onClose={() => setEditEntry(null)} />
+        <EntryModal entry={editEntry} categories={categories} defaultCategoryId={null} onClose={() => setEditEntry(null)} isReadOnly={isReadOnly} />
       )}
-      {createCatOpen && <CategoryModal cat={null} onClose={() => setCreateCatOpen(false)} />}
-      {editCat && <CategoryModal cat={editCat} onClose={() => setEditCat(null)} />}
+      {createCatOpen && !isReadOnly && <CategoryModal cat={null} parentId={createCatParentId} onClose={() => { setCreateCatOpen(false); setCreateCatParentId(null) }} />}
+      {editCat && !isReadOnly && <CategoryModal cat={editCat} onClose={() => setEditCat(null)} />}
 
-      {deleteConfirm && (
+      {deleteConfirm && !isReadOnly && (
         <AppModal open onClose={() => setDeleteConfirm(null)}>
           <div className="px-6 py-5">
             <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-2">
               {deleteConfirm.type === 'category' ? 'Удалить категорию?' : 'Удалить вопрос?'}
             </h3>
-            <p className="text-sm text-slate-600 dark:text-slate-300">
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-1">
               <strong>«{deleteConfirm.name}»</strong> будет удалена безвозвратно.
             </p>
-            {deleteConfirm.type === 'category' && (
+            {deleteConfirm.warning ? (
+              <p className="text-sm text-red-500 dark:text-red-400 mt-1">⚠ {deleteConfirm.warning}</p>
+            ) : deleteConfirm.type === 'category' && (
               <p className="text-sm text-red-500 dark:text-red-400 mt-1">
                 ⚠ Все вопросы в этой категории также будут удалены.
               </p>
@@ -398,13 +430,14 @@ export function FaqView() {
   )
 }
 
-function CategoryRow({ cat, selected, indent, onSelect, onEdit, onDelete }: {
+function CategoryRow({ cat, selected, indent, onSelect, onEdit, onDelete, onAddChild }: {
   cat: FaqCategory
   selected: boolean
   indent: number
   onSelect: () => void
-  onEdit: () => void
-  onDelete: () => void
+  onEdit?: () => void
+  onDelete?: () => void
+  onAddChild?: () => void
 }) {
   return (
     <div
@@ -419,18 +452,31 @@ function CategoryRow({ cat, selected, indent, onSelect, onEdit, onDelete }: {
     >
       {indent > 0 && <span className="text-slate-300 dark:text-slate-600 shrink-0">└</span>}
       <span className="flex-1 truncate">{cat.name}</span>
-      <button
-        onClick={e => { e.stopPropagation(); onEdit() }}
-        className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded hover:text-slate-700 dark:hover:text-slate-200 transition-all cursor-pointer shrink-0"
-      >
-        <PencilIcon className="w-3 h-3" />
-      </button>
-      <button
-        onClick={e => { e.stopPropagation(); onDelete() }}
-        className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded hover:text-red-500 transition-all cursor-pointer shrink-0"
-      >
-        <TrashIcon className="w-3 h-3" />
-      </button>
+      {indent === 0 && onAddChild && (
+        <button
+          onClick={e => { e.stopPropagation(); onAddChild() }}
+          title="Добавить подкатегорию"
+          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded hover:text-[#1B3A72] dark:hover:text-blue-400 transition-all cursor-pointer shrink-0"
+        >
+          <PlusIcon className="w-3 h-3" />
+        </button>
+      )}
+      {onEdit && (
+        <button
+          onClick={e => { e.stopPropagation(); onEdit() }}
+          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded hover:text-slate-700 dark:hover:text-slate-200 transition-all cursor-pointer shrink-0"
+        >
+          <PencilIcon className="w-3 h-3" />
+        </button>
+      )}
+      {onDelete && (
+        <button
+          onClick={e => { e.stopPropagation(); onDelete() }}
+          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded hover:text-red-500 transition-all cursor-pointer shrink-0"
+        >
+          <TrashIcon className="w-3 h-3" />
+        </button>
+      )}
     </div>
   )
 }
@@ -440,7 +486,7 @@ function EntryCard({ entry, categoryName, view = 'list', onEdit, onDelete }: {
   categoryName?: string
   view?: 'list' | 'grid'
   onEdit: () => void
-  onDelete: () => void
+  onDelete?: () => void
 }) {
   if (view === 'grid') {
     return (
@@ -449,14 +495,13 @@ function EntryCard({ entry, categoryName, view = 'list', onEdit, onDelete }: {
           <div className="w-9 h-9 bg-[#1B3A72] rounded-lg flex items-center justify-center shrink-0">
             <QuestionIcon className="w-4 h-4 text-white" />
           </div>
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={e => { e.stopPropagation(); onEdit() }} className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer">
-              <PencilIcon className="w-3.5 h-3.5" />
-            </button>
-            <button onClick={e => { e.stopPropagation(); onDelete() }} className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer">
-              <TrashIcon className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          {onDelete && (
+            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={e => { e.stopPropagation(); onDelete() }} className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer">
+                <TrashIcon className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
         <p className="font-semibold text-slate-800 dark:text-slate-100 leading-snug line-clamp-2">{entry.question}</p>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">{entry.answer}</p>
@@ -479,14 +524,13 @@ function EntryCard({ entry, categoryName, view = 'list', onEdit, onDelete }: {
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <p className="font-semibold text-slate-800 dark:text-slate-100 leading-snug">{entry.question}</p>
-            <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onClick={e => { e.stopPropagation(); onEdit() }} className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer">
-                <PencilIcon className="w-3.5 h-3.5" />
-              </button>
-              <button onClick={e => { e.stopPropagation(); onDelete() }} className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer">
-                <TrashIcon className="w-3.5 h-3.5" />
-              </button>
-            </div>
+            {onDelete && (
+              <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={e => { e.stopPropagation(); onDelete() }} className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer">
+                  <TrashIcon className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
           </div>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5 line-clamp-2 leading-relaxed">{entry.answer}</p>
           <div className="flex items-center gap-3 mt-2.5 flex-wrap">
@@ -504,11 +548,12 @@ function EntryCard({ entry, categoryName, view = 'list', onEdit, onDelete }: {
   )
 }
 
-function EntryModal({ entry, categories, defaultCategoryId, onClose }: {
+function EntryModal({ entry, categories, defaultCategoryId, onClose, isReadOnly = false }: {
   entry: FaqEntry | null
   categories: FaqCategory[]
   defaultCategoryId: number | null
   onClose: () => void
+  isReadOnly?: boolean
 }) {
   const qc = useQueryClient()
   const isEdit = entry !== null
@@ -548,7 +593,7 @@ function EntryModal({ entry, categories, defaultCategoryId, onClose }: {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-bold text-lg text-white leading-tight">
-                {isEdit ? 'Редактирование вопроса' : 'Новый вопрос'}
+                {isReadOnly ? 'Просмотр вопроса' : isEdit ? 'Редактирование вопроса' : 'Новый вопрос'}
               </p>
               {isEdit && <p className="text-sm text-white/60 mt-0.5 truncate">{entry.question}</p>}
             </div>
@@ -590,7 +635,8 @@ function EntryModal({ entry, categories, defaultCategoryId, onClose }: {
               value={question}
               onChange={e => setQuestion(e.target.value)}
               placeholder="Введите вопрос"
-              className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+              readOnly={isReadOnly}
+              className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] read-only:opacity-60 read-only:cursor-default"
             />
           </div>
 
@@ -603,26 +649,29 @@ function EntryModal({ entry, categories, defaultCategoryId, onClose }: {
               onChange={e => setAnswer(e.target.value)}
               placeholder="Введите ответ"
               rows={8}
-              className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] resize-none"
+              readOnly={isReadOnly}
+              className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] resize-none read-only:opacity-60 read-only:cursor-default"
             />
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end shrink-0">
-          <Button
-            onClick={() => saveMut.mutate()}
-            disabled={!canSave || saveMut.isPending}
-            className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
-          >
-            {saveMut.isPending ? 'Сохранение...' : isEdit ? 'Сохранить' : 'Создать'}
-          </Button>
-        </div>
+        {!isReadOnly && (
+          <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end shrink-0">
+            <Button
+              onClick={() => saveMut.mutate()}
+              disabled={!canSave || saveMut.isPending}
+              className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white"
+            >
+              {saveMut.isPending ? 'Сохранение...' : isEdit ? 'Сохранить' : 'Создать'}
+            </Button>
+          </div>
+        )}
       </div>
     </AppModal>
   )
 }
 
-function CategoryModal({ cat, onClose }: { cat: FaqCategory | null; onClose: () => void }) {
+function CategoryModal({ cat, parentId, onClose }: { cat: FaqCategory | null; parentId?: number | null; onClose: () => void }) {
   const qc = useQueryClient()
   const [name, setName] = useState(cat?.name ?? '')
   const isEdit = cat !== null
@@ -630,7 +679,7 @@ function CategoryModal({ cat, onClose }: { cat: FaqCategory | null; onClose: () 
   const saveMut = useMutation({
     mutationFn: () => isEdit
       ? faqApi.updateCategory(cat.id, { name: name || undefined })
-      : faqApi.createCategory(name),
+      : faqApi.createCategory(name, parentId ?? null),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['faq-categories'] })
       toast.success(isEdit ? 'Категория обновлена' : 'Категория создана')
@@ -648,7 +697,7 @@ function CategoryModal({ cat, onClose }: { cat: FaqCategory | null; onClose: () 
               <FolderIcon className="w-6 h-6 text-white" />
             </div>
             <div>
-              <p className="font-bold text-lg text-white">{isEdit ? 'Редактировать категорию' : 'Новая категория'}</p>
+              <p className="font-bold text-lg text-white">{isEdit ? 'Редактировать категорию' : parentId ? 'Новая подкатегория' : 'Новая категория'}</p>
               {isEdit && <p className="text-sm text-white/60 mt-0.5">{cat.name}</p>}
             </div>
           </div>
@@ -668,7 +717,7 @@ function CategoryModal({ cat, onClose }: { cat: FaqCategory | null; onClose: () 
           <Button
             onClick={() => saveMut.mutate()}
             disabled={!name.trim() || saveMut.isPending}
-            className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
+            className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white"
           >
             {saveMut.isPending ? 'Сохранение...' : isEdit ? 'Сохранить' : 'Создать'}
           </Button>

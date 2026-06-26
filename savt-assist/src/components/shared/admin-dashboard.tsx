@@ -9,52 +9,23 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { CabinetsMap } from '@/components/map/cabinets-map'
 
-const statCards = [
-  {
-    key: 'unreadChats' as const,
-    label: 'Новых сообщений',
-    href: '/admin/chats',
-    accent: '#1B3A72',
-    urgentAbove: 0,
-    icon: <ChatIcon />,
-  },
-  {
-    key: 'openServiceRequests' as const,
-    label: 'Открытых заявок',
-    href: '/admin/requests',
-    accent: '#D97706',
-    urgentAbove: 0,
-    icon: <WrenchIcon />,
-  },
-  {
-    key: 'pendingDocumentRequests' as const,
-    label: 'Запросов на документы',
-    href: '/admin/requests',
-    accent: '#7C3AED',
-    urgentAbove: 0,
-    icon: <DocIcon />,
-  },
-  {
-    key: 'pendingShareRequests' as const,
-    label: 'Доступов к ШУ',
-    href: '/admin/requests',
-    accent: '#0891B2',
-    urgentAbove: 0,
-    icon: <KeyIcon />,
-  },
-  {
-    key: 'pendingAdditionRequests' as const,
-    label: 'Добавлений ШУ',
-    href: '/admin/requests',
-    accent: '#059669',
-    urgentAbove: 0,
-    icon: <PlusBoxIcon />,
-  },
-] as const
+function makeStatCards(base: string) {
+  return [
+    { key: 'unreadChats' as const,             label: 'Новых сообщений',      href: `${base}/chats`,    accent: '#1B3A72', urgentAbove: 0, icon: <ChatIcon /> },
+    { key: 'openServiceRequests' as const,      label: 'Открытых заявок',      href: `${base}/requests`, accent: '#D97706', urgentAbove: 0, icon: <WrenchIcon /> },
+    { key: 'pendingDocumentRequests' as const,  label: 'Запросов на документы',href: `${base}/requests`, accent: '#7C3AED', urgentAbove: 0, icon: <DocIcon /> },
+    { key: 'pendingShareRequests' as const,     label: 'Доступов к ШУ',        href: `${base}/requests`, accent: '#0891B2', urgentAbove: 0, icon: <KeyIcon /> },
+    { key: 'pendingAdditionRequests' as const,  label: 'Добавлений ШУ',        href: `${base}/requests`, accent: '#059669', urgentAbove: 0, icon: <PlusBoxIcon /> },
+  ] as const
+}
+
 
 export function AdminDashboard() {
   const user = useAuthStore((s) => s.user)
-  const displayName = user?.full_name ?? user?.login ?? 'Администратор'
+  const isOperator = user?.role === 'operator'
+  const base = isOperator ? '/operator' : '/admin'
+  const displayName = user?.full_name ?? user?.login ?? (isOperator ? 'Оператор' : 'Администратор')
+  const statCards = makeStatCards(base)
 
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard'],
@@ -84,30 +55,17 @@ export function AdminDashboard() {
             const urgent = typeof value === 'number' && value > s.urgentAbove
             return (
               <Link key={s.key} href={s.href} className="block group">
-                <div className={cn(
-                  'bg-white dark:bg-slate-800 rounded-xl border p-3 transition-all',
-                  urgent
-                    ? 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-sm'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-sm'
-                )}>
+                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-sm transition-all">
                   <div className="flex items-center justify-between mb-2">
-                    <div
-                      className="w-6 h-6 rounded-md flex items-center justify-center text-white"
-                      style={{ backgroundColor: s.accent }}
-                    >
+                    <div className="w-6 h-6 rounded-md flex items-center justify-center text-white" style={{ backgroundColor: s.accent }}>
                       <span className="scale-75">{s.icon}</span>
                     </div>
-                    {urgent && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                    )}
+                    {urgent && <span className="w-1.5 h-1.5 rounded-full bg-red-500" />}
                   </div>
                   {statsLoading ? (
                     <Skeleton className="h-6 w-10 mb-1" />
                   ) : (
-                    <p className={cn(
-                      'text-xl font-extrabold leading-none',
-                      urgent ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'
-                    )}>
+                    <p className={cn('text-xl font-extrabold leading-none', urgent ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500')}>
                       {Number.isFinite(value) ? value : '—'}
                     </p>
                   )}
@@ -123,43 +81,44 @@ export function AdminDashboard() {
             <span className="font-semibold text-sm text-slate-800 dark:text-slate-100">Карта расположения ШУ</span>
           </div>
           <div className="h-[500px] p-3">
-            <CabinetsMap isAdmin={true} />
+            <CabinetsMap isAdmin={!isOperator} />
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-slate-700/60">
-            <span className="font-semibold text-sm text-slate-800 dark:text-slate-100">Последняя активность</span>
-            <span className="text-xs text-slate-400">последние 20 событий</span>
-          </div>
-
-          {activityLoading ? (
-            <div className="divide-y divide-slate-50 dark:divide-slate-700/40">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-3 px-5 py-3">
-                  <Skeleton className="w-7 h-7 rounded-full shrink-0" />
-                  <div className="flex-1 space-y-1.5">
-                    <Skeleton className="h-3 w-48" />
-                    <Skeleton className="h-3 w-32" />
+        {!isOperator && (
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-slate-700/60">
+              <span className="font-semibold text-sm text-slate-800 dark:text-slate-100">Последняя активность</span>
+              <span className="text-xs text-slate-400">последние 20 событий</span>
+            </div>
+            {activityLoading ? (
+              <div className="divide-y divide-slate-50 dark:divide-slate-700/40">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 px-5 py-3">
+                    <Skeleton className="w-7 h-7 rounded-full shrink-0" />
+                    <div className="flex-1 space-y-1.5">
+                      <Skeleton className="h-3 w-48" />
+                      <Skeleton className="h-3 w-32" />
+                    </div>
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                    <Skeleton className="h-3 w-14" />
                   </div>
-                  <Skeleton className="h-5 w-16 rounded-full" />
-                  <Skeleton className="h-3 w-14" />
-                </div>
-              ))}
-            </div>
-          ) : !activity || activity.length === 0 ? (
-            <div className="py-12 flex flex-col items-center gap-2 text-slate-400">
-              <InboxIcon className="w-8 h-8" />
-              <p className="text-sm">Нет активности</p>
-            </div>
-          ) : (
-            <ul className="divide-y divide-slate-50 dark:divide-slate-700/40">
-              {activity.map((item) => (
-                <ActivityRow key={`${item.type}-${item.id}`} item={item} />
-              ))}
-            </ul>
-          )}
-        </div>
+                ))}
+              </div>
+            ) : !activity || activity.length === 0 ? (
+              <div className="py-12 flex flex-col items-center gap-2 text-slate-400">
+                <InboxIcon className="w-8 h-8" />
+                <p className="text-sm">Нет активности</p>
+              </div>
+            ) : (
+              <ul className="divide-y divide-slate-50 dark:divide-slate-700/40">
+                {activity.map((item) => (
+                  <ActivityRow key={`${item.type}-${item.id}`} item={item} />
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
       </div>
     </div>

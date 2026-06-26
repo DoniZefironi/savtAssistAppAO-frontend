@@ -6,10 +6,11 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { MessageBubble, DateSeparator } from './message-bubble'
 import { chatDisplayName } from './chat-list-panel'
-import { toFullUrl, downloadBlob } from './attachment-view'
+import { toFullUrl, downloadBlob, ImageLightbox } from './attachment-view'
 import { chatsApi } from '@/lib/api/chats'
 import { authApi } from '@/lib/api/auth'
 import { useAuthStore } from '@/lib/store/auth'
+import { useChatNavStore } from '@/lib/store/chat-nav'
 import { useVoiceRecorder } from '@/lib/hooks/use-voice-recorder'
 import type { Chat, ChatMessage, MessageAttachment } from '@/types'
 import type { InfiniteData } from '@tanstack/react-query'
@@ -39,6 +40,7 @@ interface Props {
 }
 
 type MsgPages = InfiniteData<ChatMessage[]>
+type PageParam = { before_id?: number; after_id?: number } | undefined
 
 type ChatColors = { ownBubble?: string; otherBubble?: string; botBubble?: string; nickColor?: string; fontSize?: number; ownText?: string; otherText?: string; botText?: string }
 
@@ -51,6 +53,8 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const qc = useQueryClient()
   const currentUser = useAuthStore((s) => s.user)
   const setUser = useAuthStore((s) => s.setUser)
+  const pendingMessageId = useChatNavStore((s) => s.pendingMessageId)
+  const clearPendingMessage = useChatNavStore((s) => s.clearPendingMessage)
 
   useEffect(() => {
     if (!currentUser) authApi.me().then(setUser).catch(() => {})
@@ -58,6 +62,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const topSentinelRef = useRef<HTMLDivElement>(null)
+  const bottomSentinelRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -108,6 +113,11 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const [stickerPickerOpen, setStickerPickerOpen] = useState(false)
   const [stickerCat, setStickerCat] = useState(Object.keys(STICKERS)[0])
   const [transcriptions, setTranscriptions] = useState<Map<number, { text: string; loading: boolean }>>(new Map())
+  const [jumpMode, setJumpMode] = useState(false)
+  const jumpTargetRef = useRef<number | null>(null)
+  const jumpScrolledRef = useRef(false)
+  const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; messageId: number } | null>(null)
   const [isDarkMode, setIsDarkMode] = useState(() =>
     typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
   )
@@ -147,33 +157,49 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     return () => clearTimeout(t)
   }, [searchInput])
 
-  const { data: messagesData, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
+  const { data: messagesData, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage, fetchPreviousPage, hasPreviousPage, isFetchingPreviousPage } = useInfiniteQuery<ChatMessage[], Error, MsgPages, ['messages', number], PageParam>({
     queryKey: ['messages', chat.id],
-    initialPageParam: undefined as number | undefined,
-    queryFn: ({ pageParam }) => chatsApi.getMessages(chat.id, pageParam),
-    getNextPageParam: (lastPage) => lastPage.length < 30 ? undefined : lastPage[lastPage.length - 1]?.id,
-    refetchInterval: 1500,
+    initialPageParam: undefined,
+    queryFn: ({ pageParam }) => chatsApi.getMessages(chat.id, pageParam?.before_id, pageParam?.after_id),
+    getNextPageParam: (lastPage) => lastPage.length < 30 ? undefined : { before_id: lastPage[lastPage.length - 1]?.id },
+    getPreviousPageParam: (firstPage) => firstPage.length < 30 ? undefined : { after_id: firstPage[0]?.id },
+    refetchInterval: jumpMode ? false : 1500,
     refetchIntervalInBackground: false,
   })
 
   const { data: searchResults = [] } = useQuery({
     queryKey: ['messages-search', chat.id, searchQuery],
-    queryFn: () => chatsApi.getMessages(chat.id, undefined, searchQuery),
+    queryFn: () => chatsApi.getMessages(chat.id, undefined, undefined, searchQuery),
     enabled: searchOpen && searchQuery.length > 0,
   })
 
-  const messages = useMemo(() =>
-    [...(messagesData?.pages ?? [])].reverse().flatMap(p => [...p].reverse())
-  , [messagesData?.pages])
+  const messages = useMemo(() => {
+    const seen = new Set<number>()
+    return [...(messagesData?.pages ?? [])].reverse().flatMap(p => [...p].reverse()).filter(m => {
+      if (seen.has(m.id)) return false
+      seen.add(m.id)
+      return true
+    })
+  }, [messagesData?.pages])
 
   const displayMessages = searchOpen && searchQuery ? [...searchResults].reverse() : messages
 
   useEffect(() => {
     scrolledRef.current = false
     scrolledToUnreadRef.current = false
+    jumpScrolledRef.current = false
     setFirstUnreadId(undefined)
+    setJumpMode(false)
+    jumpTargetRef.current = null
   }, [chat.id])
   useEffect(() => { if (messages.length > 0) onMessagesLoaded?.() }, [messages.length])
+
+  useEffect(() => {
+    if (!pendingMessageId || messages.length === 0) return
+    clearPendingMessage()
+    handleScrollToMessage(pendingMessageId)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingMessageId, messages.length === 0])
   useEffect(() => {
     if (messages.length === 0) return
     if (!scrolledRef.current) {
@@ -188,6 +214,8 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
       bottomRef.current?.scrollIntoView()
       return
     }
+    if (jumpTargetRef.current !== null) return
+    if (jumpScrolledRef.current) return
     const el = listRef.current
     if (!el) return
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120
@@ -226,6 +254,17 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
       qc.invalidateQueries({ queryKey: ['operator-chats'] })
     }
   }, [chat.id])
+
+  useEffect(() => {
+    if (jumpTargetRef.current === null || messages.length === 0) return
+    const id = jumpTargetRef.current
+    requestAnimationFrame(() => {
+      if (highlightMessage(id)) {
+        jumpTargetRef.current = null
+        jumpScrolledRef.current = true
+      }
+    })
+  }, [messages])
 
   const messagesById = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages])
 
@@ -429,14 +468,61 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     }, 0)
   }
 
-  const handleScrollToMessage = (messageId: number) => {
+  const highlightMessage = (messageId: number) => {
     const el = document.getElementById(`msg-${messageId}`)
-    if (!el) return
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const container = listRef.current
+    if (!el || !container) return false
+    const elRect = el.getBoundingClientRect()
+    const cRect = container.getBoundingClientRect()
+    container.scrollTop += elRect.top - cRect.top - cRect.height / 2 + elRect.height / 2
     el.style.transition = 'background-color 0.3s ease'
     el.style.backgroundColor = 'rgba(74,143,231,0.2)'
     setTimeout(() => { el.style.backgroundColor = '' }, 1500)
+    return true
   }
+
+  const handleScrollToMessage = async (messageId: number) => {
+    if (highlightMessage(messageId)) return
+    try {
+      const msgs = await chatsApi.getMessagesAround(chat.id, messageId)
+      // newest-first page format (same as what the query returns)
+      const page = [...msgs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      jumpTargetRef.current = messageId
+      setJumpMode(true)
+      qc.setQueryData<MsgPages>(['messages', chat.id], {
+        pages: [page],
+        pageParams: [undefined],
+      })
+    } catch {
+      toast.error('Не удалось перейти к сообщению')
+    }
+  }
+
+  const exitJumpMode = async () => {
+    setJumpMode(false)
+    jumpTargetRef.current = null
+    jumpScrolledRef.current = false
+    await qc.resetQueries({ queryKey: ['messages', chat.id] })
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  useEffect(() => {
+    if (!jumpMode) return
+    const sentinel = bottomSentinelRef.current
+    const container = listRef.current
+    if (!sentinel || !container) return
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting || !jumpScrolledRef.current) return
+      if (hasPreviousPage && !isFetchingPreviousPage) {
+        fetchPreviousPage()
+      } else if (!hasPreviousPage) {
+        exitJumpMode()
+      }
+    }, { root: container, rootMargin: '80px' })
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpMode, hasPreviousPage, isFetchingPreviousPage, fetchPreviousPage])
 
   const toggleSearch = () => { setSearchOpen(v => !v); setSearchInput(''); setSearchQuery('') }
 
@@ -596,6 +682,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         </div>
       )}
 
+
       {searchOpen && searchQuery && (
         <div className="px-4 py-1.5 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-900/40 shrink-0">
           <p className="text-xs text-blue-600 dark:text-blue-400">
@@ -681,7 +768,21 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
             />
           )
         )}
+        <div ref={bottomSentinelRef} className="h-1" />
+        {isFetchingPreviousPage && (
+          <div className="flex justify-center py-2">
+            <div className="w-5 h-5 border-2 border-[#1B3A72] border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
         <div ref={bottomRef} />
+        {jumpMode && (
+          <button
+            onClick={exitJumpMode}
+            className="absolute bottom-4 right-4 z-20 flex items-center gap-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-lg rounded-full px-3 py-1.5 text-xs font-medium text-[#1B3A72] dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+          >
+            Последние ↓
+          </button>
+        )}
       </div>
 
       {botActive && !searchOpen && !selectMode && (
@@ -879,14 +980,16 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
                       const fullUrl = toFullUrl(item.url)
                       return (
                         <div key={i} className="aspect-square bg-slate-100 dark:bg-slate-800 overflow-hidden relative group cursor-pointer"
-                          onClick={() => { setAttachmentsOpen(false); setTimeout(() => handleScrollToMessage(item.message_id), 100) }}>
+                          onClick={() => {
+                            if (item.mime.startsWith('image/')) setLightbox({ url: fullUrl, name: '' })
+                            else { setAttachmentsOpen(false); setTimeout(() => handleScrollToMessage(item.message_id), 100) }
+                          }}
+                          onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, messageId: item.message_id }) }}>
                           {item.mime.startsWith('image/')
                             ? <img src={fullUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
                             : <div className="w-full h-full flex items-center justify-center text-2xl">🎬</div>
                           }
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-end justify-center pb-1.5 opacity-0 group-hover:opacity-100">
-                            <span className="text-white text-[10px] font-medium bg-black/50 rounded-full px-2 py-0.5">В чат</span>
-                          </div>
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors" />
                         </div>
                       )
                     })}
@@ -899,14 +1002,14 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
                     {allAttachments.files.map((item, i) => {
                       const fullUrl = toFullUrl(item.url)
                       return (
-                        <div key={i} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <div key={i} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                          onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, messageId: item.message_id }) }}>
                           <span className="text-2xl shrink-0">{fileIcon(item.mime)}</span>
                           <div className="flex-1 min-w-0 cursor-pointer"
-                            onClick={() => { setAttachmentsOpen(false); setTimeout(() => handleScrollToMessage(item.message_id), 100) }}>
+                            onClick={() => window.open(fullUrl, '_blank')}>
                             <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{item.name}</p>
                             <p className="text-xs text-slate-400 mt-0.5">
-                              {item.size > 0 ? `${(item.size / 1024).toFixed(0)} КБ` : ''}{' '}
-                              <span className="text-[#1B3A72] dark:text-blue-400">· В чат</span>
+                              {item.size > 0 ? `${(item.size / 1024).toFixed(0)} КБ` : ''}
                             </p>
                           </div>
                           <div className="flex gap-1 shrink-0">
@@ -932,7 +1035,8 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
                   ? <EmptyAttach label="Нет голосовых сообщений" />
                   : <div className="divide-y divide-slate-100 dark:divide-slate-700/60 px-4 py-1">
                     {allAttachments.voices.map((item, i) => (
-                      <div key={i} className="py-2.5">
+                      <div key={i} className="py-2.5"
+                        onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, messageId: item.message_id }) }}>
                         <div className="flex items-center justify-between mb-1.5">
                           <p className="text-xs text-slate-400">
                             🎙 {item.duration != null ? `${Math.floor(item.duration / 60)}:${String(item.duration % 60).padStart(2, '0')}` : 'Голосовое'}
@@ -1094,6 +1198,28 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {lightbox && <ImageLightbox url={lightbox.url} name={lightbox.name} onClose={() => setLightbox(null)} />}
+
+      {ctxMenu && (
+        <div className="fixed inset-0 z-50" onClick={() => setCtxMenu(null)} onContextMenu={(e) => { e.preventDefault(); setCtxMenu(null) }}>
+          <div
+            className="absolute bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-100 dark:border-slate-700 py-1 min-w-45"
+            style={{ left: ctxMenu.x, top: ctxMenu.y }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer text-left"
+              onClick={() => { setCtxMenu(null); setAttachmentsOpen(false); setTimeout(() => handleScrollToMessage(ctxMenu.messageId), 100) }}
+            >
+              <svg className="w-4 h-4 text-[#1B3A72] dark:text-blue-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
+              Перейти к сообщению
+            </button>
           </div>
         </div>
       )}
