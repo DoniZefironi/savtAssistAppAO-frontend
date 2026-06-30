@@ -1,5 +1,6 @@
 'use client'
 
+import { isAxiosError } from 'axios'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -8,6 +9,7 @@ import { MessageBubble, DateSeparator } from './message-bubble'
 import { chatDisplayName } from './chat-list-panel'
 import { toFullUrl, downloadBlob, ImageLightbox } from './attachment-view'
 import { chatsApi } from '@/lib/api/chats'
+import type { ChatSettingsPatch } from '@/lib/api/chats'
 import { authApi } from '@/lib/api/auth'
 import { useAuthStore } from '@/lib/store/auth'
 import { useChatNavStore } from '@/lib/store/chat-nav'
@@ -78,7 +80,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const [uploadingFile, setUploadingFile] = useState(false)
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
   const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null)
-  const [forwardTarget, setForwardTarget] = useState<ChatMessage | null>(null)
+  const [forwardMessages, setForwardMessages] = useState<ChatMessage[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchInput, setSearchInput] = useState('')
@@ -86,27 +88,11 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-  const [wallpaper, setWallpaper] = useState<string>(() => {
-    if (typeof window === 'undefined') return 'default'
-    if (chat.wallpaper_id && chat.wallpaper_id !== 'custom') return chat.wallpaper_id
-    return localStorage.getItem(`chat-wallpaper-${chat.id}`) ?? 'default'
-  })
-  const [customWallpaperUrl, setCustomWallpaperUrl] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null
-    if (chat.wallpaper_id === 'custom' && chat.wallpaper_url) return chat.wallpaper_url
-    return localStorage.getItem(`chat-wallpaper-custom-${chat.id}`)
-  })
+  // Обои/цвета/шрифт — персональные настройки вида чата, хранятся на сервере
+  // (per-user) и синхронизируются между устройствами. См. settings-query ниже.
   const [uploadingWallpaper, setUploadingWallpaper] = useState(false)
   const [attachmentsOpen, setAttachmentsOpen] = useState(false)
   const [attachTab, setAttachTab] = useState<'media' | 'files' | 'voice' | 'colors' | 'wallpaper'>('media')
-  const [chatColors, setChatColors] = useState<ChatColors>(() => {
-    if (typeof window === 'undefined') return {}
-    try {
-      const g = localStorage.getItem('chat-colors-global')
-      const p = localStorage.getItem(`chat-colors-${chat.id}`)
-      return { ...(g ? JSON.parse(g) : {}), ...(p ? JSON.parse(p) : {}) }
-    } catch { return {} }
-  })
   const [colorScope, setColorScope] = useState<'chat' | 'global'>('chat')
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
   const [confirmModal, setConfirmModal] = useState<null | 'clear' | 'delete'>(null)
@@ -142,7 +128,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     const handler = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       if (confirmModal) { setConfirmModal(null); return }
-      if (forwardTarget) { setForwardTarget(null); return }
+      if (forwardMessages.length) { setForwardMessages([]); return }
       if (attachmentsOpen) { setAttachmentsOpen(false); return }
       if (stickerPickerOpen) { setStickerPickerOpen(false); return }
       if (selectMode) { setSelectMode(false); setSelectedIds(new Set()); return }
@@ -150,7 +136,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [selectMode, searchOpen, attachmentsOpen, stickerPickerOpen, confirmModal, forwardTarget])
+  }, [selectMode, searchOpen, attachmentsOpen, stickerPickerOpen, confirmModal, forwardMessages])
 
   useEffect(() => {
     const t = setTimeout(() => setSearchQuery(searchInput), 300)
@@ -268,15 +254,64 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   const messagesById = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages])
 
-  const { data: fetchedPinnedMessage = null } = useQuery({
-    queryKey: ['pinned-message', chat.id],
-    queryFn: () => chatsApi.getPinnedMessage(chat.id),
-    enabled: !!chat.pinned_message_id,
+  // Источник правды по закрепам — отдельный эндпоинт /operator/chats/{id}/pinned (массив,
+  // новые→старые). Список /operator/chats закрепы не возвращает, поэтому полагаться на chat нельзя.
+  const { data: pinnedMessages = [] } = useQuery({
+    queryKey: ['pinned-messages', chat.id],
+    queryFn: () => chatsApi.getPinnedMessages(chat.id),
+    staleTime: 30_000,
+  })
+  const pinnedIds = useMemo(() => new Set(pinnedMessages.map(m => m.id)), [pinnedMessages])
+  // активный закреп в плашке — циклически перебираемый кликом
+  const [activePinIdx, setActivePinIdx] = useState(0)
+  const activePin = pinnedMessages.length ? pinnedMessages[activePinIdx % pinnedMessages.length] : null
+  useEffect(() => { setActivePinIdx(0) }, [chat.id])
+
+  // Эффективные персональные настройки вида чата (per-chat override, иначе глобальные).
+  const { data: settings } = useQuery({
+    queryKey: ['chat-settings', chat.id],
+    queryFn: () => chatsApi.getChatSettings(chat.id),
     staleTime: 60_000,
   })
-  const pinnedMessage = chat.pinned_message_id
-    ? (fetchedPinnedMessage ?? messagesById.get(chat.pinned_message_id) ?? null)
+  const chatColors = useMemo<ChatColors>(() => settings ? {
+    ownBubble: settings.own_bubble_color ?? undefined,
+    otherBubble: settings.other_bubble_color ?? undefined,
+    botBubble: settings.bot_bubble_color ?? undefined,
+    ownText: settings.own_text_color ?? undefined,
+    otherText: settings.other_text_color ?? undefined,
+    botText: settings.bot_text_color ?? undefined,
+    nickColor: settings.nick_color ?? undefined,
+    fontSize: settings.font_size ?? undefined,
+  } : {}, [settings])
+  const wallpaper = settings?.wallpaper_id ?? 'default'
+  const customWallpaperUrl = settings?.wallpaper_id === 'custom' && settings.wallpaper_url
+    ? toFullUrl(settings.wallpaper_url)
     : null
+
+  // Применить патч настроек к выбранному scope (этот чат / все чаты).
+  const applySettings = useCallback(async (patch: ChatSettingsPatch) => {
+    try {
+      if (colorScope === 'global') {
+        await chatsApi.updateGlobalSettings(patch)
+        qc.invalidateQueries({ queryKey: ['chat-settings'] })
+      } else {
+        const updated = await chatsApi.updateChatSettings(chat.id, patch)
+        qc.setQueryData(['chat-settings', chat.id], updated)
+      }
+    } catch {
+      toast.error('Не удалось сохранить настройки')
+    }
+  }, [colorScope, chat.id, qc])
+
+  // Обои — всегда per-chat override (вкладка обоев без переключателя scope).
+  const saveWallpaper = useCallback(async (patch: ChatSettingsPatch) => {
+    try {
+      const updated = await chatsApi.updateChatSettings(chat.id, patch)
+      qc.setQueryData(['chat-settings', chat.id], updated)
+    } catch {
+      toast.error('Не удалось сохранить обои')
+    }
+  }, [chat.id, qc])
 
   const { data: rawAttachments = [] } = useQuery({
     queryKey: ['chat-attachments', chat.id],
@@ -338,21 +373,28 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   const pinMutation = useMutation({
     mutationFn: (messageId: number) => chatsApi.pinMessage(chat.id, messageId),
-    onSuccess: (_, messageId) => {
-      qc.setQueriesData<Chat[]>({ queryKey: ['operator-chats'] }, prev =>
-        prev?.map(c => c.id === chat.id ? { ...c, pinned_message_id: messageId } : c) ?? prev
-      )
+    onSuccess: (list) => {
+      qc.setQueryData<ChatMessage[]>(['pinned-messages', chat.id], list)
+      setActivePinIdx(0)
       toast.success('Сообщение закреплено')
     },
-    onError: () => toast.error('Не удалось закрепить'),
+    onError: (e) => toast.error(isAxiosError(e) && e.response?.status === 400 ? 'Достигнут лимит закреплённых (10)' : 'Не удалось закрепить'),
   })
 
   const unpinMutation = useMutation({
-    mutationFn: () => chatsApi.unpinMessage(chat.id),
-    onSuccess: () => {
-      qc.setQueriesData<Chat[]>({ queryKey: ['operator-chats'] }, prev =>
-        prev?.map(c => c.id === chat.id ? { ...c, pinned_message_id: null } : c) ?? prev
-      )
+    mutationFn: (messageId: number) => chatsApi.unpinMessage(chat.id, messageId),
+    onSuccess: (list) => {
+      qc.setQueryData<ChatMessage[]>(['pinned-messages', chat.id], list)
+      setActivePinIdx(0)
+    },
+    onError: () => toast.error('Не удалось открепить'),
+  })
+
+  const unpinAllMutation = useMutation({
+    mutationFn: () => chatsApi.unpinAll(chat.id),
+    onSuccess: (list) => {
+      qc.setQueryData<ChatMessage[]>(['pinned-messages', chat.id], list)
+      setActivePinIdx(0)
     },
     onError: () => toast.error('Не удалось открепить'),
   })
@@ -446,16 +488,19 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     if (e.key === 'Escape') cancelContext()
   }
 
+  // ключ UI-цвета → поле бэкенда (value=undefined => null = сброс)
+  const COLOR_FIELD: Record<keyof ChatColors, keyof ChatSettingsPatch> = {
+    ownBubble: 'own_bubble_color',
+    otherBubble: 'other_bubble_color',
+    botBubble: 'bot_bubble_color',
+    ownText: 'own_text_color',
+    otherText: 'other_text_color',
+    botText: 'bot_text_color',
+    nickColor: 'nick_color',
+    fontSize: 'font_size',
+  }
   const saveColor = (key: keyof ChatColors, value: string | number | undefined) => {
-    const next = { ...chatColors } as Record<string, string | number | undefined>
-    if (value === undefined) delete next[key]
-    else next[key] = value
-    setChatColors(next as ChatColors)
-    const storageKey = colorScope === 'global' ? 'chat-colors-global' : `chat-colors-${chat.id}`
-    const existing: Record<string, unknown> = (() => { try { return JSON.parse(localStorage.getItem(storageKey) ?? '{}') } catch { return {} } })()
-    if (value === undefined) delete existing[key]
-    else existing[key] = value
-    localStorage.setItem(storageKey, JSON.stringify(existing))
+    applySettings({ [COLOR_FIELD[key]]: value ?? null } as ChatSettingsPatch)
   }
 
   const handleReply = (msg: ChatMessage) => { setReplyTo(msg); setEditingMessage(null); textareaRef.current?.focus() }
@@ -527,9 +572,9 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const toggleSearch = () => { setSearchOpen(v => !v); setSearchInput(''); setSearchQuery('') }
 
   const handlePin = useCallback((msg: ChatMessage) => {
-    if (chat.pinned_message_id === msg.id) unpinMutation.mutate()
+    if (pinnedIds.has(msg.id)) unpinMutation.mutate(msg.id)
     else pinMutation.mutate(msg.id)
-  }, [chat.pinned_message_id, pinMutation, unpinMutation])
+  }, [pinnedIds, pinMutation, unpinMutation])
 
   const handleSelectMessage = (msg: ChatMessage) => {
     if (!selectMode) setSelectMode(true)
@@ -549,20 +594,27 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   }
 
   const handleForwardSelected = () => {
-    const firstId = [...selectedIds][0]
-    const msg = messages.find(m => m.id === firstId)
-    if (msg) setForwardTarget(msg)
+    // все выбранные, в хронологическом порядке (как в ленте)
+    const selected = messages.filter(m => selectedIds.has(m.id))
+    if (selected.length) setForwardMessages(selected)
     handleCancelSelect()
   }
 
   const handleTranscribe = async (msg: ChatMessage, audioUrl: string) => {
     setTranscriptions(prev => new Map(prev).set(msg.id, { text: '', loading: true }))
     try {
+      // file_url — относительный путь /static/voices/...; файл уже загружен через /upload/voice
       const { text: result } = await chatsApi.transcribeVoice(audioUrl)
       setTranscriptions(prev => new Map(prev).set(msg.id, { text: result, loading: false }))
-    } catch {
+    } catch (e) {
       setTranscriptions(prev => { const next = new Map(prev); next.delete(msg.id); return next })
-      toast.error('Не удалось распознать голосовое')
+      const status = isAxiosError(e) ? e.response?.status : undefined
+      toast.error(
+        status === 400 ? 'Не удалось распознать этот файл'
+        : status === 404 ? 'Файл недоступен'
+        : status === 503 ? 'Распознавание временно недоступно, попробуйте позже'
+        : 'Не удалось распознать голосовое'
+      )
     }
   }
 
@@ -655,8 +707,11 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
               <div className="absolute top-full right-0 mt-1 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 min-w-52 z-50">
                 <HeaderMenuItem icon="📎" onClick={() => { setAttachmentsOpen(true); setHeaderMenuOpen(false) }}>Вложения чата</HeaderMenuItem>
                 <HeaderMenuItem icon="🖼" onClick={() => { setAttachTab('wallpaper'); setAttachmentsOpen(true); setHeaderMenuOpen(false) }}>Обои</HeaderMenuItem>
-                {!!chat.pinned_message_id && (
-                  <HeaderMenuItem icon="📌" onClick={() => { if (pinnedMessage) handleScrollToMessage(pinnedMessage.id); setHeaderMenuOpen(false) }}>Перейти к закреплённому</HeaderMenuItem>
+                {pinnedMessages.length > 0 && (
+                  <HeaderMenuItem icon="📌" onClick={() => { if (activePin) handleScrollToMessage(activePin.id); setHeaderMenuOpen(false) }}>Перейти к закреплённому</HeaderMenuItem>
+                )}
+                {pinnedMessages.length > 1 && (
+                  <HeaderMenuItem icon="📌" onClick={() => { unpinAllMutation.mutate(); setHeaderMenuOpen(false) }} danger>Открепить все ({pinnedMessages.length})</HeaderMenuItem>
                 )}
                 <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
                 <HeaderMenuItem icon="🗑" onClick={() => { setConfirmModal('clear'); setHeaderMenuOpen(false) }} danger>Очистить историю</HeaderMenuItem>
@@ -667,15 +722,27 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         </div>
       </div>
 
-      {!!chat.pinned_message_id && !searchOpen && (
+      {!!activePin && !searchOpen && (
         <div className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-          onClick={() => { if (pinnedMessage) handleScrollToMessage(pinnedMessage.id) }}>
-          <div className="w-0.5 h-7 bg-[#1B3A72] dark:bg-blue-400 rounded-full shrink-0" />
+          onClick={() => { handleScrollToMessage(activePin.id); if (pinnedMessages.length > 1) setActivePinIdx(i => (i + 1) % pinnedMessages.length) }}>
+          {/* индикатор позиции среди нескольких закрепов */}
+          {pinnedMessages.length > 1 ? (
+            <div className="flex flex-col gap-0.5 shrink-0 self-stretch py-0.5">
+              {pinnedMessages.map((m, i) => (
+                <div key={m.id} className={cn('flex-1 w-0.5 rounded-full', i === activePinIdx % pinnedMessages.length ? 'bg-[#1B3A72] dark:bg-blue-400' : 'bg-slate-300 dark:bg-slate-600')} />
+              ))}
+            </div>
+          ) : (
+            <div className="w-0.5 h-7 bg-[#1B3A72] dark:bg-blue-400 rounded-full shrink-0" />
+          )}
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-semibold text-[#1B3A72] dark:text-blue-400">Закреплённое сообщение</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{pinnedMessage?.text || '📎 Вложение'}</p>
+            <p className="text-[10px] font-semibold text-[#1B3A72] dark:text-blue-400">
+              {pinnedMessages.length > 1 ? `Закреплённое сообщение ${activePinIdx % pinnedMessages.length + 1}/${pinnedMessages.length}` : 'Закреплённое сообщение'}
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{activePin.text || '📎 Вложение'}</p>
           </div>
-          <button onClick={(e) => { e.stopPropagation(); unpinMutation.mutate() }}
+          <button onClick={(e) => { e.stopPropagation(); unpinMutation.mutate(activePin.id) }}
+            title="Открепить"
             className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-xs">
             ✕
           </button>
@@ -743,11 +810,11 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
               isLastInGroup={item.isLastInGroup}
               messagesById={messagesById}
               currentUserId={currentUser?.id}
-              pinnedMessageId={pinnedMessage?.id}
+              pinnedMessageIds={pinnedIds}
               onReply={handleReply}
               onEdit={item.isOwn ? handleEdit : undefined}
               onDelete={item.isOwn ? (msg) => deleteMutation.mutate(msg.id) : undefined}
-              onForward={(msg) => setForwardTarget(msg)}
+              onForward={(msg) => setForwardMessages([msg])}
               onReact={handleReact}
               onScrollToMessage={handleScrollToMessage}
               onPin={handlePin}
@@ -931,8 +998,8 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         </>
       )}
 
-      {forwardTarget && (
-        <ForwardDialog message={forwardTarget} currentChatId={chat.id} onClose={() => setForwardTarget(null)} />
+      {forwardMessages.length > 0 && (
+        <ForwardDialog messages={forwardMessages} currentChatId={chat.id} onClose={() => setForwardMessages([])} />
       )}
 
       {attachmentsOpen && (
@@ -1132,13 +1199,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
                   <div className="grid grid-cols-3 gap-3">
                     {WALLPAPERS.map(wp => (
                       <button key={wp.id}
-                        onClick={() => {
-                          setWallpaper(wp.id)
-                          setCustomWallpaperUrl(null)
-                          localStorage.setItem(`chat-wallpaper-${chat.id}`, wp.id)
-                          localStorage.removeItem(`chat-wallpaper-custom-${chat.id}`)
-                          chatsApi.setWallpaper(chat.id, wp.id).catch(() => {})
-                        }}
+                        onClick={() => saveWallpaper({ wallpaper_id: wp.id === 'default' ? null : wp.id, wallpaper_url: null })}
                         className={cn('h-20 rounded-xl border-2 flex items-end justify-center pb-2 transition-all cursor-pointer overflow-hidden', wallpaper === wp.id && !customWallpaperUrl ? 'border-[#1B3A72] scale-95 shadow-md' : 'border-transparent hover:scale-95')}
                         style={{ background: isDarkMode ? wp.dark : wp.light }}>
                         <span className="text-[10px] font-semibold text-white drop-shadow px-1.5 py-0.5 rounded-full bg-black/25">{wp.label}</span>
@@ -1162,12 +1223,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
                           setUploadingWallpaper(true)
                           try {
                             const { url } = await chatsApi.uploadAttachment(file)
-                            const fullUrl = toFullUrl(url)
-                            setCustomWallpaperUrl(fullUrl)
-                            setWallpaper('custom')
-                            localStorage.setItem(`chat-wallpaper-${chat.id}`, 'custom')
-                            localStorage.setItem(`chat-wallpaper-custom-${chat.id}`, fullUrl)
-                            chatsApi.setWallpaper(chat.id, 'custom', fullUrl).catch(() => {})
+                            await saveWallpaper({ wallpaper_id: 'custom', wallpaper_url: url })
                           } catch {
                             toast.error('Не удалось загрузить изображение')
                           } finally {
@@ -1181,13 +1237,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
                             <img src={customWallpaperUrl} alt="Custom" className="w-full h-full object-cover" />
                           </div>
                           <button
-                            onClick={() => {
-                              setCustomWallpaperUrl(null)
-                              setWallpaper('default')
-                              localStorage.removeItem(`chat-wallpaper-custom-${chat.id}`)
-                              localStorage.setItem(`chat-wallpaper-${chat.id}`, 'default')
-                              chatsApi.setWallpaper(chat.id, 'default').catch(() => {})
-                            }}
+                            onClick={() => saveWallpaper({ wallpaper_id: null, wallpaper_url: null })}
                             className="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer text-sm">
                             ✕
                           </button>
@@ -1253,19 +1303,46 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   )
 }
 
-function ForwardDialog({ message, currentChatId, onClose }: { message: ChatMessage; currentChatId: number; onClose: () => void }) {
+function ForwardDialog({ messages, currentChatId, onClose }: { messages: ChatMessage[]; currentChatId: number; onClose: () => void }) {
   const qc = useQueryClient()
   const [sending, setSending] = useState(false)
-  const chats = (qc.getQueryData<Chat[]>(['operator-chats']) ?? []).filter((c) => c.id !== currentChatId)
+  const [showSender, setShowSender] = useState(true)
+  // Ключ запроса — ['operator-chats', chatSearch] (с параметром поиска), поэтому берём
+  // данные из всех совпадающих запросов через getQueriesData, а не точечным getQueryData.
+  const chats = (() => {
+    const seen = new Set<number>()
+    const list: Chat[] = []
+    for (const [, data] of qc.getQueriesData<Chat[]>({ queryKey: ['operator-chats'] })) {
+      for (const c of data ?? []) {
+        if (c.id === currentChatId || seen.has(c.id)) continue
+        seen.add(c.id)
+        list.push(c)
+      }
+    }
+    return list
+  })()
 
   const forward = async (chatId: number) => {
     setSending(true)
     try {
-      const msg = await chatsApi.sendMessage(chatId, message.text ?? '', message.attachments?.length ? message.attachments : undefined)
-      qc.setQueryData<Chat[]>(['operator-chats'], (prev) =>
-        prev?.map((c) => c.id === chatId ? { ...c, last_message_text: msg.text || msg.attachments?.[0]?.file_name || c.last_message_text, last_message_at: msg.created_at } : c) ?? []
-      )
-      toast.success('Сообщение переслано')
+      let lastMsg: ChatMessage | null = null
+      let prevSender: string | null = null
+      // последовательно, чтобы сохранить порядок сообщений на бэке
+      for (const m of messages) {
+        // подпись отправителя показываем только когда он меняется (как в Telegram)
+        const header = showSender && m.sender_name !== prevSender ? `↪ ${m.sender_name}` : ''
+        const body = m.text ?? ''
+        const text = header && body ? `${header}\n${body}` : (header || body)
+        lastMsg = await chatsApi.sendMessage(chatId, text, m.attachments?.length ? m.attachments : undefined)
+        prevSender = m.sender_name
+      }
+      if (lastMsg) {
+        const last = lastMsg
+        qc.setQueriesData<Chat[]>({ queryKey: ['operator-chats'] }, (prev) =>
+          prev?.map((c) => c.id === chatId ? { ...c, last_message_text: last.text || last.attachments?.[0]?.file_name || c.last_message_text, last_message_at: last.created_at } : c) ?? prev
+        )
+      }
+      toast.success(messages.length > 1 ? `Переслано сообщений: ${messages.length}` : 'Сообщение переслано')
       onClose()
     } catch {
       toast.error('Не удалось переслать')
@@ -1279,11 +1356,23 @@ function ForwardDialog({ message, currentChatId, onClose }: { message: ChatMessa
       <div className="absolute inset-0 bg-black/40 dark:bg-black/60" />
       <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 mb-4 sm:mb-0 max-h-[60vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
-          <p className="font-semibold text-slate-800 dark:text-slate-100">Переслать в чат</p>
+          <p className="font-semibold text-slate-800 dark:text-slate-100">
+            {messages.length > 1 ? `Переслать (${messages.length})` : 'Переслать в чат'}
+          </p>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
+        <button
+          type="button"
+          onClick={() => setShowSender(v => !v)}
+          className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-slate-100 dark:border-slate-700 text-left hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer"
+        >
+          <span className="text-sm text-slate-700 dark:text-slate-200">Показывать отправителя</span>
+          <span className={cn('relative w-9 h-5 rounded-full transition-colors shrink-0', showSender ? 'bg-[#1B3A72]' : 'bg-slate-300 dark:bg-slate-600')}>
+            <span className={cn('absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform', showSender && 'translate-x-4')} />
+          </span>
+        </button>
         <div className="overflow-y-auto flex-1 py-1">
           {chats.length === 0 && <p className="text-sm text-slate-400 text-center py-8">Нет других чатов</p>}
           {chats.map((c) => (

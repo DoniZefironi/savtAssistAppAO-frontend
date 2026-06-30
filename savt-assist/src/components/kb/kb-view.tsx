@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { API_URL } from '@/lib/api/client'
 import { useAuthStore } from '@/lib/store/auth'
+import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -50,7 +51,7 @@ export function KbView() {
   const qc = useQueryClient()
   const sentinelRef = useRef<HTMLDivElement>(null)
 
-  const [panelWidth, setPanelWidth] = useState(CAT_DEFAULT)
+  const [panelWidth, setPanelWidth] = usePersistentState('sidebar-width-kb', CAT_DEFAULT)
   const [isSnapping, setIsSnapping] = useState(false)
   const [isDesktop, setIsDesktop] = useState(false)
   const isDragging = useRef(false)

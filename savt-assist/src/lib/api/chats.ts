@@ -14,6 +14,24 @@ export interface MessageSearchResult {
   attachments: unknown[]
 }
 
+/** Персональные настройки вида чата (per-user). chat_id=null — глобальные. */
+export interface ChatSettings {
+  user_id: number
+  chat_id: number | null
+  own_bubble_color: string | null
+  other_bubble_color: string | null
+  bot_bubble_color: string | null
+  own_text_color: string | null
+  other_text_color: string | null
+  bot_text_color: string | null
+  nick_color: string | null
+  font_size: number | null
+  wallpaper_id: string | null
+  wallpaper_url: string | null
+}
+
+export type ChatSettingsPatch = Partial<Omit<ChatSettings, 'user_id' | 'chat_id'>>
+
 export const chatsApi = {
   getChats: async (search?: string): Promise<Chat[]> => {
     const { data } = await apiClient.get<Chat[]>('/operator/chats', {
@@ -83,20 +101,29 @@ export const chatsApi = {
     return data
   },
 
-  pinMessage: async (chatId: number, messageId: number): Promise<void> => {
-    await apiClient.put(`/chats/${chatId}/pin/${messageId}`)
+  // Закрепы — массив (до 10 на чат). PUT/DELETE возвращают актуальный список,
+  // поэтому второй запрос за списком не нужен.
+  pinMessage: async (chatId: number, messageId: number): Promise<ChatMessage[]> => {
+    const { data } = await apiClient.put<ChatMessage[]>(`/operator/chats/${chatId}/pin/${messageId}`)
+    return data
   },
 
-  unpinMessage: async (chatId: number): Promise<void> => {
-    await apiClient.delete(`/chats/${chatId}/pin`)
+  unpinMessage: async (chatId: number, messageId: number): Promise<ChatMessage[]> => {
+    const { data } = await apiClient.delete<ChatMessage[]>(`/operator/chats/${chatId}/pin/${messageId}`)
+    return data
   },
 
-  getPinnedMessage: async (chatId: number): Promise<ChatMessage | null> => {
+  unpinAll: async (chatId: number): Promise<ChatMessage[]> => {
+    const { data } = await apiClient.delete<ChatMessage[]>(`/operator/chats/${chatId}/pin`)
+    return data
+  },
+
+  getPinnedMessages: async (chatId: number): Promise<ChatMessage[]> => {
     try {
-      const { data } = await apiClient.get<ChatMessage>(`/operator/chats/${chatId}/pinned`)
-      return data ?? null
+      const { data } = await apiClient.get<ChatMessage[]>(`/operator/chats/${chatId}/pinned`)
+      return data ?? []
     } catch {
-      return null
+      return []
     }
   },
 
@@ -110,7 +137,7 @@ export const chatsApi = {
   },
 
   deleteChat: async (chatId: number): Promise<void> => {
-    await apiClient.delete(`/chats/${chatId}`)
+    await apiClient.delete(`/operator/chats/${chatId}`)
   },
 
   getMessagesAround: async (chatId: number, aroundId: number, limit = 30): Promise<ChatMessage[]> => {
@@ -126,7 +153,13 @@ export const chatsApi = {
   },
 
   transcribeVoice: async (audioUrl: string): Promise<{ text: string }> => {
-    const { data } = await apiClient.post<{ text: string }>('/upload/transcribe', { file_url: audioUrl })
+    // Длинные голосовые (>1 МБ) сервер обрабатывает синхронно через Yandex до ~100с,
+    // поэтому таймаут запроса поднят до 120с (короткие отвечают за 1-3с).
+    const { data } = await apiClient.post<{ text: string }>(
+      '/upload/transcribe',
+      { file_url: audioUrl },
+      { timeout: 120_000 },
+    )
     return data
   },
 
@@ -142,10 +175,31 @@ export const chatsApi = {
     await apiClient.post(`/operator/chats/${chatId}/return-to-bot`)
   },
 
-  setWallpaper: async (chatId: number, wallpaperId: string, wallpaperUrl?: string): Promise<void> => {
-    await apiClient.patch(`/chats/${chatId}/wallpaper`, {
-      wallpaper_id: wallpaperId,
-      ...(wallpaperUrl ? { wallpaper_url: wallpaperUrl } : {}),
-    })
+  // Персональные настройки вида чата (цвета, шрифт, обои) — per-user, синхронизируются
+  // между устройствами. Глобальные + per-chat override (override имеет приоритет).
+  getGlobalSettings: async (): Promise<ChatSettings> => {
+    const { data } = await apiClient.get<ChatSettings>('/operator/chats/settings')
+    return data
+  },
+
+  updateGlobalSettings: async (patch: ChatSettingsPatch): Promise<ChatSettings> => {
+    const { data } = await apiClient.patch<ChatSettings>('/operator/chats/settings', patch)
+    return data
+  },
+
+  /** Эффективные настройки чата: per-chat override, иначе глобальные. */
+  getChatSettings: async (chatId: number): Promise<ChatSettings> => {
+    const { data } = await apiClient.get<ChatSettings>(`/operator/chats/${chatId}/settings`)
+    return data
+  },
+
+  updateChatSettings: async (chatId: number, patch: ChatSettingsPatch): Promise<ChatSettings> => {
+    const { data } = await apiClient.patch<ChatSettings>(`/operator/chats/${chatId}/settings`, patch)
+    return data
+  },
+
+  /** Сбросить per-chat override (откат к глобальным). */
+  resetChatSettings: async (chatId: number): Promise<void> => {
+    await apiClient.delete(`/operator/chats/${chatId}/settings`)
   },
 }

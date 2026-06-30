@@ -58,9 +58,6 @@ export interface Chat {
   problem_status: string | null
   bot_active: boolean
   operator_requested: boolean
-  wallpaper_id?: string | null
-  wallpaper_url?: string | null
-  pinned_message_id?: number | null
 }
 
 export interface ChatMessage {

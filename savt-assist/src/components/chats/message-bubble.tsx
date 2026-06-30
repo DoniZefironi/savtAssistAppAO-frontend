@@ -30,7 +30,7 @@ interface Props {
   isLastInGroup: boolean
   messagesById?: Map<number, ChatMessage>
   currentUserId?: number
-  pinnedMessageId?: number
+  pinnedMessageIds?: Set<number>
   onReply?: (msg: ChatMessage) => void
   onEdit?: (msg: ChatMessage) => void
   onDelete?: (msg: ChatMessage) => void
@@ -56,7 +56,7 @@ interface Props {
 
 export function MessageBubble({
   message, isOwn, isBot, showAvatar, showName, isLastInGroup,
-  messagesById, currentUserId, pinnedMessageId,
+  messagesById, currentUserId, pinnedMessageIds,
   onReply, onEdit, onDelete, onForward, onReact, onScrollToMessage,
   onPin, onSelect, isSelected, selectMode,
   transcription, transcribing, onTranscribe,
@@ -68,7 +68,7 @@ export function MessageBubble({
   const hasAttachments = !!message.attachments?.length
   const replyMsg = message.reply_to_message_id != null ? messagesById?.get(message.reply_to_message_id) : undefined
   const voiceAttachment = message.attachments?.find(a => a.mime_type.startsWith('audio/'))
-  const isPinned = message.id === pinnedMessageId
+  const isPinned = !!pinnedMessageIds?.has(message.id)
   const effectiveOwnText = ownTextColor ?? (ownBubbleColor ? getContrastColor(ownBubbleColor) : undefined)
   const effectiveOtherText = otherTextColor ?? (otherBubbleColor ? getContrastColor(otherBubbleColor) : undefined)
   const effectiveBotText = botTextColor ?? (botBubbleColor ? getContrastColor(botBubbleColor) : undefined)

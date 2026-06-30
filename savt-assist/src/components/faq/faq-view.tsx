@@ -10,6 +10,7 @@ import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuthStore } from '@/lib/store/auth'
+import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -39,7 +40,7 @@ export function FaqView() {
   const CAT_DEFAULT = 208
   const CAT_MAX = 360
   const CAT_SNAP = 56
-  const [panelWidth, setPanelWidth] = useState(CAT_DEFAULT)
+  const [panelWidth, setPanelWidth] = usePersistentState('sidebar-width-faq', CAT_DEFAULT)
   const [isSnapping, setIsSnapping] = useState(false)
   const [isDesktop, setIsDesktop] = useState(false)
   const isDragging = useRef(false)

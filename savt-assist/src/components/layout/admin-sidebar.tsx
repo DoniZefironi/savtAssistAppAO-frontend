@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -8,10 +7,11 @@ import Cookies from 'js-cookie'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/lib/store/auth'
 import { authApi } from '@/lib/api/auth'
+import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import Image from 'next/image'
 
 export function AdminSidebar({ mobileOpen, onMobileClose }: { mobileOpen: boolean; onMobileClose: () => void }) {
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = usePersistentState('sidebar-collapsed', false)
   const pathname = usePathname()
   const router = useRouter()
   const { user, logout } = useAuthStore()

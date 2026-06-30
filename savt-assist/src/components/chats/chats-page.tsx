@@ -7,6 +7,7 @@ import { ChatConversation } from './chat-conversation'
 import { chatsApi } from '@/lib/api/chats'
 import { cabinetsApi } from '@/lib/api/cabinets'
 import { useChatNavStore } from '@/lib/store/chat-nav'
+import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import type { Chat, ChatMessage } from '@/types'
 
 const DEFAULT_WIDTH = 288
@@ -24,7 +25,7 @@ export function ChatsPage() {
   const [chatSearchInput, setChatSearchInput] = useState('')
   const [chatSearch, setChatSearch] = useState('')
 
-  const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH)
+  const [panelWidth, setPanelWidth] = usePersistentState('sidebar-width-chats', DEFAULT_WIDTH)
   const [isSnapping, setIsSnapping] = useState(false)
   const [isDesktop, setIsDesktop] = useState(false)
   const isDragging = useRef(false)

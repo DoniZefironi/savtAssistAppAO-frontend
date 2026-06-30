@@ -4,6 +4,7 @@
 
 | Роль     | Логин              | Пароль           |
 |----------|--------------------|------------------|
+| super    | superadmin         | MyStr0ngPass     |
 | admin    | admin              | 123qweASDZXC     |
 | operator | operator           | 123qweASDZXC     |
 | user     | +375291002030      | qweasdzxc        |
@@ -271,6 +272,10 @@ GET /chats/{chat_id}/messages?limit=30
 Загрузка более старых (пользователь скроллит вверх):
 GET /chats/{chat_id}/messages?before_id={oldest_msg_id}&limit=30
 → Добавить в начало списка.
+
+Загрузка вокруг конкретного сообщения (поиск + переход по ссылке):
+GET /chats/{chat_id}/messages?around_id={msg_id}&limit=30
+→ Возвращает сообщения до и после указанного ID.
 ```
 
 ### Отправка сообщения
@@ -327,11 +332,13 @@ POST /chats/{chat_id}/read
 ```
 
 ### Обои чата
+Обои — личная настройка пользователя; собеседник не видит выбранный фон.
 ```
 Установить: PATCH /chats/{chat_id}/wallpaper
 Тело: { "wallpaper_url": "/static/photos/bg.jpg" }
 Сбросить:   { "wallpaper_url": null }
-→ Ответ: ChatOut с обновлённым wallpaper_url
+→ Ответ: ChatSettingsOut с обновлённым wallpaper_url
+   (обои сохраняются в настройках пользователя, а не в самом чате)
 ```
 
 ### Удалить чат
@@ -348,7 +355,9 @@ DELETE /operator/chats/{chat_id}/messages
 → 204 No Content
 ```
 
-### Настройки вида чата (цвета, шрифт)
+### Настройки вида чата (цвета, шрифт, обои)
+Все настройки вида — личные: собеседник видит чат со своими настройками.
+
 Глобальные настройки (применяются ко всем чатам пользователя):
 ```
 GET   /chats/settings          → ChatSettingsOut
@@ -363,6 +372,9 @@ DELETE /chats/{chat_id}/settings   → сбрасывает override (откат
 → 204 No Content для DELETE
 ```
 
+Обои — часть настроек per-chat; можно задать через `PATCH /chats/{chat_id}/wallpaper`
+или через `PATCH /chats/{chat_id}/settings` (поле `wallpaper_url`).
+
 Тело запроса `ChatSettingsIn` (все поля опциональны):
 ```json
 {
@@ -373,10 +385,11 @@ DELETE /chats/{chat_id}/settings   → сбрасывает override (откат
   "other_text_color": "#000000",
   "bot_text_color": "#555555",
   "nick_color": "#128C7E",
-  "font_size": 14
+  "font_size": 14,
+  "wallpaper_url": "/static/photos/bg.jpg"
 }
 ```
-Цвета — HEX `#RRGGBB`. `font_size` — от 8 до 24.
+Цвета — HEX `#RRGGBB`. `font_size` — от 8 до 24. `wallpaper_url` — URL обоев (null = сброс).
 
 ### Голосовое сообщение → текст
 ```
@@ -891,6 +904,30 @@ POST /upload/transcribe (JSON: { file_url: "/static/voices/abc.ogg" })
 
 ---
 
+### GET `/admin/cabinets/geo`
+Лёгкий endpoint для карты — возвращает **все** ШУ одним запросом без пагинации.
+
+Ответ (`list[CabinetGeoItem]`):
+```json
+[
+  {
+    "id": 3,
+    "object_number": "29_099",
+    "admin_internal_name": "Главная подстанция",
+    "warranty_status": "active",
+    "latitude": 53.9,
+    "longitude": 27.56,
+    "has_open_requests": true
+  }
+]
+```
+
+`warranty_status`: `active` | `expiring_soon` | `expired`.  
+`has_open_requests`: есть ли хотя бы одна сервисная заявка со статусом `open`.  
+ШУ без координат тоже включены (`latitude`/`longitude` = `null`) — фронт фильтрует сам.
+
+---
+
 ### GET `/admin/cabinets/{cabinet_id}`
 Детальная информация о ШУ с тегами.
 
@@ -1137,6 +1174,14 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 
 ### GET `/admin/admins`
 Только администраторы (`role=admin`). **Только для суперадмина.** Параметры: аналогично `/admin/users` (без значения `role` в `sort_by`), включая `is_verified` и `is_phone_verified`.
+
+### GET `/admin/admins/{user_id}`
+Детальная информация об администраторе. **Только для суперадмина.**
+
+---
+
+### POST `/admin/admins`
+Создать администратора (короткий alias для `POST /admin/users/admins`). **Только для суперадмина.**
 
 ---
 
@@ -1622,10 +1667,9 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ]
 ```
 
-`ChatOut` (возвращается при `GET /cabinets/{cabinet_id}/chat`, `PATCH wallpaper`, `PUT/DELETE pin`) содержит дополнительные поля:
+`ChatOut` (возвращается при `GET /cabinets/{cabinet_id}/chat`, `PUT/DELETE pin`) содержит дополнительное поле:
 ```json
 {
-  "wallpaper_url": "/static/photos/bg.jpg",
   "pinned_message_id": 42
 }
 ```
@@ -1641,10 +1685,13 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 
 ### GET `/chats/{chat_id}/messages`
 История сообщений. Параметры:
-- `before_id` — ID сообщения, загрузить более старые (cursor pagination для бесконечного скролла)
+- `before_id` — ID сообщения, загрузить более старые (cursor pagination, скролл вверх)
+- `after_id` — загрузить более новые (`id > after_id`, скролл вниз; пустой массив = дошли до конца, симметрично `before_id`)
+- `around_id` — загрузить сообщения вокруг указанного ID (для перехода к конкретному сообщению)
 - `limit` — количество (по умолчанию `30`, максимум `100`)
 - `search` — поиск по тексту сообщений
 
+Приоритет курсоров при передаче нескольких: `around_id` → `after_id` → `before_id`/`search`.
 Сообщения возвращаются от новых к старым.
 ```json
 [
@@ -1719,11 +1766,11 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ---
 
 ### PATCH `/chats/{chat_id}/wallpaper`
-Установить или сбросить обои чата. Доступно только владельцу.
+Установить или сбросить обои чата. Доступно только владельцу. Обои личные — собеседник их не видит.
 ```json
 { "wallpaper_url": "/static/photos/bg.jpg" }
 ```
-Для сброса: `{ "wallpaper_url": null }`. Ответ: `ChatOut`.
+Для сброса: `{ "wallpaper_url": null }`. Ответ: `ChatSettingsOut`.
 
 ---
 
@@ -1790,10 +1837,11 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
   "other_text_color": "#000000",
   "bot_text_color": "#555555",
   "nick_color": "#128C7E",
-  "font_size": 14
+  "font_size": 14,
+  "wallpaper_url": "/static/photos/bg.jpg"
 }
 ```
-`chat_id: null` — глобальные настройки.
+`chat_id: null` — глобальные настройки. `wallpaper_url: null` — обои не установлены.
 
 ---
 
@@ -1812,12 +1860,24 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 
 Каждый чат содержит `user_id`, `user_name`, `cabinet_object_number`.
 
+> **Оптимизация:** запрос выполняется за 3 DB-запроса независимо от числа чатов (JOIN на User+Cabinet + batch unread counts + batch last messages), вместо 4N+1 в предыдущей версии.
+
+---
+
+### GET `/operator/chats/{chat_id}/pinned`
+Закреплённое сообщение чата. Возвращает `MessageOut` или `null` если ничего не закреплено.
+
 ---
 
 ### GET `/operator/chats/{chat_id}/messages`
 История сообщений чата. Параметры:
-- `before_id`, `limit` — cursor pagination
+- `before_id` — cursor pagination (старее указанного ID, скролл вверх)
+- `after_id` — новее указанного ID (`id > after_id`, скролл вниз; пустой массив = конец)
+- `around_id` — сообщения вокруг указанного ID (для перехода к результату поиска)
+- `limit` — количество (по умолч. `30`, максимум `100`)
 - `search` — поиск по тексту сообщений
+
+Приоритет курсоров: `around_id` → `after_id` → `before_id`/`search`.
 
 Личные чаты пользователя (`chat_type=notes`) недоступны оператору/админу — `403`.
 
@@ -1883,6 +1943,51 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
   "total": 3, "page": 1, "size": 20, "pages": 1
 }
 ```
+
+---
+
+### GET `/operator/chats/unread-count`
+Быстрый бейдж — количество чатов (`cabinet` + `support`), в которых есть хотя бы одно непрочитанное сообщение от пользователя.
+
+Ответ:
+```json
+{ "count": 3 }
+```
+
+---
+
+## Рут `admin/dashboard` — дашборд
+
+### GET `/admin/dashboard`
+Единый endpoint для главного экрана администратора/оператора. Возвращает все счётчики одним запросом (5 DB-запросов) и последние 10 действий по всем типам заявок.
+
+**Доступ:** `operator`, `admin`.
+
+Ответ (`DashboardOut`):
+```json
+{
+  "stats": {
+    "unread_chats": 2,
+    "open_service_requests": 5,
+    "pending_document_requests": 3,
+    "pending_share_requests": 1,
+    "pending_addition_requests": 4
+  },
+  "recent_activity": [
+    {
+      "id": 12,
+      "type": "service",
+      "status": "open",
+      "user_id": 8,
+      "user_full_name": "Иванов Иван",
+      "cabinet_id": 3,
+      "created_at": "2026-06-24T10:00:00Z"
+    }
+  ]
+}
+```
+
+Поле `type`: `service` | `document` | `share` | `addition`.
 
 ---
 
@@ -1992,6 +2097,11 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 
 ### POST `/notifications/read-all`
 Отметить все уведомления пользователя как прочитанные. `204 No Content`.
+
+---
+
+### DELETE `/notifications`
+Удалить все уведомления текущего пользователя. `204 No Content`.
 
 ---
 
@@ -2413,6 +2523,26 @@ UPDATE chats SET bot_no_count = 0, follow_up_sent = false;
 -- Посмотреть сколько чанков проиндексировано
 SELECT source_type, COUNT(*) FROM embeddings GROUP BY source_type;
 ```
+
+---
+
+## Рут `admin: audit` — журнал действий
+
+### GET `/admin/audit-logs`
+Журнал административных действий (создание/удаление пользователей, баны, верификации и т.п.). Доступно администратору и оператору.
+
+Параметры:
+- `actor_id` — фильтр по ID исполнителя
+- `actor_role` — фильтр по роли: `admin` / `operator` / `user` / `system`
+- `action` — фильтр по типу действия (строка)
+- `entity_type` — фильтр по типу сущности (строка)
+- `entity_id` — фильтр по ID сущности
+- `date_from`, `date_to` — диапазон дат (ISO 8601)
+- `search` — поиск по тексту
+- `search_in` — где искать: `all` (по умолч.) / `action` / `entity_type` / `actor_name` / `payload`
+- `sort_by` — `created_at` (по умолч.) / `action` / `entity_type` / `actor_role` / `actor_id`
+- `sort_order` — `asc` / `desc`
+- `page`, `size` — пагинация (по умолч. `1` / `50`, максимум `200`)
 
 ---
 

@@ -155,7 +155,7 @@ function AudioAttachment({ a, isOwn, transcription, transcribing, onTranscribe }
           onClick={toggle}
           className={cn(
             'w-10 h-10 rounded-full flex items-center justify-center shrink-0 cursor-pointer transition-colors',
-            isOwn ? 'bg-white/25 hover:bg-white/40 text-white' : 'bg-[#1B3A72] hover:bg-[#1B3A72]/80 text-white'
+            isOwn ? 'bg-white/25 hover:bg-white/40 text-white' : 'bg-[#1B3A72] hover:bg-[#1B3A72]/80 text-white dark:bg-blue-600 dark:hover:bg-blue-500'
           )}
         >
           {playing ? <PauseIcon /> : <PlayIcon />}
@@ -168,24 +168,24 @@ function AudioAttachment({ a, isOwn, transcription, transcribing, onTranscribe }
               return (
                 <div
                   key={i}
-                  className="flex-1 rounded-full min-w-[2px]"
-                  style={{
-                    height: `${pct}%`,
-                    backgroundColor: filled
-                      ? (isOwn ? 'rgba(255,255,255,0.9)' : '#1B3A72')
-                      : (isOwn ? 'rgba(255,255,255,0.3)' : 'rgba(27,58,114,0.25)'),
-                  }}
+                  className={cn(
+                    'flex-1 rounded-full min-w-[2px]',
+                    isOwn
+                      ? (filled ? 'bg-white/90' : 'bg-white/30')
+                      : (filled ? 'bg-[#1B3A72] dark:bg-slate-200' : 'bg-[#1B3A72]/25 dark:bg-white/25')
+                  )}
+                  style={{ height: `${pct}%` }}
                 />
               )
             })}
           </div>
 
           <div className="flex items-center justify-between">
-            <span className={cn('text-[10px]', isOwn ? 'text-white/55' : 'text-slate-400 dark:text-slate-500')}>
+            <span className={cn('text-[10px]', isOwn ? 'text-white/55' : 'text-slate-400 dark:text-slate-300')}>
               {isVoice ? '🎙 ' : '🎵 '}{displayTime || '0:00'}
             </span>
             <div className="flex items-center gap-1.5">
-              {isVoice && onTranscribe && !transcription && (
+              {onTranscribe && !transcription && (
                 <button
                   onClick={onTranscribe}
                   disabled={transcribing}
@@ -203,7 +203,7 @@ function AudioAttachment({ a, isOwn, transcription, transcribing, onTranscribe }
               <button
                 onClick={() => downloadBlob(url, a.file_name)}
                 title="Скачать"
-                className={cn('cursor-pointer transition-colors', isOwn ? 'text-white/50 hover:text-white' : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300')}
+                className={cn('cursor-pointer transition-colors', isOwn ? 'text-white/50 hover:text-white' : 'text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200')}
               >
                 <DownloadIcon size={13} />
               </button>
