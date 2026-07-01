@@ -82,11 +82,10 @@ export const kbApi = {
 
   deleteCategory: (id: number) => apiClient.delete(`/admin/kb/categories/${id}`),
 
-  // Админский список (включая неопубликованные) — публичный /kb/articles всегда
-  // фильтрует is_published=true и скрыл бы черновики даже от самой админки.
+  // Используем админский список (не публичный /kb/articles), чтобы получить
+  // расширенные sort_by (version) и не зависеть от публичной фильтрации.
   listArticles: (params?: {
     category_id?: number
-    is_published?: boolean
     search?: string
     sort_by?: string
     sort_order?: string
@@ -102,7 +101,7 @@ export const kbApi = {
   createArticle: (data: { category_id: number; title: string; description?: string | null }): Promise<KbArticleDetail> =>
     apiClient.post('/admin/kb/articles', data).then(r => r.data),
 
-  updateArticle: (id: number, data: { title?: string | null; description?: string | null; category_id?: number | null; is_published?: boolean }): Promise<KbArticleDetail> =>
+  updateArticle: (id: number, data: { title?: string | null; description?: string | null; category_id?: number | null }): Promise<KbArticleDetail> =>
     apiClient.patch(`/admin/kb/articles/${id}`, data).then(r => r.data),
 
   deleteArticle: (id: number) => apiClient.delete(`/admin/kb/articles/${id}`),

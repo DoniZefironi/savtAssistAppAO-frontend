@@ -26,17 +26,14 @@ function fullUrl(url: string) {
   return url.startsWith('http') ? url : `${API_URL}${url}`
 }
 
-type SortValue = 'created_at' | 'updated_at' | 'title' | 'version' | 'is_published'
+type SortValue = 'created_at' | 'updated_at' | 'title' | 'version'
 
 const SORT_OPTIONS: { value: SortValue; label: string }[] = [
   { value: 'created_at', label: 'По дате' },
   { value: 'updated_at', label: 'По изменению' },
   { value: 'title', label: 'По названию' },
   { value: 'version', label: 'По версии' },
-  { value: 'is_published', label: 'По публикации' },
 ]
-
-type PublishFilter = 'all' | 'published' | 'draft'
 
 interface DeleteConfirm {
   type: 'category' | 'article'
@@ -111,7 +108,6 @@ export function KbView() {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortValue>('created_at')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
-  const [publishFilter, setPublishFilter] = useState<PublishFilter>('all')
   const [catSearch, setCatSearch] = useState('')
   const [catSortAlpha, setCatSortAlpha] = useState(false)
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([])
@@ -138,12 +134,11 @@ export function KbView() {
   const toggleTag = (id: number) => setSelectedTagIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
 
   const articlesQ = useInfiniteQuery({
-    queryKey: ['kb-articles', selectedCatId, search, sortBy, sortOrder, selectedTagIds, publishFilter],
+    queryKey: ['kb-articles', selectedCatId, search, sortBy, sortOrder, selectedTagIds],
     initialPageParam: 1,
     queryFn: ({ pageParam }: { pageParam: number }) =>
       kbApi.listArticles({
         category_id: selectedCatId ?? undefined,
-        is_published: publishFilter === 'all' ? undefined : publishFilter === 'published',
         search: search || undefined,
         sort_by: sortBy,
         sort_order: sortOrder,
@@ -282,22 +277,6 @@ export function KbView() {
               </button>
             )
           })}
-          <div className="flex border border-slate-200 dark:border-slate-700 rounded-full overflow-hidden ml-1">
-            {([['all', 'Все'], ['published', 'Опубликованные'], ['draft', 'Черновики']] as [PublishFilter, string][]).map(([val, label]) => (
-              <button
-                key={val}
-                onClick={() => setPublishFilter(val)}
-                className={cn(
-                  'px-3 py-1 text-xs font-medium transition-colors cursor-pointer',
-                  publishFilter === val
-                    ? 'bg-[#1B3A72] text-white'
-                    : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
         </div>
 
         {docTags.length > 0 && (
@@ -619,9 +598,6 @@ function ArticleCard({ article, categoryName, view = 'list', onEdit, onDelete }:
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">{article.description}</p>
         )}
         <div className="flex flex-wrap gap-1 mt-auto pt-2.5">
-          {!article.is_published && (
-            <span className="text-xs px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">Черновик</span>
-          )}
           {categoryName && (
             <span className="text-xs px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">{categoryName}</span>
           )}
@@ -655,9 +631,6 @@ function ArticleCard({ article, categoryName, view = 'list', onEdit, onDelete }:
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">{article.description}</p>
           )}
           <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-            {!article.is_published && (
-              <span className="text-xs px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">Черновик</span>
-            )}
             {categoryName && (
               <span className="text-xs px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">{categoryName}</span>
             )}
@@ -704,8 +677,6 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose, isReadO
     article?.category_id ?? defaultCategoryId ?? categories[0]?.id ?? 0
   )
   const [selectedTags, setSelectedTags] = useState<Tag[]>(article?.tags ?? [])
-  // Как и в FAQ: новая статья создаётся черновиком, публикуется отдельно после создания.
-  const [isPublished, setIsPublished] = useState(article?.is_published ?? false)
   const [tab, setTab] = useState<'content' | 'attachments'>('content')
 
   useEffect(() => {
@@ -714,7 +685,6 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose, isReadO
       setDescription(detail.description ?? '')
       setCategoryId(detail.category_id)
       setSelectedTags(detail.tags)
-      setIsPublished(detail.is_published)
     }
   }, [detail])
 
@@ -726,15 +696,9 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose, isReadO
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      let saved: KbArticleDetail
-      if (isEdit) {
-        saved = await kbApi.updateArticle(article.id, { title: title || null, description: description || null, category_id: categoryId, is_published: isPublished })
-      } else {
-        // POST всегда создаёт опубликованную статью (is_published в теле создания
-        // не принимается) — если выбран черновик, сразу снимаем публикацию отдельным PATCH.
-        saved = await kbApi.createArticle({ title, description: description || null, category_id: categoryId })
-        if (!isPublished) saved = await kbApi.updateArticle(saved.id, { is_published: false })
-      }
+      const saved = isEdit
+        ? await kbApi.updateArticle(article.id, { title: title || null, description: description || null, category_id: categoryId })
+        : await kbApi.createArticle({ title, description: description || null, category_id: categoryId })
       await kbApi.updateArticleTags(saved.id, selectedTags.map(t => t.id))
       return saved
     },
@@ -796,31 +760,6 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose, isReadO
         <div className="flex-1 overflow-y-auto">
           {tab === 'content' && (
             <div className="px-6 py-4 space-y-4">
-              {isEdit ? (
-                <button
-                  type="button"
-                  onClick={() => !isReadOnly && setIsPublished(v => !v)}
-                  disabled={isReadOnly}
-                  className={cn(
-                    'w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg border transition-colors text-left',
-                    isPublished
-                      ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20'
-                      : 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20',
-                    isReadOnly ? 'cursor-default' : 'cursor-pointer'
-                  )}
-                >
-                  <span className={cn('text-sm font-medium', isPublished ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400')}>
-                    {isPublished ? 'Опубликовано' : 'Черновик — не виден пользователям'}
-                  </span>
-                  <span className={cn('relative w-9 h-5 rounded-full transition-colors shrink-0', isPublished ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600')}>
-                    <span className={cn('absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform', isPublished && 'translate-x-4')} />
-                  </span>
-                </button>
-              ) : (
-                <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">
-                  Статья будет создана как черновик — опубликуйте её после создания.
-                </p>
-              )}
               <div>
                 <label className="text-xs font-medium text-slate-500 block mb-1.5">
                   Категория <span className="text-red-500">*</span>
