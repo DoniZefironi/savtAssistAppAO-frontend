@@ -26,13 +26,17 @@ function fullUrl(url: string) {
   return url.startsWith('http') ? url : `${API_URL}${url}`
 }
 
-type SortValue = 'created_at' | 'updated_at' | 'title'
+type SortValue = 'created_at' | 'updated_at' | 'title' | 'version' | 'is_published'
 
 const SORT_OPTIONS: { value: SortValue; label: string }[] = [
   { value: 'created_at', label: 'По дате' },
   { value: 'updated_at', label: 'По изменению' },
   { value: 'title', label: 'По названию' },
+  { value: 'version', label: 'По версии' },
+  { value: 'is_published', label: 'По публикации' },
 ]
+
+type PublishFilter = 'all' | 'published' | 'draft'
 
 interface DeleteConfirm {
   type: 'category' | 'article'
@@ -107,6 +111,9 @@ export function KbView() {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortValue>('created_at')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [publishFilter, setPublishFilter] = useState<PublishFilter>('all')
+  const [catSearch, setCatSearch] = useState('')
+  const [catSortAlpha, setCatSortAlpha] = useState(false)
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([])
   const [editArticle, setEditArticle] = useState<KbArticleList | null>(null)
   const [createArticleOpen, setCreateArticleOpen] = useState(false)
@@ -122,17 +129,21 @@ export function KbView() {
 
   const handleCatSelect = (id: number | null) => setSelectedCatId(id)
 
-  const categoriesQ = useQuery({ queryKey: ['kb-categories'], queryFn: kbApi.listCategories })
+  // Полный список категорий (без фильтров) — нужен как есть для дерева навигации
+  // и выпадающего списка в модалке статьи; поиск/сортировка категорий — только
+  // клиентские, чтобы не резать список категорий для выбора при создании статьи.
+  const categoriesQ = useQuery({ queryKey: ['kb-categories'], queryFn: () => kbApi.listCategories() })
   const tagsQ = useQuery({ queryKey: ['kb-tags', 'document'], queryFn: () => kbApi.listTags('document') })
   const docTags = tagsQ.data ?? []
   const toggleTag = (id: number) => setSelectedTagIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
 
   const articlesQ = useInfiniteQuery({
-    queryKey: ['kb-articles', selectedCatId, search, sortBy, sortOrder, selectedTagIds],
+    queryKey: ['kb-articles', selectedCatId, search, sortBy, sortOrder, selectedTagIds, publishFilter],
     initialPageParam: 1,
     queryFn: ({ pageParam }: { pageParam: number }) =>
       kbApi.listArticles({
         category_id: selectedCatId ?? undefined,
+        is_published: publishFilter === 'all' ? undefined : publishFilter === 'published',
         search: search || undefined,
         sort_by: sortBy,
         sort_order: sortOrder,
@@ -204,8 +215,21 @@ export function KbView() {
   const allArticles = articlesQ.data?.pages.flatMap(p => p.items) ?? []
   const total = articlesQ.data?.pages[0]?.total
 
+  // Полное дерево — для дропдауна категории в модалке статьи и для childrenOf() ниже
   const rootCats = categories.filter(c => !c.parent_id)
   const childrenOf = (parentId: number) => categories.filter(c => c.parent_id === parentId)
+
+  // Поиск/сортировка категорий в сайдбаре — клиентские (полный список остаётся
+  // нетронутым для дропдауна выбора категории при создании/редактировании статьи)
+  const catMatch = (c: KbCategory) => c.name.toLowerCase().includes(catSearch.trim().toLowerCase())
+  const maybeSort = (list: KbCategory[]) => catSortAlpha ? list.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru')) : list
+  const visibleRootCats = maybeSort(
+    rootCats.filter(root => !catSearch.trim() || catMatch(root) || childrenOf(root.id).some(catMatch))
+  )
+  const visibleChildrenOf = (root: KbCategory) => {
+    const children = childrenOf(root.id)
+    return maybeSort(catSearch.trim() && !catMatch(root) ? children.filter(catMatch) : children)
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -258,6 +282,22 @@ export function KbView() {
               </button>
             )
           })}
+          <div className="flex border border-slate-200 dark:border-slate-700 rounded-full overflow-hidden ml-1">
+            {([['all', 'Все'], ['published', 'Опубликованные'], ['draft', 'Черновики']] as [PublishFilter, string][]).map(([val, label]) => (
+              <button
+                key={val}
+                onClick={() => setPublishFilter(val)}
+                className={cn(
+                  'px-3 py-1 text-xs font-medium transition-colors cursor-pointer',
+                  publishFilter === val
+                    ? 'bg-[#1B3A72] text-white'
+                    : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {docTags.length > 0 && (
@@ -296,7 +336,25 @@ export function KbView() {
           className={cn('shrink-0 border-r border-slate-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 flex flex-col overflow-hidden', isSnapping && 'transition-[width] duration-150')}
           style={isDesktop ? { width: panelWidth } : { width: CAT_DEFAULT }}
         >
-          <div className="p-2 overflow-y-auto flex-1">
+          <div className="p-2 pb-1 flex items-center gap-1.5 shrink-0">
+            <input
+              value={catSearch}
+              onChange={e => setCatSearch(e.target.value)}
+              placeholder="Поиск категорий"
+              className="flex-1 min-w-0 px-2.5 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:border-[#4A8FE7]"
+            />
+            <button
+              onClick={() => setCatSortAlpha(v => !v)}
+              title="Сортировать по алфавиту"
+              className={cn(
+                'shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                catSortAlpha ? 'bg-[#1B3A72] text-white' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              )}
+            >
+              АЯ
+            </button>
+          </div>
+          <div className="px-2 pb-2 overflow-y-auto flex-1">
             <button
               onClick={() => handleCatSelect(null)}
               className={cn(
@@ -309,8 +367,8 @@ export function KbView() {
               Все статьи
             </button>
 
-            {rootCats.map(root => {
-              const children = childrenOf(root.id)
+            {visibleRootCats.map(root => {
+              const children = visibleChildrenOf(root)
               return (
                 <div key={root.id}>
                   <CategoryRow
@@ -561,6 +619,9 @@ function ArticleCard({ article, categoryName, view = 'list', onEdit, onDelete }:
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">{article.description}</p>
         )}
         <div className="flex flex-wrap gap-1 mt-auto pt-2.5">
+          {!article.is_published && (
+            <span className="text-xs px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">Черновик</span>
+          )}
           {categoryName && (
             <span className="text-xs px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">{categoryName}</span>
           )}
@@ -594,6 +655,9 @@ function ArticleCard({ article, categoryName, view = 'list', onEdit, onDelete }:
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">{article.description}</p>
           )}
           <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+            {!article.is_published && (
+              <span className="text-xs px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">Черновик</span>
+            )}
             {categoryName && (
               <span className="text-xs px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">{categoryName}</span>
             )}
@@ -640,6 +704,7 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose, isReadO
     article?.category_id ?? defaultCategoryId ?? categories[0]?.id ?? 0
   )
   const [selectedTags, setSelectedTags] = useState<Tag[]>(article?.tags ?? [])
+  const [isPublished, setIsPublished] = useState(article?.is_published ?? true)
   const [tab, setTab] = useState<'content' | 'attachments'>('content')
 
   useEffect(() => {
@@ -648,6 +713,7 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose, isReadO
       setDescription(detail.description ?? '')
       setCategoryId(detail.category_id)
       setSelectedTags(detail.tags)
+      setIsPublished(detail.is_published)
     }
   }, [detail])
 
@@ -660,7 +726,7 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose, isReadO
   const saveMut = useMutation({
     mutationFn: async () => {
       const saved = isEdit
-        ? await kbApi.updateArticle(article.id, { title: title || null, description: description || null, category_id: categoryId })
+        ? await kbApi.updateArticle(article.id, { title: title || null, description: description || null, category_id: categoryId, is_published: isPublished })
         : await kbApi.createArticle({ title, description: description || null, category_id: categoryId })
       await kbApi.updateArticleTags(saved.id, selectedTags.map(t => t.id))
       return saved
@@ -723,6 +789,27 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose, isReadO
         <div className="flex-1 overflow-y-auto">
           {tab === 'content' && (
             <div className="px-6 py-4 space-y-4">
+              {isEdit && (
+                <button
+                  type="button"
+                  onClick={() => !isReadOnly && setIsPublished(v => !v)}
+                  disabled={isReadOnly}
+                  className={cn(
+                    'w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg border transition-colors text-left',
+                    isPublished
+                      ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20'
+                      : 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20',
+                    isReadOnly ? 'cursor-default' : 'cursor-pointer'
+                  )}
+                >
+                  <span className={cn('text-sm font-medium', isPublished ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400')}>
+                    {isPublished ? 'Опубликовано' : 'Черновик — не виден пользователям'}
+                  </span>
+                  <span className={cn('relative w-9 h-5 rounded-full transition-colors shrink-0', isPublished ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600')}>
+                    <span className={cn('absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform', isPublished && 'translate-x-4')} />
+                  </span>
+                </button>
+              )}
               <div>
                 <label className="text-xs font-medium text-slate-500 block mb-1.5">
                   Категория <span className="text-red-500">*</span>

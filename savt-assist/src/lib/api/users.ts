@@ -36,6 +36,7 @@ interface ListParams {
   is_active?: boolean
   is_verified?: boolean
   is_phone_verified?: boolean
+  user_type?: 'individual' | 'organization'
   role?: string
   sort_by?: string
   sort_order?: string

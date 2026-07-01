@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useEffect, useRef, Fragment } from 'react'
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { API_URL } from '@/lib/api/client'
 import { requestsApi } from '@/lib/api/requests'
 import type { ServiceRequest, AdditionRequest, ShareRequest, DocumentRequest } from '@/lib/api/requests'
+import { usersApi } from '@/lib/api/users'
+import { useAuthStore } from '@/lib/store/auth'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -38,6 +40,7 @@ const REQ_FILTERS = [
 
 const SVC_SORT = [
   { value: 'created_at', label: 'По дате' },
+  { value: 'closed_at', label: 'По закрытию' },
   { value: 'status', label: 'По статусу' },
   { value: 'user_full_name', label: 'По имени' },
   { value: 'cabinet_object_number', label: 'По ШУ' },
@@ -45,20 +48,31 @@ const SVC_SORT = [
 ]
 const ADDITIONS_SORT = [
   { value: 'created_at', label: 'По дате' },
+  { value: 'resolved_at', label: 'По рассмотрению' },
   { value: 'status', label: 'По статусу' },
   { value: 'user_full_name', label: 'По имени' },
 ]
 const SHARES_SORT = [
   { value: 'created_at', label: 'По дате' },
+  { value: 'resolved_at', label: 'По рассмотрению' },
   { value: 'status', label: 'По статусу' },
   { value: 'user_full_name', label: 'По имени' },
   { value: 'cabinet_object_number', label: 'По ШУ' },
 ]
 const DOC_SORT = [
   { value: 'created_at', label: 'По дате' },
+  { value: 'resolved_at', label: 'По рассмотрению' },
   { value: 'status', label: 'По статусу' },
   { value: 'user_full_name', label: 'По имени' },
   { value: 'doc_type', label: 'По типу' },
+]
+
+const REQUEST_TYPE_FILTERS = [
+  { value: 'all', label: 'Все типы' },
+  { value: 'repair', label: 'Ремонт' },
+  { value: 'maintenance', label: 'Обслуживание' },
+  { value: 'inspection', label: 'Осмотр' },
+  { value: 'other', label: 'Другое' },
 ]
 
 function svcStatusCls(s: string) {
@@ -107,12 +121,25 @@ function toFullUrl(url: string) {
 type ViewMode = 'list' | 'grid'
 
 export function RequestsView() {
+  const currentUser = useAuthStore(s => s.user)
   const [tab, setTab] = useState<Tab>('service')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [requestTypeFilter, setRequestTypeFilter] = useState('all')
+  const [resolvedByAdminId, setResolvedByAdminId] = useState<number | null>(null)
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState('created_at')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+
+  // Список админов для дропдауна "Обработал" — доступен только суперадмину
+  // (GET /admin/admins), поэтому для остальных ролей используется числовой ID.
+  const adminsQ = useQuery({
+    queryKey: ['admins-for-filter'],
+    queryFn: () => usersApi.getAdminList({ size: 100 }),
+    enabled: currentUser?.role === 'superadmin',
+    staleTime: 60_000,
+  })
+  const admins = adminsQ.data?.items ?? []
   const [view, setView] = useState<ViewMode>('list')
   useEffect(() => {
     const saved = localStorage.getItem('view-mode-requests')
@@ -133,6 +160,8 @@ export function RequestsView() {
   const handleTabChange = (t: Tab) => {
     setTab(t)
     setStatusFilter('all')
+    setRequestTypeFilter('all')
+    setResolvedByAdminId(null)
     setSearchInput('')
     setSearch('')
     setSortBy('created_at')
@@ -146,36 +175,37 @@ export function RequestsView() {
 
   const sp = statusFilter === 'all' ? undefined : statusFilter
   const sq = search || undefined
+  const rtp = requestTypeFilter === 'all' ? undefined : requestTypeFilter
 
   const svcQ = useInfiniteQuery({
-    queryKey: ['service-requests', sp, sq, sortBy, sortOrder],
+    queryKey: ['service-requests', sp, sq, sortBy, sortOrder, rtp],
     initialPageParam: 1,
     queryFn: ({ pageParam }: { pageParam: number }) =>
-      requestsApi.getServiceRequests({ status: sp, search: sq, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
+      requestsApi.getServiceRequests({ status: sp, search: sq, request_type: rtp, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
     enabled: tab === 'service',
   })
   const addQ = useInfiniteQuery({
-    queryKey: ['addition-requests', sp, sq, sortBy, sortOrder],
+    queryKey: ['addition-requests', sp, sq, sortBy, sortOrder, resolvedByAdminId],
     initialPageParam: 1,
     queryFn: ({ pageParam }: { pageParam: number }) =>
-      requestsApi.getAdditions({ status: sp, search: sq, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
+      requestsApi.getAdditions({ status: sp, search: sq, resolved_by_admin_id: resolvedByAdminId ?? undefined, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
     enabled: tab === 'additions',
   })
   const shrQ = useInfiniteQuery({
-    queryKey: ['share-requests', sp, sq, sortBy, sortOrder],
+    queryKey: ['share-requests', sp, sq, sortBy, sortOrder, resolvedByAdminId],
     initialPageParam: 1,
     queryFn: ({ pageParam }: { pageParam: number }) =>
-      requestsApi.getShares({ status: sp, search: sq, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
+      requestsApi.getShares({ status: sp, search: sq, resolved_by_admin_id: resolvedByAdminId ?? undefined, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
     enabled: tab === 'shares',
   })
   const docQ = useInfiniteQuery({
-    queryKey: ['document-requests', sp, sq, sortBy, sortOrder],
+    queryKey: ['document-requests', sp, sq, sortBy, sortOrder, resolvedByAdminId],
     initialPageParam: 1,
     queryFn: ({ pageParam }: { pageParam: number }) =>
-      requestsApi.getDocumentRequests({ status: sp, search: sq, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
+      requestsApi.getDocumentRequests({ status: sp, search: sq, resolved_by_admin_id: resolvedByAdminId ?? undefined, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
     enabled: tab === 'docs',
   })
@@ -293,6 +323,57 @@ export function RequestsView() {
             </button>
           ))}
         </div>
+
+        {tab === 'service' && (
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            <span className="text-xs text-slate-400 font-medium mr-0.5">Тип:</span>
+            {REQUEST_TYPE_FILTERS.map(f => (
+              <button
+                key={f.value}
+                onClick={() => setRequestTypeFilter(f.value)}
+                className={cn(
+                  'px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+                  requestTypeFilter === f.value
+                    ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {tab !== 'service' && (
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            <span className="text-xs text-slate-400 font-medium mr-0.5">Обработал:</span>
+            {currentUser?.role === 'superadmin' ? (
+              <select
+                value={resolvedByAdminId ?? ''}
+                onChange={e => setResolvedByAdminId(e.target.value ? Number(e.target.value) : null)}
+                className="px-2.5 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded-full bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus:border-[#4A8FE7]"
+              >
+                <option value="">Любой администратор</option>
+                {admins.map(a => (
+                  <option key={a.id} value={a.id}>{a.full_name ?? a.login ?? `#${a.id}`}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="number"
+                value={resolvedByAdminId ?? ''}
+                onChange={e => setResolvedByAdminId(e.target.value ? Number(e.target.value) : null)}
+                placeholder="ID администратора"
+                className="w-36 px-2.5 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded-full bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:border-[#4A8FE7]"
+              />
+            )}
+            {resolvedByAdminId != null && (
+              <button onClick={() => setResolvedByAdminId(null)} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">
+                сбросить
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-4 bg-slate-50 dark:bg-slate-900">
@@ -623,6 +704,7 @@ export function ServiceDialog({ request, onClose }: { request: ServiceRequest; o
         <DRowLink label="Шкаф управления" value={`ШУ ${request.cabinet_object_number}`} onClick={() => setSubCabinetId(request.cabinet_id)} />
         <DRow label="Создана" value={fmtDate(request.created_at)} />
         <DRow label="Закрыта" value={request.closed_at ? fmtDate(request.closed_at) : '—'} />
+        <DRow label="Bitrix-задача" value={request.bitrix_task_id ?? '—'} />
         <div className="flex gap-4 px-6 py-3">
           <span className="text-xs text-slate-400 w-32 shrink-0 pt-0.5">Описание</span>
           <p className="flex-1 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
@@ -701,6 +783,7 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
         {request.user_registered_at && <DRow label="Зарегистрирован" value={fmtDate(request.user_registered_at)} />}
         <DRow label="Заявка создана" value={fmtDate(request.created_at)} />
         {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
+        {request.resolved_by_admin_id != null && <DRow label="Обработал" value={`Администратор #${request.resolved_by_admin_id}`} />}
         {request.cabinet_id && <DRowLink label="Связанный ШУ" value={`ШУ #${request.cabinet_id}`} onClick={() => setSubCabinetId(request.cabinet_id!)} />}
         {request.user_comment && (
           <DRow label="Комментарий" value={
@@ -836,6 +919,7 @@ function ShareDialog({ request, onClose }: { request: ShareRequest; onClose: () 
         <DRow label="Тип ШУ" value={request.cabinet_type} />
         <DRow label="Заявка создана" value={fmtDate(request.created_at)} />
         {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
+        {request.resolved_by_admin_id != null && <DRow label="Обработал" value={`Администратор #${request.resolved_by_admin_id}`} />}
         {request.user_comment && (
           <DRow label="Комментарий" value={
             <span className="font-normal text-slate-600 dark:text-slate-300">{request.user_comment}</span>
@@ -955,6 +1039,7 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
         {request.cabinet_id && <DRowLink label="Шкаф" value={`ШУ #${request.cabinet_id}`} onClick={() => setSubCabinetId(request.cabinet_id!)} />}
         <DRow label="Создана" value={fmtDate(request.created_at)} />
         {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
+        {request.resolved_by_admin_id != null && <DRow label="Обработал" value={`Администратор #${request.resolved_by_admin_id}`} />}
         {request.user_message && (
           <DRow label="Сообщение" value={
             <span className="font-normal text-slate-600 dark:text-slate-300">{request.user_message}</span>

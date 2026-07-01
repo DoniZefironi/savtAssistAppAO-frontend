@@ -31,8 +31,14 @@
 | `YANDEX_FOLDER_ID` | Folder ID сервисного аккаунта Yandex Cloud |
 | `YANDEX_API_KEY` | API-ключ Yandex Cloud |
 | `YANDEX_GPT_MODEL` | Модель YandexGPT (`yandexgpt-lite`) |
+| `YANDEX_STORAGE_BUCKET` | Бакет Yandex Object Storage для голосовых >1 МБ (long-running распознавание) |
+| `YANDEX_STORAGE_ACCESS_KEY_ID` | Статический ключ доступа (S3-совместимый) к бакету |
+| `YANDEX_STORAGE_SECRET_ACCESS_KEY` | Секрет статического ключа доступа к бакету |
+| `YANDEX_STORAGE_ENDPOINT_URL` | Endpoint Object Storage (по умолч. `https://storage.yandexcloud.net`) |
 | `BOT_FOLLOW_UP_MINUTES` | Через сколько минут бот пишет follow-up (по умолч. 60) |
 | `BOT_MAX_ATTEMPTS` | Попыток бота до предложения оператора (по умолч. 3) |
+| `BITRIX_WEBHOOK_URL` | URL входящего вебхука Bitrix24 (`https://портал.bitrix24.ru/rest/ID/КОД/`) |
+| `BITRIX_DEFAULT_RESPONSIBLE_ID` | ID сотрудника Bitrix24, назначаемого ответственным по всем автосозданным задачам |
 | `APP_ENV` | Окружение (`dev`/`prod`), в `dev` включает SQL-логирование |
 | `SMS_PROVIDER` | Провайдер SMS: `mock` (по умолч.) или `smscenter` |
 | `SMSCENTER_LOGIN` | Логин аккаунта smscenter.by |
@@ -324,11 +330,13 @@ POST /chats/{chat_id}/read
 Убрать:    DELETE /chats/{chat_id}/messages/{msg_id}/reactions/{emoji}
 ```
 
-### Закрепить сообщение
+### Закреплённые сообщения (несколько на чат, до 10)
 ```
-Закрепить:  PUT    /chats/{chat_id}/pin/{msg_id}
-Открепить:  DELETE /chats/{chat_id}/pin
-→ Ответ: ChatOut с обновлённым pinned_message_id
+Список:            GET    /chats/{chat_id}/pinned
+Закрепить:         PUT    /chats/{chat_id}/pin/{msg_id}   (идемпотентно)
+Открепить одно:    DELETE /chats/{chat_id}/pin/{msg_id}
+Открепить все:     DELETE /chats/{chat_id}/pin
+→ Все 4 ответа: list[MessageOut], от новых к старым по времени закрепления
 ```
 
 ### Обои чата
@@ -832,12 +840,18 @@ POST /upload/transcribe (JSON: { file_url: "/static/voices/abc.ogg" })
 { "text": "распознанный текст сообщения" }
 ```
 
-Поддерживаемые форматы для распознавания: `ogg/opus`, `webm` (opus codec), `mp3`, `m4a`, `aac`, `wav`. Файл должен быть предварительно загружен через `POST /upload/voice`.
+Принимает любой формат, который умеет читать `ffmpeg` (`ogg/opus`, `webm`, `mp3`, `m4a`, `aac`, `wav` и т.д.) — сервер сам перекодирует файл в OGG/Opus перед отправкой в Yandex, поэтому реальный контейнер/кодек присланного файла значения не имеет. Файл должен быть предварительно загружен через `POST /upload/voice`.
+
+**Размер файла (после перекодирования) обрабатывается гибридно:**
+- **≤ 1 МБ** (примерно 30-60 сек записи) — синхронное распознавание (`stt:recognize`), ответ обычно за 1-3 секунды.
+- **> 1 МБ** — асинхронное распознавание (`longRunningRecognize`): файл временно загружается в Yandex Object Storage (бакет приватный, доступ для Yandex через presigned URL на 1 час), сервер сам дожидается результата (поллинг, до ~100 сек) и удаляет файл из Object Storage по завершении. Для фронта это прозрачно — ответ остаётся `{ text }`, просто запрос может идти дольше. Требует дополнительно настроенных `YANDEX_STORAGE_BUCKET`, `YANDEX_STORAGE_ACCESS_KEY_ID`, `YANDEX_STORAGE_SECRET_ACCESS_KEY`.
+
+Эндпоинт **stateless**: ничего не сохраняет в БД, не привязан к чату/сообщению — принимает любой `file_url` из `/static/voices/...` и просто возвращает текст. Повторный вызов — повторное распознавание.
 
 Ошибки:
-- `400` — некорректный URL
+- `400` — некорректный URL, либо файл не распознан как аудио (ffmpeg не смог его обработать)
 - `404` — файл не найден
-- `503` — Yandex SpeechKit недоступен или не настроен
+- `503` — Yandex SpeechKit/Object Storage недоступны, не настроены, вернули ошибку, либо распознавание не уложилось в таймаут (для очень длинных записей)
 
 ---
 
@@ -879,7 +893,7 @@ POST /upload/transcribe (JSON: { file_url: "/static/voices/abc.ogg" })
 - `has_users` — `true` / `false` — есть ли привязанный пользователь
 - `has_service_requests` — `true` / `false` — есть ли сервисные заявки
 - `warranty_status` — `active` (гарантия действует) / `expired` (истекла) / `none` (не указана)
-- `sort_by` — `type`, `warranty_ends_at`, `object_number`, `admin_internal_name`, `created_at`
+- `sort_by` — `type`, `warranty_ends_at`, `object_number`, `admin_internal_name`, `purpose`, `created_at`
 - `sort_order` — `asc`, `desc`
 - `page`, `size` — пагинация (по умолч. `1` / `20`, максимум `100`)
 
@@ -995,8 +1009,9 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ### GET `/admin/cabinet-requests/additions`
 Заявки на добавление ШУ через фото. Параметры:
 - `status` — `pending` / `approved` / `rejected`
-- `search` — поиск по ФИО, телефону, организации пользователя
-- `sort_by` — `created_at` (по умолч.), `status`, `user_full_name`
+- `resolved_by_admin_id` — заявки, обработанные конкретным администратором
+- `search` — поиск по ФИО, телефону, организации пользователя, комментарию пользователя и ответу администратора
+- `sort_by` — `created_at` (по умолч.), `resolved_at`, `status`, `user_full_name`
 - `sort_order` — `asc` / `desc`
 - `page`, `size`
 
@@ -1017,6 +1032,7 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
       "status": "pending",
       "cabinet_id": null,
       "admin_response": null,
+      "resolved_by_admin_id": null,
       "created_at": "2026-05-12T08:00:00Z",
       "resolved_at": null
     }
@@ -1052,8 +1068,9 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ### GET `/admin/cabinet-requests/shares`
 Заявки на доступ к уже существующему ШУ (сканирован QR, но ШУ уже занят). Параметры:
 - `status` — `pending` / `approved` / `rejected`
-- `search` — поиск по ФИО/телефону пользователя, типу/номеру/названию ШУ
-- `sort_by` — `created_at` (по умолч.), `status`, `user_full_name`, `cabinet_object_number`
+- `resolved_by_admin_id` — заявки, обработанные конкретным администратором
+- `search` — поиск по ФИО/телефону пользователя, типу/номеру/названию ШУ, комментарию пользователя и ответу администратора
+- `sort_by` — `created_at` (по умолч.), `resolved_at`, `status`, `user_full_name`, `cabinet_object_number`
 - `sort_order` — `asc` / `desc`
 - `page`, `size`
 
@@ -1075,6 +1092,7 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
       "user_comment": null,
       "status": "pending",
       "admin_response": null,
+      "resolved_by_admin_id": null,
       "created_at": "2026-05-12T09:00:00Z",
       "resolved_at": null
     }
@@ -1161,7 +1179,8 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 - `is_active` — `true` / `false`
 - `is_verified` — `true` / `false` — верификация аккаунта администратором
 - `is_phone_verified` — `true` / `false` — подтверждённый номер телефона
-- `sort_by` — `created_at` (по умолч.), `full_name`, `phone`, `email`, `role`
+- `user_type` — `individual` / `organization`
+- `sort_by` — `created_at` (по умолч.), `full_name`, `phone`, `email`, `login`, `organization_name`, `role`
 - `sort_order` — `asc` / `desc`
 - `page`, `size` — пагинация (по умолч. `page=1`, `size=20`, максимум `100`)
 
@@ -1465,8 +1484,9 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ### GET `/admin/document-requests`
 Заявки пользователей на доступ к закрытым документам. Параметры:
 - `status` — `pending` / `approved` / `rejected`
-- `search` — поиск по ФИО/телефону/организации пользователя, типу документа
-- `sort_by` — `created_at` (по умолч.), `status`, `user_full_name`, `doc_type`
+- `resolved_by_admin_id` — заявки, обработанные конкретным администратором
+- `search` — поиск по ФИО/телефону/организации пользователя, типу документа, сообщению пользователя и ответу администратора
+- `sort_by` — `created_at` (по умолч.), `resolved_at`, `status`, `user_full_name`, `doc_type`
 - `sort_order` — `asc` / `desc`
 - `page`, `size`
 
@@ -1488,6 +1508,7 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
       "status": "pending",
       "user_message": "Нужен для проверки",
       "admin_response": null,
+      "resolved_by_admin_id": null,
       "created_at": "2026-06-01T09:00:00Z",
       "resolved_at": null
     }
@@ -1667,13 +1688,6 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ]
 ```
 
-`ChatOut` (возвращается при `GET /cabinets/{cabinet_id}/chat`, `PUT/DELETE pin`) содержит дополнительное поле:
-```json
-{
-  "pinned_message_id": 42
-}
-```
-
 ---
 
 ### GET `/cabinets/{cabinet_id}/chat`
@@ -1685,13 +1699,11 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 
 ### GET `/chats/{chat_id}/messages`
 История сообщений. Параметры:
-- `before_id` — ID сообщения, загрузить более старые (cursor pagination, скролл вверх)
-- `after_id` — загрузить более новые (`id > after_id`, скролл вниз; пустой массив = дошли до конца, симметрично `before_id`)
+- `before_id` — ID сообщения, загрузить более старые (cursor pagination для бесконечного скролла)
 - `around_id` — загрузить сообщения вокруг указанного ID (для перехода к конкретному сообщению)
 - `limit` — количество (по умолчанию `30`, максимум `100`)
 - `search` — поиск по тексту сообщений
 
-Приоритет курсоров при передаче нескольких: `around_id` → `after_id` → `before_id`/`search`.
 Сообщения возвращаются от новых к старым.
 ```json
 [
@@ -1774,13 +1786,23 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 
 ---
 
+### GET `/chats/{chat_id}/pinned`
+Список закреплённых сообщений чата. Сортировка: от недавно закреплённых к старым. Ответ: `list[MessageOut]`, пустой массив — ничего не закреплено.
+
+---
+
 ### PUT `/chats/{chat_id}/pin/{msg_id}`
-Закрепить сообщение. Ответ: `ChatOut` с обновлённым `pinned_message_id`.
+Закрепить сообщение. Идемпотентно — повторный вызов с тем же `msg_id` ничего не меняет. Лимит — **10 закреплённых сообщений на чат**, при превышении `400`. Ответ: обновлённый `list[MessageOut]`.
+
+---
+
+### DELETE `/chats/{chat_id}/pin/{msg_id}`
+Открепить конкретное сообщение. Ответ: обновлённый `list[MessageOut]`.
 
 ---
 
 ### DELETE `/chats/{chat_id}/pin`
-Открепить сообщение. Ответ: `ChatOut` с `pinned_message_id: null`.
+Открепить все сообщения чата. Ответ: `[]`.
 
 ---
 
@@ -1838,14 +1860,31 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
   "bot_text_color": "#555555",
   "nick_color": "#128C7E",
   "font_size": 14,
-  "wallpaper_url": "/static/photos/bg.jpg"
+  "wallpaper_url": "/static/photos/bg.jpg",
+  "wallpaper_id": null
 }
 ```
-`chat_id: null` — глобальные настройки. `wallpaper_url: null` — обои не установлены.
+`chat_id: null` — глобальные настройки.
+
+Обои — три состояния:
+- **default** — `wallpaper_url: null`, `wallpaper_id: null`
+- **пресет** (клиентский градиент по ключу) — `wallpaper_url: null`, `wallpaper_id: "forest"`
+- **своё изображение** — `wallpaper_url: "/static/photos/bg.jpg"`, `wallpaper_id: "custom"`
+
+Оба поля передаются в `PATCH .../settings` вместе с цветами и `font_size` — отдельного эндпоинта для обоев в составе настроек нет (есть только legacy `PATCH /chats/{chat_id}/wallpaper`, не зависит от `ChatSettings`).
 
 ---
 
 ## Рут `operator` — операторский интерфейс
+
+### GET `/operator/chats/settings`
+### PATCH `/operator/chats/settings`
+### GET `/operator/chats/{chat_id}/settings`
+### PATCH `/operator/chats/{chat_id}/settings`
+### DELETE `/operator/chats/{chat_id}/settings`
+Персональные настройки вида чата (цвета, шрифт, обои) для авторизованного оператора/админа — зеркало `/chats/settings` и `/chats/{chat_id}/settings`. Владение чатом не требуется (настройки привязаны к самому оператору, не к чату). Семантика идентична пользовательским: global + per-chat override, `DELETE` сбрасывает override к глобальным. Ответы — `ChatSettingsOut` / `204`.
+
+---
 
 ### GET `/operator/chats/{chat_id}/attachments`
 Все вложения чата. Параметр `type`: `image` / `voice` / `document` / `video`. Ответ — такой же список `ChatAttachmentOut` как в `/chats/{chat_id}/attachments`.
@@ -1865,19 +1904,19 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ---
 
 ### GET `/operator/chats/{chat_id}/pinned`
-Закреплённое сообщение чата. Возвращает `MessageOut` или `null` если ничего не закреплено.
+Список закреплённых сообщений чата (до 10). Сортировка: от недавно закреплённых к старым. Ответ: `list[MessageOut]`, пустой массив — ничего не закреплено.
 
 ---
 
 ### GET `/operator/chats/{chat_id}/messages`
 История сообщений чата. Параметры:
-- `before_id` — cursor pagination (старее указанного ID, скролл вверх)
-- `after_id` — новее указанного ID (`id > after_id`, скролл вниз; пустой массив = конец)
+- `before_id` — cursor pagination (старее указанного ID)
 - `around_id` — сообщения вокруг указанного ID (для перехода к результату поиска)
+- `after_id` — сообщения новее указанного ID (догрузка вниз после `around_id`)
 - `limit` — количество (по умолч. `30`, максимум `100`)
 - `search` — поиск по тексту сообщений
 
-Приоритет курсоров: `around_id` → `after_id` → `before_id`/`search`.
+`before_id`, `around_id`, `after_id` взаимоисключающие — при одновременной передаче приоритет: `around_id` → `after_id` → `before_id`.
 
 Личные чаты пользователя (`chat_type=notes`) недоступны оператору/админу — `403`.
 
@@ -1909,12 +1948,17 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ---
 
 ### PUT `/operator/chats/{chat_id}/pin/{msg_id}`
-Закрепить сообщение в чате. Возвращает обновлённый `ChatOut` с `pinned_message_id`.
+Закрепить сообщение. Идемпотентно, лимит 10 на чат (`400` при превышении). Ответ: обновлённый `list[MessageOut]`.
+
+---
+
+### DELETE `/operator/chats/{chat_id}/pin/{msg_id}`
+Открепить конкретное сообщение. Ответ: обновлённый `list[MessageOut]`.
 
 ---
 
 ### DELETE `/operator/chats/{chat_id}/pin`
-Открепить сообщение. Возвращает обновлённый `ChatOut`.
+Открепить все сообщения чата. Ответ: `[]`.
 
 ---
 
@@ -2007,6 +2051,8 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ```
 `description` — минимум 10 символов.
 
+После создания заявка асинхронно (в фоне, не блокируя ответ) синхронизируется с Bitrix24 — создаётся задача (`tasks.task.add`) на фиксированного ответственного (`BITRIX_DEFAULT_RESPONSIBLE_ID`). ID созданной задачи попадает в поле `bitrix_task_id` (появится не сразу, а чуть позже создания заявки — обнови список, чтобы увидеть). Если Bitrix не настроен или недоступен — заявка всё равно создаётся, просто `bitrix_task_id` остаётся `null`.
+
 ---
 
 ### GET `/service-requests`
@@ -2017,8 +2063,9 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ### GET `/admin/service-requests`
 Все заявки (для админа/оператора). Параметры:
 - `status`, `cabinet_id`
+- `request_type` — `repair` / `maintenance` / `inspection` / `other` (точное совпадение)
 - `search` — поиск по ФИО/телефону/организации пользователя, номеру/названию ШУ, типу и описанию заявки
-- `sort_by` — `created_at` (по умолч.), `status`, `user_full_name`, `cabinet_object_number`, `request_type`
+- `sort_by` — `created_at` (по умолч.), `closed_at`, `status`, `user_full_name`, `cabinet_object_number`, `request_type`
 - `sort_order` — `asc` / `desc`
 - `page`, `size`
 
@@ -2158,7 +2205,7 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 
 ## Рут `admin: kb` — база знаний (администратор/оператор)
 
-База знаний — файловый репозиторий, организованный по категориям. Каждая запись может содержать несколько файлов любых типов (PDF, Word, Excel, видео, фото). Создание записи = публикация (черновиков нет).
+База знаний — файловый репозиторий, организованный по категориям. Каждая запись может содержать несколько файлов любых типов (PDF, Word, Excel, видео, фото). При создании запись сразу публикуется (`is_published=true`); снять публикацию (сделать черновиком) можно через `PATCH .../articles/{id}` с `is_published: false`.
 
 > Просмотр категорий (`GET /admin/kb/categories`) доступен администратору и оператору. Создание/редактирование/удаление категорий и записей, а также добавление/удаление вложений — только для администратора.
 
@@ -2176,7 +2223,11 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ---
 
 ### GET `/admin/kb/categories`
-Список всех категорий, отсортированный по `sort_order`.
+Список категорий. Параметры (все опциональны, ответ — плоский список, без пагинации):
+- `search` — поиск по названию и описанию
+- `parent_id` — фильтр по родительской категории
+- `sort_by` — `sort_order` (по умолч.), `name`
+- `sort_order` — `asc` (по умолч.) / `desc`
 
 ---
 
@@ -2190,8 +2241,21 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 
 ---
 
+### GET `/admin/kb/articles`
+Список записей базы знаний (админ/оператор, включая неопубликованные). Параметры:
+- `category_id`, `tag_ids` (`?tag_ids=1&tag_ids=2`)
+- `is_published` — `true` / `false` — без параметра возвращаются записи в любом статусе
+- `search` — поиск по заголовку и содержимому
+- `sort_by` — `created_at` (по умолч.), `updated_at`, `title`, `version`, `is_published`
+- `sort_order` — `asc` / `desc`
+- `page`, `size`
+
+Публичный аналог — `GET /kb/articles` (см. ниже) — всегда показывает только `is_published=true`.
+
+---
+
 ### POST `/admin/kb/articles`
-Создать запись в базе знаний (сразу публикуется).
+Создать запись в базе знаний (сразу публикуется, `is_published=true`).
 ```json
 {
   "category_id": 1,
@@ -2204,7 +2268,7 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ---
 
 ### PATCH `/admin/kb/articles/{article_id}`
-Редактировать заголовок, описание или категорию записи.
+Редактировать заголовок, описание, категорию или статус публикации записи (все поля опциональны, включая `is_published`).
 
 ---
 
@@ -2347,7 +2411,11 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ---
 
 ### GET `/admin/faq/categories`
-Список всех категорий.
+Список категорий. Параметры (все опциональны, ответ — плоский список, без пагинации):
+- `search` — поиск по названию
+- `parent_id` — фильтр по родительской категории
+- `sort_by` — `sort_order` (по умолч.), `name`
+- `sort_order` — `asc` (по умолч.) / `desc`
 
 ---
 
@@ -2362,7 +2430,7 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ---
 
 ### POST `/admin/faq/entries`
-Создать вопрос и ответ сразу.
+Создать вопрос и ответ сразу. Создаётся неопубликованным (`is_published=false`) — опубликовать через `PATCH` (см. ниже).
 ```json
 {
   "category_id": 1,
@@ -2375,14 +2443,20 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ---
 
 ### GET `/admin/faq/entries`
-Список вопросов. Параметры: `category_id`, `search`, `page`, `size`.
+Список вопросов. Параметры:
+- `category_id`
+- `is_published` — `true` / `false` — без параметра возвращаются вопросы в любом статусе
+- `search` — поиск по вопросу и ответу
+- `sort_by` — `created_at` (по умолч.), `updated_at`, `question`, `version`, `is_published`
+- `sort_order` — `asc` / `desc`
+- `page`, `size`
 
 ---
 
 ### PATCH `/admin/faq/entries/{entry_id}`
-Обновить вопрос и/или ответ (передавать только изменённые поля).
+Обновить вопрос, ответ и/или статус публикации (передавать только изменённые поля).
 ```json
-{ "answer": "Обновлённый ответ" }
+{ "answer": "Обновлённый ответ", "is_published": true }
 ```
 
 ---
@@ -2411,6 +2485,8 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 - `sort_by` — `created_at` (по умолч.), `updated_at`, `question`
 - `sort_order` — `asc` / `desc`
 - `page`, `size` — пагинация
+
+> В отличие от `/kb/articles`, этот эндпоинт **не фильтрует** по `is_published` — показывает вопросы в любом статусе публикации. Оставлено намеренно: включение фильтра потребует сначала опубликовать через админку существующие вопросы (иначе они разом пропадут для пользователей).
 
 ```json
 {

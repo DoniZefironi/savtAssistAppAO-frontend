@@ -23,6 +23,14 @@ const STATUS_FILTERS = [
 const SORT_OPTIONS = [
   { value: 'created_at', label: 'По дате' },
   { value: 'full_name', label: 'По имени' },
+  { value: 'login', label: 'По логину' },
+  { value: 'organization_name', label: 'По организации' },
+] as const
+
+const USER_TYPE_FILTERS = [
+  { value: 'all', label: 'Все' },
+  { value: 'individual', label: 'Физ. лица' },
+  { value: 'organization', label: 'Организации' },
 ] as const
 
 type SortValue = (typeof SORT_OPTIONS)[number]['value']
@@ -75,6 +83,7 @@ export function UsersView() {
 
   const [roleTab, setRoleTab] = useState<RoleTab>('user')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [userTypeFilter, setUserTypeFilter] = useState<'all' | 'individual' | 'organization'>('all')
   const [verifiedFilter, setVerifiedFilter] = useState<boolean | null>(null)
   const [phoneVerifiedFilter, setPhoneVerifiedFilter] = useState<boolean | null>(null)
   const [sortBy, setSortBy] = useState<SortValue>('created_at')
@@ -99,6 +108,7 @@ export function UsersView() {
 
   useEffect(() => {
     setStatusFilter('all')
+    setUserTypeFilter('all')
     setVerifiedFilter(null)
     setPhoneVerifiedFilter(null)
     setSearchInput('')
@@ -110,11 +120,12 @@ export function UsersView() {
   const isActive = statusFilter === 'all' ? undefined : statusFilter === 'active'
 
   const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } = useInfiniteQuery({
-    queryKey: ['admin-users', roleTab, statusFilter, verifiedFilter, phoneVerifiedFilter, sortBy, sortOrder, search],
+    queryKey: ['admin-users', roleTab, statusFilter, userTypeFilter, verifiedFilter, phoneVerifiedFilter, sortBy, sortOrder, search],
     initialPageParam: 1,
     queryFn: ({ pageParam }: { pageParam: number }) =>
       getListFn(roleTab)({
         is_active: isActive,
+        ...(userTypeFilter !== 'all' ? { user_type: userTypeFilter } : {}),
         ...(verifiedFilter !== null ? { is_verified: verifiedFilter } : {}),
         ...(phoneVerifiedFilter !== null ? { is_phone_verified: phoneVerifiedFilter } : {}),
         search: search || undefined,
@@ -241,6 +252,23 @@ export function UsersView() {
               className={cn(
                 'px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
                 statusFilter === f.value
+                  ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
+                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+
+          <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />
+
+          {USER_TYPE_FILTERS.map(f => (
+            <button
+              key={f.value}
+              onClick={() => setUserTypeFilter(f.value)}
+              className={cn(
+                'px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+                userTypeFilter === f.value
                   ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
                   : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
               )}

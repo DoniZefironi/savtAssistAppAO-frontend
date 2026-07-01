@@ -20,6 +20,7 @@ export interface KbArticleList {
   created_at: string
   tags: Tag[]
   attachment_count: number
+  is_published: boolean
 }
 
 export interface KbArticleDetail {
@@ -33,6 +34,7 @@ export interface KbArticleDetail {
   updated_at: string
   tags: Tag[]
   attachments: KbAttachment[]
+  is_published: boolean
 }
 
 export interface KbAttachment {
@@ -64,8 +66,13 @@ async function multipartPost<T>(path: string, form: FormData): Promise<T> {
 }
 
 export const kbApi = {
-  listCategories: (): Promise<KbCategory[]> =>
-    apiClient.get('/admin/kb/categories').then(r => r.data),
+  listCategories: (params?: {
+    search?: string
+    parent_id?: number
+    sort_by?: 'sort_order' | 'name'
+    sort_order?: 'asc' | 'desc'
+  }): Promise<KbCategory[]> =>
+    apiClient.get('/admin/kb/categories', { params }).then(r => r.data),
 
   createCategory: (name: string, parent_id?: number | null, description?: string | null): Promise<KbCategory> =>
     apiClient.post('/admin/kb/categories', { name, parent_id: parent_id ?? null, description: description ?? null }).then(r => r.data),
@@ -75,8 +82,11 @@ export const kbApi = {
 
   deleteCategory: (id: number) => apiClient.delete(`/admin/kb/categories/${id}`),
 
+  // Админский список (включая неопубликованные) — публичный /kb/articles всегда
+  // фильтрует is_published=true и скрыл бы черновики даже от самой админки.
   listArticles: (params?: {
     category_id?: number
+    is_published?: boolean
     search?: string
     sort_by?: string
     sort_order?: string
@@ -84,7 +94,7 @@ export const kbApi = {
     page?: number
     size?: number
   }): Promise<PaginatedResponse<KbArticleList>> =>
-    apiClient.get('/kb/articles', { params }).then(r => r.data),
+    apiClient.get('/admin/kb/articles', { params }).then(r => r.data),
 
   getArticle: (id: number): Promise<KbArticleDetail> =>
     apiClient.get(`/kb/articles/${id}`).then(r => r.data),
@@ -92,7 +102,7 @@ export const kbApi = {
   createArticle: (data: { category_id: number; title: string; description?: string | null }): Promise<KbArticleDetail> =>
     apiClient.post('/admin/kb/articles', data).then(r => r.data),
 
-  updateArticle: (id: number, data: { title?: string | null; description?: string | null; category_id?: number | null }): Promise<KbArticleDetail> =>
+  updateArticle: (id: number, data: { title?: string | null; description?: string | null; category_id?: number | null; is_published?: boolean }): Promise<KbArticleDetail> =>
     apiClient.patch(`/admin/kb/articles/${id}`, data).then(r => r.data),
 
   deleteArticle: (id: number) => apiClient.delete(`/admin/kb/articles/${id}`),

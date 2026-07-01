@@ -118,6 +118,7 @@ export interface ServiceRequest {
   status: 'open' | 'in_progress' | 'closed'
   created_at: string
   closed_at: string | null
+  bitrix_task_id: string | null
 }
 
 export interface AdditionRequest {
@@ -134,6 +135,7 @@ export interface AdditionRequest {
   status: 'pending' | 'approved' | 'rejected'
   cabinet_id: number | null
   admin_response: string | null
+  resolved_by_admin_id: number | null
   created_at: string
   resolved_at: string | null
 }
@@ -153,6 +155,7 @@ export interface DocumentRequest {
   status: 'pending' | 'approved' | 'rejected'
   user_message: string | null
   admin_response: string | null
+  resolved_by_admin_id: number | null
   created_at: string
   resolved_at: string | null
 }
@@ -172,6 +175,7 @@ export interface ShareRequest {
   user_comment: string | null
   status: 'pending' | 'approved' | 'rejected'
   admin_response: string | null
+  resolved_by_admin_id: number | null
   created_at: string
   resolved_at: string | null
 }

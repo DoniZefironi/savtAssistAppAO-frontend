@@ -7,6 +7,8 @@ interface ListParams {
   status?: string
   search?: string
   cabinet_id?: number
+  request_type?: string
+  resolved_by_admin_id?: number
   sort_by?: string
   sort_order?: 'asc' | 'desc'
   page?: number

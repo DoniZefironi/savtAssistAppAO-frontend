@@ -16,13 +16,17 @@ function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-type SortValue = 'created_at' | 'updated_at' | 'question'
+type SortValue = 'created_at' | 'updated_at' | 'question' | 'version' | 'is_published'
 
 const SORT_OPTIONS: { value: SortValue; label: string }[] = [
   { value: 'created_at', label: 'По дате' },
   { value: 'updated_at', label: 'По изменению' },
   { value: 'question', label: 'По вопросу' },
+  { value: 'version', label: 'По версии' },
+  { value: 'is_published', label: 'По публикации' },
 ]
+
+type PublishFilter = 'all' | 'published' | 'draft'
 
 interface DeleteConfirm {
   type: 'category' | 'entry'
@@ -96,6 +100,9 @@ export function FaqView() {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortValue>('created_at')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [publishFilter, setPublishFilter] = useState<PublishFilter>('all')
+  const [catSearch, setCatSearch] = useState('')
+  const [catSortAlpha, setCatSortAlpha] = useState(false)
   const [editEntry, setEditEntry] = useState<FaqEntry | null>(null)
   const [createEntryOpen, setCreateEntryOpen] = useState(false)
   const [createCatOpen, setCreateCatOpen] = useState(false)
@@ -110,17 +117,20 @@ export function FaqView() {
 
   const handleCatSelect = (id: number | null) => setSelectedCatId(id)
 
+  // Полный список категорий (без фильтров) — нужен как есть для дропдауна
+  // категории в модалке вопроса; поиск/сортировка в сайдбаре — клиентские.
   const { data: categories = [] } = useQuery({
     queryKey: ['faq-categories'],
-    queryFn: faqApi.listCategories,
+    queryFn: () => faqApi.listCategories(),
   })
 
   const entriesQ = useInfiniteQuery({
-    queryKey: ['faq-entries', selectedCatId, search, sortBy, sortOrder],
+    queryKey: ['faq-entries', selectedCatId, search, sortBy, sortOrder, publishFilter],
     initialPageParam: 1,
     queryFn: ({ pageParam }: { pageParam: number }) =>
       faqApi.listEntries({
         category_id: selectedCatId ?? undefined,
+        is_published: publishFilter === 'all' ? undefined : publishFilter === 'published',
         search: search || undefined,
         sort_by: sortBy,
         sort_order: sortOrder,
@@ -190,20 +200,28 @@ export function FaqView() {
   const allEntries = entriesQ.data?.pages.flatMap(p => p.items) ?? []
   const total = entriesQ.data?.pages[0]?.total
 
-  const rootCats = categories.filter(c => !c.parent_id)
-  const childrenOf = (parentId: number) => categories.filter(c => c.parent_id === parentId)
+  // Поиск/сортировка категорий в сайдбаре — клиентские (полный список категорий
+  // остаётся нетронутым для дропдауна выбора при создании/редактировании вопроса)
+  const maybeSortCats = (list: FaqCategory[]) => catSortAlpha ? list.slice().sort((a, b) => a.name.localeCompare(b.name, 'ru')) : list
+  const catMatch = (c: FaqCategory) => c.name.toLowerCase().includes(catSearch.trim().toLowerCase())
+  const allRootCats = maybeSortCats(categories.filter(c => !c.parent_id))
+  const childrenOf = (parentId: number) => maybeSortCats(categories.filter(c => c.parent_id === parentId))
+  const rootCats = allRootCats.filter(root => !catSearch.trim() || catMatch(root) || childrenOf(root.id).some(catMatch))
   const shownIds = new Set<number>()
   const orderedCats: { cat: FaqCategory; indent: number }[] = []
   for (const root of rootCats) {
     orderedCats.push({ cat: root, indent: 0 })
     shownIds.add(root.id)
-    for (const child of childrenOf(root.id)) {
+    const kids = childrenOf(root.id)
+    for (const child of (catSearch.trim() && !catMatch(root) ? kids.filter(catMatch) : kids)) {
       orderedCats.push({ cat: child, indent: 1 })
       shownIds.add(child.id)
     }
   }
-  for (const cat of categories) {
-    if (!shownIds.has(cat.id)) orderedCats.push({ cat, indent: cat.parent_id ? 1 : 0 })
+  if (!catSearch.trim()) {
+    for (const cat of categories) {
+      if (!shownIds.has(cat.id)) orderedCats.push({ cat, indent: cat.parent_id ? 1 : 0 })
+    }
   }
 
   return (
@@ -257,6 +275,22 @@ export function FaqView() {
               </button>
             )
           })}
+          <div className="flex border border-slate-200 dark:border-slate-700 rounded-full overflow-hidden ml-1">
+            {([['all', 'Все'], ['published', 'Опубликованные'], ['draft', 'Черновики']] as [PublishFilter, string][]).map(([val, label]) => (
+              <button
+                key={val}
+                onClick={() => setPublishFilter(val)}
+                className={cn(
+                  'px-3 py-1 text-xs font-medium transition-colors cursor-pointer',
+                  publishFilter === val
+                    ? 'bg-[#1B3A72] text-white'
+                    : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -266,7 +300,25 @@ export function FaqView() {
           className={cn('shrink-0 border-r border-slate-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 flex flex-col overflow-hidden', isSnapping && 'transition-[width] duration-150')}
           style={isDesktop ? { width: panelWidth } : { width: CAT_DEFAULT }}
         >
-          <div className="p-2 overflow-y-auto flex-1">
+          <div className="p-2 pb-1 flex items-center gap-1.5 shrink-0">
+            <input
+              value={catSearch}
+              onChange={e => setCatSearch(e.target.value)}
+              placeholder="Поиск категорий"
+              className="flex-1 min-w-0 px-2.5 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:border-[#4A8FE7]"
+            />
+            <button
+              onClick={() => setCatSortAlpha(v => !v)}
+              title="Сортировать по алфавиту"
+              className={cn(
+                'shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-xs font-semibold transition-colors cursor-pointer',
+                catSortAlpha ? 'bg-[#1B3A72] text-white' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              )}
+            >
+              АЯ
+            </button>
+          </div>
+          <div className="px-2 pb-2 overflow-y-auto flex-1">
             <button
               onClick={() => handleCatSelect(null)}
               className={cn(
@@ -507,6 +559,9 @@ function EntryCard({ entry, categoryName, view = 'list', onEdit, onDelete }: {
         <p className="font-semibold text-slate-800 dark:text-slate-100 leading-snug line-clamp-2">{entry.question}</p>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">{entry.answer}</p>
         <div className="flex items-center gap-2 mt-auto pt-2.5 flex-wrap">
+          {!entry.is_published && (
+            <span className="text-xs px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">Черновик</span>
+          )}
           {categoryName && (
             <span className="text-xs px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">{categoryName}</span>
           )}
@@ -535,6 +590,9 @@ function EntryCard({ entry, categoryName, view = 'list', onEdit, onDelete }: {
           </div>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5 line-clamp-2 leading-relaxed">{entry.answer}</p>
           <div className="flex items-center gap-3 mt-2.5 flex-wrap">
+            {!entry.is_published && (
+              <span className="text-xs px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">Черновик</span>
+            )}
             {categoryName && (
               <span className="text-xs px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">{categoryName}</span>
             )}
@@ -564,12 +622,14 @@ function EntryModal({ entry, categories, defaultCategoryId, onClose, isReadOnly 
   const [categoryId, setCategoryId] = useState<number>(
     entry?.category_id ?? defaultCategoryId ?? categories[0]?.id ?? 0
   )
+  const [isPublished, setIsPublished] = useState(entry?.is_published ?? false)
 
   const saveMut = useMutation({
     mutationFn: () => isEdit
       ? faqApi.updateEntry(entry.id, {
           question: question !== entry.question ? question : undefined,
           answer: answer !== entry.answer ? answer : undefined,
+          is_published: isPublished !== entry.is_published ? isPublished : undefined,
         })
       : faqApi.createEntry({ question, answer, category_id: categoryId }),
     onSuccess: () => {
@@ -602,6 +662,31 @@ function EntryModal({ entry, categories, defaultCategoryId, onClose, isReadOnly 
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          {isEdit ? (
+            <button
+              type="button"
+              onClick={() => !isReadOnly && setIsPublished(v => !v)}
+              disabled={isReadOnly}
+              className={cn(
+                'w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg border transition-colors text-left',
+                isPublished
+                  ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20'
+                  : 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20',
+                isReadOnly ? 'cursor-default' : 'cursor-pointer'
+              )}
+            >
+              <span className={cn('text-sm font-medium', isPublished ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400')}>
+                {isPublished ? 'Опубликовано' : 'Черновик — не виден пользователям'}
+              </span>
+              <span className={cn('relative w-9 h-5 rounded-full transition-colors shrink-0', isPublished ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600')}>
+                <span className={cn('absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform', isPublished && 'translate-x-4')} />
+              </span>
+            </button>
+          ) : (
+            <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">
+              Вопрос будет создан как черновик — опубликуйте его после создания.
+            </p>
+          )}
           <div>
             <label className="text-xs font-medium text-slate-500 block mb-1.5">
               Категория {!isEdit && <span className="text-red-500">*</span>}

@@ -18,6 +18,7 @@ const PAGE_SIZE = 20
 
 const SORT_OPTIONS = [
   { label: 'По типу', value: 'type' },
+  { label: 'По назначению', value: 'purpose' },
   { label: 'По гарантии', value: 'warranty_ends_at' },
   { label: 'По дате', value: 'created_at' },
 ] as const
