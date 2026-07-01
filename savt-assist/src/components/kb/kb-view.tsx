@@ -704,7 +704,8 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose, isReadO
     article?.category_id ?? defaultCategoryId ?? categories[0]?.id ?? 0
   )
   const [selectedTags, setSelectedTags] = useState<Tag[]>(article?.tags ?? [])
-  const [isPublished, setIsPublished] = useState(article?.is_published ?? true)
+  // Как и в FAQ: новая статья создаётся черновиком, публикуется отдельно после создания.
+  const [isPublished, setIsPublished] = useState(article?.is_published ?? false)
   const [tab, setTab] = useState<'content' | 'attachments'>('content')
 
   useEffect(() => {
@@ -725,9 +726,15 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose, isReadO
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      const saved = isEdit
-        ? await kbApi.updateArticle(article.id, { title: title || null, description: description || null, category_id: categoryId, is_published: isPublished })
-        : await kbApi.createArticle({ title, description: description || null, category_id: categoryId })
+      let saved: KbArticleDetail
+      if (isEdit) {
+        saved = await kbApi.updateArticle(article.id, { title: title || null, description: description || null, category_id: categoryId, is_published: isPublished })
+      } else {
+        // POST всегда создаёт опубликованную статью (is_published в теле создания
+        // не принимается) — если выбран черновик, сразу снимаем публикацию отдельным PATCH.
+        saved = await kbApi.createArticle({ title, description: description || null, category_id: categoryId })
+        if (!isPublished) saved = await kbApi.updateArticle(saved.id, { is_published: false })
+      }
       await kbApi.updateArticleTags(saved.id, selectedTags.map(t => t.id))
       return saved
     },
@@ -789,7 +796,7 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose, isReadO
         <div className="flex-1 overflow-y-auto">
           {tab === 'content' && (
             <div className="px-6 py-4 space-y-4">
-              {isEdit && (
+              {isEdit ? (
                 <button
                   type="button"
                   onClick={() => !isReadOnly && setIsPublished(v => !v)}
@@ -809,6 +816,10 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose, isReadO
                     <span className={cn('absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform', isPublished && 'translate-x-4')} />
                   </span>
                 </button>
+              ) : (
+                <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">
+                  Статья будет создана как черновик — опубликуйте её после создания.
+                </p>
               )}
               <div>
                 <label className="text-xs font-medium text-slate-500 block mb-1.5">
