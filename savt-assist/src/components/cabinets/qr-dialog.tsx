@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { AlertTriangle } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -62,7 +63,7 @@ export function QrDialog({ cabinet, onClose }: Props) {
 
           {error && (
             <div className="w-56 h-56 rounded-xl border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 gap-2">
-              <span className="text-3xl">⚠</span>
+              <AlertTriangle className="w-8 h-8" />
               <span className="text-sm">Не удалось загрузить QR</span>
             </div>
           )}

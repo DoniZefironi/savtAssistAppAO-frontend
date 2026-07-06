@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useRef, useState } from 'react'
+import { Bot, Paperclip } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AttachmentView } from './attachment-view'
 import type { ChatMessage } from '@/types'
@@ -166,7 +167,7 @@ export function MessageBubble({
             style={botBubbleColor ? { backgroundColor: botBubbleColor, color: effectiveBotText } : undefined}
           >
             <div className="flex items-center justify-center gap-1.5 mb-2">
-              <span className="text-base leading-none">🤖</span>
+              <Bot className="w-4 h-4" />
               <span className={cn('text-xs font-semibold', !botBubbleColor && 'text-indigo-600 dark:text-indigo-400')} style={{ opacity: botBubbleColor ? 0.8 : undefined }}>{message.sender_name}</span>
             </div>
             {isDeleted ? (
@@ -181,7 +182,7 @@ export function MessageBubble({
                   >
                     <p className={cn('text-xs font-semibold truncate', !botBubbleColor && 'text-indigo-600 dark:text-indigo-400')} style={{ opacity: botBubbleColor ? 0.85 : undefined }}>{replyMsg.sender_name}</p>
                     <p className={cn('text-xs truncate', !botBubbleColor && 'text-slate-500 dark:text-slate-400')} style={{ opacity: botBubbleColor ? 0.65 : undefined }}>
-                      {replyMsg.deleted_at ? 'Сообщение удалено' : replyMsg.text || (replyMsg.attachments?.length ? '📎 Вложение' : '')}
+                      {replyMsg.deleted_at ? 'Сообщение удалено' : replyMsg.text || (replyMsg.attachments?.length ? <><Paperclip className="inline w-3 h-3 -mt-0.5 mr-1" />Вложение</> : '')}
                     </p>
                   </div>
                 )}
@@ -333,7 +334,7 @@ export function MessageBubble({
                       <>
                         <p className="text-xs font-semibold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '240px', opacity: 0.85 }}>{replyMsg.sender_name}</p>
                         <p className="text-xs" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '240px', opacity: 0.65 }}>
-                          {replyMsg.deleted_at ? 'Сообщение удалено' : replyMsg.text || (replyMsg.attachments?.length ? '📎 Вложение' : '')}
+                          {replyMsg.deleted_at ? 'Сообщение удалено' : replyMsg.text || (replyMsg.attachments?.length ? <><Paperclip className="inline w-3 h-3 -mt-0.5 mr-1" />Вложение</> : '')}
                         </p>
                       </>
                     ) : (

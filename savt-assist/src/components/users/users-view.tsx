@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { X, CheckCircle2, XCircle, Smartphone, PhoneOff, Users } from 'lucide-react'
 import { cn, isSuperadminRole } from '@/lib/utils'
 import { usersApi } from '@/lib/api/users'
 import type { AdminUser } from '@/lib/api/users'
@@ -218,7 +219,9 @@ export function UsersView() {
             className="pl-9 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 focus-visible:ring-[#4A8FE7]"
           />
           {searchInput && (
-            <button onClick={() => setSearchInput('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">✕</button>
+            <button onClick={() => setSearchInput('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">
+              <X className="w-4 h-4" />
+            </button>
           )}
         </div>
 
@@ -288,7 +291,8 @@ export function UsersView() {
                 : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-emerald-400 hover:text-emerald-600'
             )}
           >
-            ✓ Верифицированные
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            Верифицированные
           </button>
           <button
             onClick={() => setVerifiedFilter(v => v === false ? null : false)}
@@ -299,7 +303,8 @@ export function UsersView() {
                 : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-rose-400 hover:text-rose-500'
             )}
           >
-            ✗ Не верифицированные
+            <XCircle className="w-3.5 h-3.5" />
+            Не верифицированные
           </button>
           <button
             onClick={() => setPhoneVerifiedFilter(v => v === true ? null : true)}
@@ -310,7 +315,8 @@ export function UsersView() {
                 : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-emerald-400 hover:text-emerald-600'
             )}
           >
-            📱 Номер подтверждён
+            <Smartphone className="w-3.5 h-3.5" />
+            Номер подтверждён
           </button>
           <button
             onClick={() => setPhoneVerifiedFilter(v => v === false ? null : false)}
@@ -321,7 +327,8 @@ export function UsersView() {
                 : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-rose-400 hover:text-rose-500'
             )}
           >
-            📵 Номер не подтверждён
+            <PhoneOff className="w-3.5 h-3.5" />
+            Номер не подтверждён
           </button>
         </div>
       </div>
@@ -340,7 +347,7 @@ export function UsersView() {
         )}
         {!isLoading && !isError && allItems.length === 0 && (
           <div className="flex flex-col items-center justify-center h-48 text-slate-400">
-            <p className="text-2xl mb-2">👥</p>
+            <Users className="w-8 h-8 mb-2 opacity-50" />
             <p>Пользователей не найдено</p>
           </div>
         )}
@@ -516,7 +523,11 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
               {user.login && <DRow label="Логин" value={user.login} />}
               {user.email && <DRow label="Email" value={user.email} />}
               {user.organization_name && <DRow label="Организация" value={user.organization_name} />}
-              <DRow label="Телефон подтверждён" value={user.is_phone_verified ? '✓ Да' : '✗ Нет'} />
+              <DRow label="Телефон подтверждён" value={
+                user.is_phone_verified
+                  ? <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="w-4 h-4" />Да</span>
+                  : <span className="flex items-center gap-1 text-rose-500 dark:text-rose-400"><XCircle className="w-4 h-4" />Нет</span>
+              } />
               <DRow label="Зарегистрирован" value={fmtDate(user.created_at)} />
             </div>
 
@@ -552,7 +563,7 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
           {!isReadOnly && !isStaffAdmin && <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 shrink-0">
             {deleteStep ? (
               <div className="space-y-2">
-                <p className="text-sm text-slate-600 dark:text-slate-300">
+                <p className="text-sm text-slate-600 dark:text-slate-300 wrap-break-word">
                   Удалить оператора <strong>{user.full_name ?? user.login}</strong>? Все сессии будут отозваны. Переписка сохранится.
                 </p>
                 <div className="flex justify-end gap-2">

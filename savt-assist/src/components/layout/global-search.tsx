@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter, usePathname } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
+import { Package, MessageCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { chatsApi } from '@/lib/api/chats'
 import { useAuthStore } from '@/lib/store/auth'
@@ -152,8 +153,8 @@ export function GlobalSearch() {
                       onClick={() => handleSelect(item.chat_id)}
                       className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors cursor-pointer"
                     >
-                      <div className="w-8 h-8 rounded-full bg-[#1B3A72]/10 dark:bg-blue-900/30 flex items-center justify-center shrink-0 mt-0.5 text-sm">
-                        {item.chat_type === 'cabinet' ? '📦' : '💬'}
+                      <div className="w-8 h-8 rounded-full bg-[#1B3A72]/10 dark:bg-blue-900/30 flex items-center justify-center shrink-0 mt-0.5 text-[#1B3A72] dark:text-blue-400">
+                        {item.chat_type === 'cabinet' ? <Package className="w-4 h-4" /> : <MessageCircle className="w-4 h-4" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2 mb-0.5">

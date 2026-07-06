@@ -3,13 +3,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { kbApi } from '@/lib/api/kb'
 import type { KbArticleDetail, KbArticleList, KbAttachment, KbCategory, Tag } from '@/lib/api/kb'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { API_URL } from '@/lib/api/client'
+import { toFullUrl as fullUrl } from '@/lib/api/base-url'
 import { useAuthStore } from '@/lib/store/auth'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 
@@ -21,11 +22,6 @@ function fmtSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
-function fullUrl(url: string) {
-  if (!url) return ''
-  return url.startsWith('http') ? url : `${API_URL}${url}`
-}
-
 type SortValue = 'created_at' | 'updated_at' | 'title' | 'version'
 
 const SORT_OPTIONS: { value: SortValue; label: string }[] = [
@@ -489,16 +485,17 @@ export function KbView() {
 
       {deleteConfirm && !isReadOnly && (
         <AppModal open onClose={() => setDeleteConfirm(null)}>
-          <div className="px-6 py-5">
+          <div className="px-6 py-5 min-w-0">
             <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-2">
               {deleteConfirm.type === 'category' ? 'Удалить категорию?' : 'Удалить статью?'}
             </h3>
-            <p className="text-sm text-slate-600 dark:text-slate-300 mb-1">
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-1 wrap-break-word">
               <strong>«{deleteConfirm.name}»</strong> будет удалена безвозвратно.
             </p>
             {deleteConfirm.warning && (
-              <p className="text-sm text-red-500 dark:text-red-400 mt-1">
-                ⚠ {deleteConfirm.warning}
+              <p className="text-sm text-red-500 dark:text-red-400 mt-1 flex items-start gap-1">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                {deleteConfirm.warning}
               </p>
             )}
             <div className="flex justify-end gap-2 mt-4">
@@ -580,7 +577,7 @@ function ArticleCard({ article, categoryName, view = 'list', onEdit, onDelete }:
 }) {
   if (view === 'grid') {
     return (
-      <div onClick={onEdit} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-4 hover:border-slate-200 dark:hover:border-slate-600 hover:shadow-sm transition-all group cursor-pointer flex flex-col">
+      <div onClick={onEdit} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-4 hover:border-slate-200 dark:hover:border-slate-600 hover:shadow-sm transition-all group cursor-pointer flex flex-col overflow-hidden">
         <div className="flex items-start justify-between mb-2.5">
           <div className="w-9 h-9 bg-[#1B3A72] rounded-lg flex items-center justify-center shrink-0">
             <BookIcon className="w-4 h-4 text-white" />
@@ -593,9 +590,9 @@ function ArticleCard({ article, categoryName, view = 'list', onEdit, onDelete }:
             </div>
           )}
         </div>
-        <p className="font-semibold text-slate-800 dark:text-slate-100 leading-snug line-clamp-2">{article.title}</p>
+        <p className="font-semibold text-slate-800 dark:text-slate-100 leading-snug line-clamp-2 wrap-break-word">{article.title}</p>
         {article.description && (
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">{article.description}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 wrap-break-word leading-relaxed">{article.description}</p>
         )}
         <div className="flex flex-wrap gap-1 mt-auto pt-2.5">
           {categoryName && (
@@ -611,14 +608,14 @@ function ArticleCard({ article, categoryName, view = 'list', onEdit, onDelete }:
   }
 
   return (
-    <div onClick={onEdit} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-5 hover:border-slate-200 dark:hover:border-slate-600 hover:shadow-sm transition-all group cursor-pointer">
+    <div onClick={onEdit} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-5 hover:border-slate-200 dark:hover:border-slate-600 hover:shadow-sm transition-all group cursor-pointer overflow-hidden">
       <div className="flex items-start gap-3">
         <div className="w-9 h-9 bg-[#1B3A72] rounded-lg flex items-center justify-center shrink-0 mt-0.5">
           <BookIcon className="w-4 h-4 text-white" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
-            <p className="font-semibold text-slate-800 dark:text-slate-100 leading-snug">{article.title}</p>
+            <p className="font-semibold text-slate-800 dark:text-slate-100 leading-snug line-clamp-2 wrap-break-word">{article.title}</p>
             {onDelete && (
               <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button onClick={e => { e.stopPropagation(); onDelete() }} className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer">
@@ -628,7 +625,7 @@ function ArticleCard({ article, categoryName, view = 'list', onEdit, onDelete }:
             )}
           </div>
           {article.description && (
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">{article.description}</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 wrap-break-word leading-relaxed">{article.description}</p>
           )}
           <div className="flex items-center gap-2 mt-2.5 flex-wrap">
             {categoryName && (
@@ -723,9 +720,9 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose, isReadO
 
   return (
     <AppModal open onClose={onClose} className="sm:max-w-2xl">
-      <div className="flex flex-col max-h-[85vh]">
+      <div className="flex flex-col max-h-[85vh] min-w-0">
         <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-6 py-5 shrink-0">
-          <div className="flex items-start gap-4 pr-8">
+          <div className="flex items-start gap-4 pr-8 min-w-0">
             <div className="w-12 h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
               <BookIcon className="w-6 h-6 text-white" />
             </div>
@@ -990,15 +987,15 @@ function CategoryModal({ cat, parentId, onClose }: { cat: KbCategory | null; par
 
   return (
     <AppModal open onClose={onClose}>
-      <div className="flex flex-col">
+      <div className="flex flex-col min-w-0">
         <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-6 py-5 shrink-0">
-          <div className="flex items-start gap-4 pr-8">
+          <div className="flex items-start gap-4 pr-8 min-w-0">
             <div className="w-12 h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0">
               <FolderIcon className="w-6 h-6 text-white" />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="font-bold text-lg text-white">{isEdit ? 'Редактировать категорию' : parentId ? 'Новая подкатегория' : 'Новая категория'}</p>
-              {isEdit && <p className="text-sm text-white/60 mt-0.5">{cat.name}</p>}
+              {isEdit && <p className="text-sm text-white/60 mt-0.5 truncate">{cat.name}</p>}
             </div>
           </div>
         </div>

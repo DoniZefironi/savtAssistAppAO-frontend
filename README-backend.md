@@ -39,6 +39,7 @@
 | `BOT_MAX_ATTEMPTS` | Попыток бота до предложения оператора (по умолч. 3) |
 | `BITRIX_WEBHOOK_URL` | URL входящего вебхука Bitrix24 (`https://портал.bitrix24.ru/rest/ID/КОД/`) |
 | `BITRIX_DEFAULT_RESPONSIBLE_ID` | ID сотрудника Bitrix24, назначаемого ответственным по всем автосозданным задачам |
+| `BITRIX_DEFAULT_GROUP_ID` | ID проекта (рабочей группы) Bitrix24, необязательно — без него задачи создаются без привязки к проекту |
 | `APP_ENV` | Окружение (`dev`/`prod`), в `dev` включает SQL-логирование |
 | `SMS_PROVIDER` | Провайдер SMS: `mock` (по умолч.) или `smscenter` |
 | `SMSCENTER_LOGIN` | Логин аккаунта smscenter.by |
@@ -53,8 +54,16 @@
 
 ## Работа с Docker
 
+Конфигурация разделена на прод и dev:
+
+- `docker-compose.yml` — **продакшн**: без hot-reload, код внутри образа, nginx с HTTPS (`nginx.conf`).
+- `docker-compose.dev.yml` — **локальная разработка**: `--reload`, монтирование кода, nginx без TLS (`nginx.dev.conf`).
+
 ```bash
-# Сборка и запуск
+# ЛОКАЛЬНАЯ РАЗРАБОТКА — сборка и запуск
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+
+# ПРОД (на сервере) — сборка и запуск
 docker compose up -d --build
 
 # Миграции
@@ -71,6 +80,71 @@ docker exec -it savt-backend-db-1 psql -U postgres -d savt
 # \dt — все таблицы
 # \d <таблица> — структура таблицы
 # \q — выход
+```
+
+> После изменения кода на проде нужен пересбор: `docker compose up -d --build` (код копируется в образ, а не монтируется).
+
+---
+
+## Развёртывание и HTTPS (прод)
+
+Прод-nginx (`nginx.conf`) принимает только HTTPS: порт 80 отдаёт ACME-челленджи и редиректит на 443. Без сертификата контейнер nginx **не стартует** — поэтому порядок первого развёртывания такой:
+
+Какой конфиг nginx использовать, задаётся переменной `NGINX_CONF` в `.env` (по умолчанию `nginx.conf`):
+
+| Конфиг | Когда использовать |
+|---|---|
+| `nginx.conf` (умолч.) | Прод: 443 с TLS, порт 80 — только редирект и ACME |
+| `nginx.http-fallback.conf` | Переходный: порт 443 снаружи ещё не проброшен — API работает и по 80, и по 443 |
+| `nginx.dev.conf` | Локальная разработка (подключается автоматически через `docker-compose.dev.yml`) |
+
+Переходный режим (пока сеть/роутер не пробрасывает 443):
+
+```bash
+echo "NGINX_CONF=nginx.http-fallback.conf" >> .env
+docker compose up -d nginx
+```
+
+После проброса 443 вернуть строгий режим: удалить строку `NGINX_CONF` из `.env` и снова `docker compose up -d nginx`.
+
+### 1. Подготовка
+
+```bash
+# В .env выставить боевые секреты:
+#   JWT_SECRET_KEY  — минимум 64 случайных символа
+#   POSTGRES_PASSWORD — длинный случайный пароль
+openssl rand -hex 48   # генератор секретов
+```
+
+> Если меняете `POSTGRES_PASSWORD` на уже работающей БД, одного .env мало — пароль хранится в самой БД:
+> ```bash
+> docker exec -it savt-backend-db-1 psql -U postgres -c "ALTER USER postgres PASSWORD 'новый_пароль';"
+> # затем обновить POSTGRES_PASSWORD и DATABASE_URL в .env и перезапустить api
+> ```
+
+### 2. Получить сертификат (первый раз — standalone, порт 80 должен быть свободен)
+
+```bash
+sudo apt install certbot            # если ещё не установлен
+docker compose stop nginx           # освободить порт 80
+sudo certbot certonly --standalone -d helper.savt.by
+mkdir -p certbot-www                # webroot для последующих продлений
+docker compose up -d                # nginx стартует уже с сертификатом
+```
+
+### 3. Автопродление сертификата
+
+`crontab -e`, добавить:
+
+```
+0 4 * * 1 certbot renew --webroot -w /path/to/savt-backend/certbot-www --deploy-hook "docker exec savt-backend-nginx-1 nginx -s reload" >> /var/log/certbot-renew.log 2>&1
+```
+
+### 4. Проверка
+
+```bash
+curl -I http://helper.savt.by/health    # → 301 на https (в переходном режиме — 200)
+curl https://helper.savt.by/health      # → {"app":"ok","db":true}
 ```
 
 ---
@@ -2101,6 +2175,7 @@ QR кодирует строку: `savt://cabinet/{unique_code}`
 ```json
 { "status": "in_progress" }
 ```
+Если у заявки есть `bitrix_task_id`, статус асинхронно (в фоне) прокидывается и в задачу Bitrix24: `open` → "Ждёт выполнения", `in_progress` → "Выполняется", `closed` → "Завершена". Направление одностороннее — изменение статуса задачи прямо в Bitrix24 к нам не возвращается.
 
 ---
 
@@ -2668,15 +2743,23 @@ Data:      { "cabinet_id": 5, "days_left": 30 }
 
 Скрипт `backup.sh` делает дамп PostgreSQL из Docker-контейнера, сжимает и хранит последние 5 файлов.
 
+Гарантии скрипта:
+- Дамп пишется во временный файл `.part` и переименовывается только при успехе — упавший `pg_dump` не оставит битый бэкап, который вытеснил бы хорошие при ротации.
+- Пустой дамп считается ошибкой.
+- Ротация: хранятся `BACKUP_KEEP_COUNT` (по умолчанию 5) последних файлов.
+- Опционально копия выгружается в Yandex Object Storage (`BACKUP_S3_UPLOAD=1`) — переживёт смерть диска сервера. Использует ключи `YANDEX_STORAGE_*` из контейнера api, кладёт в `db-backups/` бакета.
+
+Переменные окружения скрипта: `POSTGRES_DB` (умолч. `savt`), `POSTGRES_USER` (умолч. `postgres`), `BACKUP_KEEP_COUNT` (умолч. `5`), `BACKUP_S3_UPLOAD` (умолч. `0`), `BACKUP_DB_CONTAINER` / `BACKUP_API_CONTAINER` (умолч. `savt-backend-db-1` / `savt-backend-api-1`). Пароль БД не нужен — `pg_dump` внутри контейнера ходит через локальный сокет.
+
 ### Первый запуск (на сервере)
 
 ```bash
 # Сделать скрипт исполняемым
 chmod +x savt-backend/backup.sh
 
-# Проверить вручную (переменные берутся из окружения или .env)
+# Проверить вручную
 cd savt-backend
-POSTGRES_DB=savt POSTGRES_USER=postgres ./backup.sh
+./backup.sh
 ```
 
 Бэкапы сохраняются в `savt-backend/backups/` с именем `savt_backup_YYYY-MM-DD_HH-MM-SS.sql.gz`.
@@ -2687,13 +2770,22 @@ POSTGRES_DB=savt POSTGRES_USER=postgres ./backup.sh
 crontab -e
 ```
 
-Добавить строку (запуск каждый день в 03:00):
+Добавить строку (запуск каждый день в 03:00, с выгрузкой в Object Storage):
 
 ```
-0 3 * * * cd /path/to/savt-backend && POSTGRES_DB=savt POSTGRES_USER=postgres POSTGRES_PASSWORD=yourpassword ./backup.sh >> /var/log/savt-backup.log 2>&1
+0 3 * * * cd /path/to/savt-backend && BACKUP_S3_UPLOAD=1 ./backup.sh >> /var/log/savt-backup.log 2>&1
 ```
 
 > Замените `/path/to/savt-backend` на реальный путь к директории на сервере.
+> Если бакет Object Storage не настроен — уберите `BACKUP_S3_UPLOAD=1`.
+
+### Проверить, что бэкапы реально делаются
+
+```bash
+crontab -l | grep backup            # строка на месте?
+tail -n 20 /var/log/savt-backup.log # последние запуски без ошибок?
+ls -lh savt-backend/backups/        # 5 файлов со свежими датами?
+```
 
 ### Восстановление из бэкапа
 

@@ -1,3 +1,4 @@
+import { CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getWarrantyDaysLeft, getWarrantyStatus } from '@/lib/warranty'
 
@@ -15,24 +16,24 @@ export function WarrantyBadge({ warrantyEndsAt, warrantyStatus: rawStatus }: Pro
   const cfg = {
     active: {
       cls: 'bg-green-50 text-green-700 border-green-200',
-      icon: '✓',
+      icon: CheckCircle2,
       label: days !== null ? `${days} дн.` : 'Активна',
     },
     expiring_soon: {
       cls: 'bg-amber-50 text-amber-700 border-amber-200',
-      icon: '⚠',
+      icon: AlertTriangle,
       label: days !== null ? `${days} дн.` : 'Истекает',
     },
     expired: {
       cls: 'bg-red-50 text-red-700 border-red-200',
-      icon: '✕',
+      icon: XCircle,
       label: 'Истекла',
     },
   }[status]
 
   return (
     <span className={cn('inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border', cfg.cls)}>
-      <span>{cfg.icon}</span>
+      <cfg.icon className="w-3.5 h-3.5" />
       {cfg.label}
     </span>
   )

@@ -1,8 +1,6 @@
 import axios from 'axios'
 import Cookies from 'js-cookie'
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://helper.savt.by'
-
 export const apiClient = axios.create({
   baseURL: '/backend',
   headers: { 'Content-Type': 'application/json' },

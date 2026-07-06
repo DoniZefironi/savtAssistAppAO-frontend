@@ -1,7 +1,8 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Package, FileText, MessageCircle, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { chatsApi } from '@/lib/api/chats'
 import type { MessageSearchResult } from '@/lib/api/chats'
@@ -142,8 +143,8 @@ export function ChatListPanel({ chats, selectedId, onSelect, onSelectChatId, loa
                   onClick={() => { setPending(item.chat_id, item.id); onSearchChange(''); onSelectChatId(item.chat_id) }}
                   className="w-full text-left flex items-start gap-3 px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer border-b border-slate-50 dark:border-slate-800"
                 >
-                  <div className="w-10 h-10 rounded-full bg-[#1B3A72]/10 dark:bg-blue-900/30 flex items-center justify-center shrink-0 text-base mt-0.5">
-                    {item.chat_type === 'cabinet' ? '📦' : '💬'}
+                  <div className="w-10 h-10 rounded-full bg-[#1B3A72]/10 dark:bg-blue-900/30 flex items-center justify-center shrink-0 mt-0.5 text-[#1B3A72] dark:text-blue-400">
+                    {item.chat_type === 'cabinet' ? <Package className="w-4 h-4" /> : <MessageCircle className="w-4 h-4" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1 mb-0.5">
@@ -163,7 +164,7 @@ export function ChatListPanel({ chats, selectedId, onSelect, onSelectChatId, loa
 
             {!sorted.length && !msgLoading && msgResults.length === 0 && (
               <div className="flex flex-col items-center justify-center h-32 text-slate-400 text-sm gap-2">
-                <span className="text-3xl">🔍</span>
+                <Search className="w-7 h-7 opacity-50" />
                 Ничего не найдено
               </div>
             )}
@@ -172,7 +173,7 @@ export function ChatListPanel({ chats, selectedId, onSelect, onSelectChatId, loa
           <>
             {sorted.length === 0 && (
               <div className="flex flex-col items-center justify-center h-32 text-slate-400 text-sm gap-2">
-                <span className="text-3xl">💬</span>
+                <MessageCircle className="w-7 h-7 opacity-50" />
                 Нет чатов
               </div>
             )}
@@ -209,7 +210,7 @@ function CompactChatRow({ chat, selected, onSelect }: { chat: Chat; selected: bo
         'w-9 h-9 rounded-full flex items-center justify-center text-base font-semibold text-white',
         avatarBg, bg
       )}>
-        {chat.chat_type === 'cabinet' ? '📦' : chat.chat_type === 'notes' ? '📝' : chatInitials(chat)}
+        {chat.chat_type === 'cabinet' ? <Package className="w-4 h-4" /> : chat.chat_type === 'notes' ? <FileText className="w-4 h-4" /> : chatInitials(chat)}
       </div>
 
       {hasUnread && (
@@ -281,7 +282,7 @@ function ChatAvatar({ chat, selected }: { chat: Chat; selected: boolean }) {
   const bg = selected ? 'bg-white/20' : chatColor(chat)
   return (
     <div className={cn('w-12 h-12 rounded-full flex items-center justify-center shrink-0 text-lg font-semibold', bg, !selected && 'text-white')}>
-      {chat.chat_type === 'cabinet' ? '📦' : chat.chat_type === 'notes' ? '📝' : chatInitials(chat)}
+      {chat.chat_type === 'cabinet' ? <Package className="w-5 h-5" /> : chat.chat_type === 'notes' ? <FileText className="w-5 h-5" /> : chatInitials(chat)}
     </div>
   )
 }
@@ -297,9 +298,9 @@ export function chatDisplayName(chat: Chat): string {
   return `Чат #${chat.id}`
 }
 
-function chatInitials(chat: Chat): string {
+function chatInitials(chat: Chat): ReactNode {
   const name = chat.user_name
-  if (!name) return chat.chat_type === 'support' ? '💬' : '?'
+  if (!name) return chat.chat_type === 'support' ? <MessageCircle className="w-4 h-4" /> : '?'
   return name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
 }
 

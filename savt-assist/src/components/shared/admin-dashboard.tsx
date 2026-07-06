@@ -89,7 +89,7 @@ export function AdminDashboard() {
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-slate-700/60">
               <span className="font-semibold text-sm text-slate-800 dark:text-slate-100">Последняя активность</span>
-              <span className="text-xs text-slate-400">последние 20 событий</span>
+              <span className="text-xs text-slate-400">последние 10 событий</span>
             </div>
             {activityLoading ? (
               <div className="divide-y divide-slate-50 dark:divide-slate-700/40">

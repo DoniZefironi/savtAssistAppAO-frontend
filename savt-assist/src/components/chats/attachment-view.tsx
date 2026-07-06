@@ -1,14 +1,12 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import { API_URL } from '@/lib/api/client'
+import { X, FileText, FileSpreadsheet, Video, Archive, Paperclip, Mic, Music } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { MessageAttachment } from '@/types'
 
-export function toFullUrl(url: string): string {
-  if (!url) return ''
-  return url.startsWith('http') ? url : `${API_URL}${url}`
-}
+import { toFullUrl } from '@/lib/api/base-url'
+export { toFullUrl }
 
 export async function downloadBlob(url: string, filename: string) {
   try {
@@ -39,13 +37,12 @@ function formatDuration(sec: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-function fileIcon(mime: string): string {
-  if (mime.includes('pdf')) return '📄'
-  if (mime.includes('word') || mime.includes('doc')) return '📝'
-  if (mime.includes('excel') || mime.includes('sheet') || mime.includes('xls')) return '📊'
-  if (mime.includes('video')) return '🎬'
-  if (mime.includes('zip') || mime.includes('archive')) return '🗜'
-  return '📎'
+function FileTypeIcon({ mime, className }: { mime: string; className?: string }) {
+  if (mime.includes('pdf') || mime.includes('word') || mime.includes('doc')) return <FileText className={className} />
+  if (mime.includes('excel') || mime.includes('sheet') || mime.includes('xls')) return <FileSpreadsheet className={className} />
+  if (mime.includes('video')) return <Video className={className} />
+  if (mime.includes('zip') || mime.includes('archive')) return <Archive className={className} />
+  return <Paperclip className={className} />
 }
 
 interface Props {
@@ -181,8 +178,9 @@ function AudioAttachment({ a, isOwn, transcription, transcribing, onTranscribe }
           </div>
 
           <div className="flex items-center justify-between">
-            <span className={cn('text-[10px]', isOwn ? 'text-white/55' : 'text-slate-400 dark:text-slate-300')}>
-              {isVoice ? '🎙 ' : '🎵 '}{displayTime || '0:00'}
+            <span className={cn('text-[10px] flex items-center gap-1', isOwn ? 'text-white/55' : 'text-slate-400 dark:text-slate-300')}>
+              {isVoice ? <Mic className="w-2.5 h-2.5" /> : <Music className="w-2.5 h-2.5" />}
+              {displayTime || '0:00'}
             </span>
             <div className="flex items-center gap-1.5">
               {onTranscribe && !transcription && (
@@ -254,7 +252,7 @@ function FileAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean }) 
         ? 'bg-white/25 border border-white/35'
         : 'bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 shadow-sm'
     )}>
-      <span className="text-2xl flex-shrink-0">{fileIcon(a.mime_type)}</span>
+      <FileTypeIcon mime={a.mime_type} className={cn('w-6 h-6 shrink-0', isOwn ? 'text-white/80' : 'text-slate-400')} />
       <div className="flex-1 min-w-0">
         <p className={cn('text-sm font-medium truncate leading-tight', isOwn ? 'text-white' : 'text-slate-800 dark:text-slate-100')}>
           {a.file_name}
@@ -313,7 +311,7 @@ export function ImageLightbox({ url, name, onClose }: { url: string; name: strin
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-colors cursor-pointer"
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         </div>
       </div>

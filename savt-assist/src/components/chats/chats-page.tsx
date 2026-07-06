@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { MessageCircle } from 'lucide-react'
 import { ChatListPanel } from './chat-list-panel'
 import { ChatConversation } from './chat-conversation'
 import { chatsApi } from '@/lib/api/chats'
@@ -200,7 +201,7 @@ function getUserNameFromCache(qc: ReturnType<typeof useQueryClient>, chatId: num
 function EmptyState() {
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-3 bg-[linear-gradient(160deg,#f5f7fa_0%,#eaeff8_100%)] dark:[background:linear-gradient(160deg,#1a2236_0%,#1e2744_100%)]">
-      <span className="text-5xl">💬</span>
+      <MessageCircle className="w-12 h-12 opacity-50" />
       <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Выберите чат</p>
       <p className="text-xs text-slate-400 dark:text-slate-500 text-center max-w-40">Выберите чат из списка слева</p>
     </div>

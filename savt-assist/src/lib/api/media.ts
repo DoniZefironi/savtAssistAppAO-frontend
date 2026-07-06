@@ -1,5 +1,6 @@
 import Cookies from 'js-cookie'
-import { apiClient, API_URL } from './client'
+import { apiClient } from './client'
+import { toFullUrl } from './base-url'
 import type { PaginatedResponse } from '@/types'
 
 export interface CabinetDocument {
@@ -24,11 +25,6 @@ export interface CabinetPhoto {
   caption: string | null
   sort_order: number
   created_at: string
-}
-
-function toFullUrl(url: string) {
-  if (!url) return ''
-  return url.startsWith('http') ? url : `${API_URL}${url}`
 }
 
 async function uploadMultipart<T>(path: string, form: FormData): Promise<T> {

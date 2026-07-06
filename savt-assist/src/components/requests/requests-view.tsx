@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef, Fragment } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { X, ClipboardList, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { API_URL } from '@/lib/api/client'
+import { toFullUrl } from '@/lib/api/base-url'
 import { requestsApi } from '@/lib/api/requests'
 import type { ServiceRequest, AdditionRequest, ShareRequest, DocumentRequest } from '@/lib/api/requests'
 import { usersApi } from '@/lib/api/users'
@@ -113,11 +114,6 @@ function userTypeLabel(t: string | null) {
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
 }
-function toFullUrl(url: string) {
-  if (!url) return ''
-  return url.startsWith('http') ? url : `${API_URL}${url}`
-}
-
 type ViewMode = 'list' | 'grid'
 
 export function RequestsView() {
@@ -133,13 +129,6 @@ export function RequestsView() {
 
   // Список админов для дропдауна "Обработал" — доступен только суперадмину
   // (GET /admin/admins), поэтому для остальных ролей используется числовой ID.
-  const adminsQ = useQuery({
-    queryKey: ['admins-for-filter'],
-    queryFn: () => usersApi.getAdminList({ size: 100 }),
-    enabled: currentUser?.role === 'superadmin',
-    staleTime: 60_000,
-  })
-  const admins = adminsQ.data?.items ?? []
   const [view, setView] = useState<ViewMode>('list')
   useEffect(() => {
     const saved = localStorage.getItem('view-mode-requests')
@@ -278,7 +267,9 @@ export function RequestsView() {
             className="pl-9 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 focus-visible:ring-[#4A8FE7]"
           />
           {searchInput && (
-            <button onClick={() => setSearchInput('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">✕</button>
+            <button onClick={() => setSearchInput('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">
+              <X className="w-4 h-4" />
+            </button>
           )}
         </div>
 
@@ -343,37 +334,6 @@ export function RequestsView() {
             ))}
           </div>
         )}
-
-        {tab !== 'service' && (
-          <div className="flex flex-wrap items-center gap-2 mt-2">
-            <span className="text-xs text-slate-400 font-medium mr-0.5">Обработал:</span>
-            {currentUser?.role === 'superadmin' ? (
-              <select
-                value={resolvedByAdminId ?? ''}
-                onChange={e => setResolvedByAdminId(e.target.value ? Number(e.target.value) : null)}
-                className="px-2.5 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded-full bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus:border-[#4A8FE7]"
-              >
-                <option value="">Любой администратор</option>
-                {admins.map(a => (
-                  <option key={a.id} value={a.id}>{a.full_name ?? a.login ?? `#${a.id}`}</option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="number"
-                value={resolvedByAdminId ?? ''}
-                onChange={e => setResolvedByAdminId(e.target.value ? Number(e.target.value) : null)}
-                placeholder="ID администратора"
-                className="w-36 px-2.5 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded-full bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:border-[#4A8FE7]"
-              />
-            )}
-            {resolvedByAdminId != null && (
-              <button onClick={() => setResolvedByAdminId(null)} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">
-                сбросить
-              </button>
-            )}
-          </div>
-        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-4 bg-slate-50 dark:bg-slate-900">
@@ -431,7 +391,7 @@ export function RequestsView() {
 function Empty({ text }: { text: string }) {
   return (
     <div className="flex flex-col items-center justify-center h-48 text-slate-400">
-      <p className="text-2xl mb-2">📋</p>
+      <ClipboardList className="w-8 h-8 mb-2 opacity-50" />
       <p>{text}</p>
     </div>
   )
@@ -601,7 +561,7 @@ function VerifiedBadge({ verified }: { verified: boolean }) {
         ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
         : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
     )}>
-      {verified ? '✓ Подтверждён' : 'Не подтверждён'}
+      {verified ? <><CheckCircle2 className="w-3 h-3" />Подтверждён</> : 'Не подтверждён'}
     </span>
   )
 }
@@ -658,6 +618,24 @@ function StatusStepper({ status, onChange }: {
       })}
     </div>
   )
+}
+
+// Резолв ID администратора в имя/логин. GET /admin/admins доступен только
+// суперадмину, поэтому: своё имя видно всегда, для остальных — резолв по
+// списку админов (только суперадмин), иначе fallback на "Администратор #ID".
+function useAdminDisplayName(adminId: number | null): string {
+  const currentUser = useAuthStore(s => s.user)
+  const isSuperadmin = currentUser?.role === 'superadmin'
+  const adminsQ = useQuery({
+    queryKey: ['admins-for-filter'],
+    queryFn: () => usersApi.getAdminList({ size: 100 }),
+    enabled: isSuperadmin,
+    staleTime: 60_000,
+  })
+  if (adminId == null) return ''
+  if (adminId === currentUser?.id) return currentUser?.full_name ?? currentUser?.login ?? `Администратор #${adminId}`
+  const found = adminsQ.data?.items.find(a => a.id === adminId)
+  return found ? (found.full_name ?? found.login ?? `Администратор #${adminId}`) : `Администратор #${adminId}`
 }
 
 export function ServiceDialog({ request, onClose }: { request: ServiceRequest; onClose: () => void }) {
@@ -743,6 +721,7 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
   const [rejectNote, setRejectNote] = useState('')
   const [subUserId, setSubUserId] = useState<number | null>(null)
   const [subCabinetId, setSubCabinetId] = useState<number | null>(null)
+  const resolvedByName = useAdminDisplayName(request.resolved_by_admin_id)
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['addition-requests'] })
@@ -783,7 +762,7 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
         {request.user_registered_at && <DRow label="Зарегистрирован" value={fmtDate(request.user_registered_at)} />}
         <DRow label="Заявка создана" value={fmtDate(request.created_at)} />
         {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
-        {request.resolved_by_admin_id != null && <DRow label="Обработал" value={`Администратор #${request.resolved_by_admin_id}`} />}
+        {request.resolved_by_admin_id != null && <DRow label="Обработал" value={resolvedByName} />}
         {request.cabinet_id && <DRowLink label="Связанный ШУ" value={`ШУ #${request.cabinet_id}`} onClick={() => setSubCabinetId(request.cabinet_id!)} />}
         {request.user_comment && (
           <DRow label="Комментарий" value={
@@ -877,6 +856,7 @@ function ShareDialog({ request, onClose }: { request: ShareRequest; onClose: () 
   const [rejectNote, setRejectNote] = useState('')
   const [subUserId, setSubUserId] = useState<number | null>(null)
   const [subCabinetId, setSubCabinetId] = useState<number | null>(null)
+  const resolvedByName = useAdminDisplayName(request.resolved_by_admin_id)
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['share-requests'] })
@@ -919,7 +899,7 @@ function ShareDialog({ request, onClose }: { request: ShareRequest; onClose: () 
         <DRow label="Тип ШУ" value={request.cabinet_type} />
         <DRow label="Заявка создана" value={fmtDate(request.created_at)} />
         {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
-        {request.resolved_by_admin_id != null && <DRow label="Обработал" value={`Администратор #${request.resolved_by_admin_id}`} />}
+        {request.resolved_by_admin_id != null && <DRow label="Обработал" value={resolvedByName} />}
         {request.user_comment && (
           <DRow label="Комментарий" value={
             <span className="font-normal text-slate-600 dark:text-slate-300">{request.user_comment}</span>

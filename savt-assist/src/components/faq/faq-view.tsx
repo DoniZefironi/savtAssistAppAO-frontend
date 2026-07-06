@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { faqApi } from '@/lib/api/faq'
 import type { FaqCategory, FaqEntry } from '@/lib/api/faq'
@@ -16,17 +17,14 @@ function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-type SortValue = 'created_at' | 'updated_at' | 'question' | 'version' | 'is_published'
+type SortValue = 'created_at' | 'updated_at' | 'question' | 'version'
 
 const SORT_OPTIONS: { value: SortValue; label: string }[] = [
   { value: 'created_at', label: 'По дате' },
   { value: 'updated_at', label: 'По изменению' },
   { value: 'question', label: 'По вопросу' },
   { value: 'version', label: 'По версии' },
-  { value: 'is_published', label: 'По публикации' },
 ]
-
-type PublishFilter = 'all' | 'published' | 'draft'
 
 interface DeleteConfirm {
   type: 'category' | 'entry'
@@ -100,7 +98,6 @@ export function FaqView() {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortValue>('created_at')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
-  const [publishFilter, setPublishFilter] = useState<PublishFilter>('all')
   const [catSearch, setCatSearch] = useState('')
   const [catSortAlpha, setCatSortAlpha] = useState(false)
   const [editEntry, setEditEntry] = useState<FaqEntry | null>(null)
@@ -125,12 +122,11 @@ export function FaqView() {
   })
 
   const entriesQ = useInfiniteQuery({
-    queryKey: ['faq-entries', selectedCatId, search, sortBy, sortOrder, publishFilter],
+    queryKey: ['faq-entries', selectedCatId, search, sortBy, sortOrder],
     initialPageParam: 1,
     queryFn: ({ pageParam }: { pageParam: number }) =>
       faqApi.listEntries({
         category_id: selectedCatId ?? undefined,
-        is_published: publishFilter === 'all' ? undefined : publishFilter === 'published',
         search: search || undefined,
         sort_by: sortBy,
         sort_order: sortOrder,
@@ -275,22 +271,6 @@ export function FaqView() {
               </button>
             )
           })}
-          <div className="flex border border-slate-200 dark:border-slate-700 rounded-full overflow-hidden ml-1">
-            {([['all', 'Все'], ['published', 'Опубликованные'], ['draft', 'Черновики']] as [PublishFilter, string][]).map(([val, label]) => (
-              <button
-                key={val}
-                onClick={() => setPublishFilter(val)}
-                className={cn(
-                  'px-3 py-1 text-xs font-medium transition-colors cursor-pointer',
-                  publishFilter === val
-                    ? 'bg-[#1B3A72] text-white'
-                    : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
 
@@ -452,18 +432,22 @@ export function FaqView() {
 
       {deleteConfirm && !isReadOnly && (
         <AppModal open onClose={() => setDeleteConfirm(null)}>
-          <div className="px-6 py-5">
+          <div className="px-6 py-5 min-w-0">
             <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-2">
               {deleteConfirm.type === 'category' ? 'Удалить категорию?' : 'Удалить вопрос?'}
             </h3>
-            <p className="text-sm text-slate-600 dark:text-slate-300 mb-1">
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-1 wrap-break-word">
               <strong>«{deleteConfirm.name}»</strong> будет удалена безвозвратно.
             </p>
             {deleteConfirm.warning ? (
-              <p className="text-sm text-red-500 dark:text-red-400 mt-1">⚠ {deleteConfirm.warning}</p>
+              <p className="text-sm text-red-500 dark:text-red-400 mt-1 flex items-start gap-1">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                {deleteConfirm.warning}
+              </p>
             ) : deleteConfirm.type === 'category' && (
-              <p className="text-sm text-red-500 dark:text-red-400 mt-1">
-                ⚠ Все вопросы в этой категории также будут удалены.
+              <p className="text-sm text-red-500 dark:text-red-400 mt-1 flex items-start gap-1">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                Все вопросы в этой категории также будут удалены.
               </p>
             )}
             <div className="flex justify-end gap-2 mt-4">
@@ -543,7 +527,7 @@ function EntryCard({ entry, categoryName, view = 'list', onEdit, onDelete }: {
 }) {
   if (view === 'grid') {
     return (
-      <div onClick={onEdit} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-4 hover:border-slate-200 dark:hover:border-slate-600 hover:shadow-sm transition-all group cursor-pointer flex flex-col">
+      <div onClick={onEdit} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-4 hover:border-slate-200 dark:hover:border-slate-600 hover:shadow-sm transition-all group cursor-pointer flex flex-col overflow-hidden">
         <div className="flex items-start justify-between mb-2.5">
           <div className="w-9 h-9 bg-[#1B3A72] rounded-lg flex items-center justify-center shrink-0">
             <QuestionIcon className="w-4 h-4 text-white" />
@@ -556,12 +540,9 @@ function EntryCard({ entry, categoryName, view = 'list', onEdit, onDelete }: {
             </div>
           )}
         </div>
-        <p className="font-semibold text-slate-800 dark:text-slate-100 leading-snug line-clamp-2">{entry.question}</p>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">{entry.answer}</p>
+        <p className="font-semibold text-slate-800 dark:text-slate-100 leading-snug line-clamp-2 wrap-break-word">{entry.question}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 wrap-break-word leading-relaxed">{entry.answer}</p>
         <div className="flex items-center gap-2 mt-auto pt-2.5 flex-wrap">
-          {!entry.is_published && (
-            <span className="text-xs px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">Черновик</span>
-          )}
           {categoryName && (
             <span className="text-xs px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">{categoryName}</span>
           )}
@@ -572,14 +553,14 @@ function EntryCard({ entry, categoryName, view = 'list', onEdit, onDelete }: {
   }
 
   return (
-    <div onClick={onEdit} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-5 hover:border-slate-200 dark:hover:border-slate-600 hover:shadow-sm transition-all group cursor-pointer">
+    <div onClick={onEdit} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-5 hover:border-slate-200 dark:hover:border-slate-600 hover:shadow-sm transition-all group cursor-pointer overflow-hidden">
       <div className="flex items-start gap-3">
         <div className="w-9 h-9 bg-[#1B3A72] rounded-lg flex items-center justify-center shrink-0 mt-0.5">
           <QuestionIcon className="w-4 h-4 text-white" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
-            <p className="font-semibold text-slate-800 dark:text-slate-100 leading-snug">{entry.question}</p>
+            <p className="font-semibold text-slate-800 dark:text-slate-100 leading-snug line-clamp-2 wrap-break-word">{entry.question}</p>
             {onDelete && (
               <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button onClick={e => { e.stopPropagation(); onDelete() }} className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer">
@@ -588,11 +569,8 @@ function EntryCard({ entry, categoryName, view = 'list', onEdit, onDelete }: {
               </div>
             )}
           </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5 line-clamp-2 leading-relaxed">{entry.answer}</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5 line-clamp-2 wrap-break-word leading-relaxed">{entry.answer}</p>
           <div className="flex items-center gap-3 mt-2.5 flex-wrap">
-            {!entry.is_published && (
-              <span className="text-xs px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">Черновик</span>
-            )}
             {categoryName && (
               <span className="text-xs px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400">{categoryName}</span>
             )}
@@ -622,16 +600,18 @@ function EntryModal({ entry, categories, defaultCategoryId, onClose, isReadOnly 
   const [categoryId, setCategoryId] = useState<number>(
     entry?.category_id ?? defaultCategoryId ?? categories[0]?.id ?? 0
   )
-  const [isPublished, setIsPublished] = useState(entry?.is_published ?? false)
 
   const saveMut = useMutation({
-    mutationFn: () => isEdit
-      ? faqApi.updateEntry(entry.id, {
+    mutationFn: async () => {
+      if (isEdit) {
+        return faqApi.updateEntry(entry.id, {
           question: question !== entry.question ? question : undefined,
           answer: answer !== entry.answer ? answer : undefined,
-          is_published: isPublished !== entry.is_published ? isPublished : undefined,
         })
-      : faqApi.createEntry({ question, answer, category_id: categoryId }),
+      }
+      const created = await faqApi.createEntry({ question, answer, category_id: categoryId })
+      return faqApi.updateEntry(created.id, { is_published: true })
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['faq-entries'] })
       toast.success(isEdit ? 'Вопрос обновлён' : 'Вопрос создан')
@@ -646,9 +626,9 @@ function EntryModal({ entry, categories, defaultCategoryId, onClose, isReadOnly 
 
   return (
     <AppModal open onClose={onClose} className="sm:max-w-2xl">
-      <div className="flex flex-col max-h-[85vh]">
+      <div className="flex flex-col max-h-[85vh] min-w-0">
         <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-6 py-5 shrink-0">
-          <div className="flex items-start gap-4 pr-8">
+          <div className="flex items-start gap-4 pr-8 min-w-0">
             <div className="w-12 h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
               <QuestionIcon className="w-6 h-6 text-white" />
             </div>
@@ -662,31 +642,6 @@ function EntryModal({ entry, categories, defaultCategoryId, onClose, isReadOnly 
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-          {isEdit ? (
-            <button
-              type="button"
-              onClick={() => !isReadOnly && setIsPublished(v => !v)}
-              disabled={isReadOnly}
-              className={cn(
-                'w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg border transition-colors text-left',
-                isPublished
-                  ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20'
-                  : 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20',
-                isReadOnly ? 'cursor-default' : 'cursor-pointer'
-              )}
-            >
-              <span className={cn('text-sm font-medium', isPublished ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400')}>
-                {isPublished ? 'Опубликовано' : 'Черновик — не виден пользователям'}
-              </span>
-              <span className={cn('relative w-9 h-5 rounded-full transition-colors shrink-0', isPublished ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600')}>
-                <span className={cn('absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform', isPublished && 'translate-x-4')} />
-              </span>
-            </button>
-          ) : (
-            <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">
-              Вопрос будет создан как черновик — опубликуйте его после создания.
-            </p>
-          )}
           <div>
             <label className="text-xs font-medium text-slate-500 block mb-1.5">
               Категория {!isEdit && <span className="text-red-500">*</span>}
@@ -776,15 +731,15 @@ function CategoryModal({ cat, parentId, onClose }: { cat: FaqCategory | null; pa
 
   return (
     <AppModal open onClose={onClose}>
-      <div className="flex flex-col">
+      <div className="flex flex-col min-w-0">
         <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-6 py-5 shrink-0">
-          <div className="flex items-start gap-4 pr-8">
+          <div className="flex items-start gap-4 pr-8 min-w-0">
             <div className="w-12 h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0">
               <FolderIcon className="w-6 h-6 text-white" />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="font-bold text-lg text-white">{isEdit ? 'Редактировать категорию' : parentId ? 'Новая подкатегория' : 'Новая категория'}</p>
-              {isEdit && <p className="text-sm text-white/60 mt-0.5">{cat.name}</p>}
+              {isEdit && <p className="text-sm text-white/60 mt-0.5 truncate">{cat.name}</p>}
             </div>
           </div>
         </div>

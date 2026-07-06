@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { API_URL } from "./src/lib/api/base-url";
 
 const nextConfig: NextConfig = {
   images: {
@@ -11,7 +12,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/backend/:path*',
-        destination: `${process.env.NEXT_PUBLIC_API_URL || 'http://helper.savt.by'}/:path*`,
+        destination: `${API_URL}/:path*`,
       },
     ]
   },

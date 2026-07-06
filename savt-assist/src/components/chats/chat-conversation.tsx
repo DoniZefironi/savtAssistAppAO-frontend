@@ -4,6 +4,10 @@ import { isAxiosError } from 'axios'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import {
+  X, Paperclip, Image as ImageIcon, Pin, PinOff, Trash2, Ban,
+  Package, FileText, MessageCircle, Bot, User, Video, FileSpreadsheet, Archive, Mic as MicIconLucide, Inbox,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MessageBubble, DateSeparator } from './message-bubble'
 import { chatDisplayName } from './chat-list-panel'
@@ -623,7 +627,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const botActive = chat.bot_active
   const renderItems = buildRenderItems(displayMessages, currentUser?.id ?? -1, firstUnreadId)
   const name = chatDisplayName(chat)
-  const avatarEmoji = chat.chat_type === 'cabinet' ? '📦' : chat.chat_type === 'notes' ? '📝' : '💬'
+  const AvatarIcon = chat.chat_type === 'cabinet' ? Package : chat.chat_type === 'notes' ? FileText : MessageCircle
   const avatarBg = chat.chat_type === 'cabinet' ? 'bg-[#1B3A72]' : 'bg-slate-500'
   const currentWallpaper = WALLPAPERS.find(w => w.id === wallpaper) ?? WALLPAPERS[0]
 
@@ -656,7 +660,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
           onClick={!searchOpen ? () => { setAttachmentsOpen(true); setAttachTab('media') } : undefined}
         >
           <div className={cn('w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0', avatarBg)}>
-            {avatarEmoji}
+            <AvatarIcon className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
             {searchOpen ? (
@@ -705,17 +709,17 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
             </button>
             {headerMenuOpen && (
               <div className="absolute top-full right-0 mt-1 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 min-w-52 z-50">
-                <HeaderMenuItem icon="📎" onClick={() => { setAttachmentsOpen(true); setHeaderMenuOpen(false) }}>Вложения чата</HeaderMenuItem>
-                <HeaderMenuItem icon="🖼" onClick={() => { setAttachTab('wallpaper'); setAttachmentsOpen(true); setHeaderMenuOpen(false) }}>Обои</HeaderMenuItem>
+                <HeaderMenuItem icon={<Paperclip className="w-4 h-4" />} onClick={() => { setAttachmentsOpen(true); setHeaderMenuOpen(false) }}>Вложения чата</HeaderMenuItem>
+                <HeaderMenuItem icon={<ImageIcon className="w-4 h-4" />} onClick={() => { setAttachTab('wallpaper'); setAttachmentsOpen(true); setHeaderMenuOpen(false) }}>Обои</HeaderMenuItem>
                 {pinnedMessages.length > 0 && (
-                  <HeaderMenuItem icon="📌" onClick={() => { if (activePin) handleScrollToMessage(activePin.id); setHeaderMenuOpen(false) }}>Перейти к закреплённому</HeaderMenuItem>
+                  <HeaderMenuItem icon={<Pin className="w-4 h-4" />} onClick={() => { if (activePin) handleScrollToMessage(activePin.id); setHeaderMenuOpen(false) }}>Перейти к закреплённому</HeaderMenuItem>
                 )}
                 {pinnedMessages.length > 1 && (
-                  <HeaderMenuItem icon="📌" onClick={() => { unpinAllMutation.mutate(); setHeaderMenuOpen(false) }} danger>Открепить все ({pinnedMessages.length})</HeaderMenuItem>
+                  <HeaderMenuItem icon={<PinOff className="w-4 h-4" />} onClick={() => { unpinAllMutation.mutate(); setHeaderMenuOpen(false) }} danger>Открепить все ({pinnedMessages.length})</HeaderMenuItem>
                 )}
                 <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
-                <HeaderMenuItem icon="🗑" onClick={() => { setConfirmModal('clear'); setHeaderMenuOpen(false) }} danger>Очистить историю</HeaderMenuItem>
-                <HeaderMenuItem icon="🚫" onClick={() => { setConfirmModal('delete'); setHeaderMenuOpen(false) }} danger>Удалить чат</HeaderMenuItem>
+                <HeaderMenuItem icon={<Trash2 className="w-4 h-4" />} onClick={() => { setConfirmModal('clear'); setHeaderMenuOpen(false) }} danger>Очистить историю</HeaderMenuItem>
+                <HeaderMenuItem icon={<Ban className="w-4 h-4" />} onClick={() => { setConfirmModal('delete'); setHeaderMenuOpen(false) }} danger>Удалить чат</HeaderMenuItem>
               </div>
             )}
           </div>
@@ -739,12 +743,15 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
             <p className="text-[10px] font-semibold text-[#1B3A72] dark:text-blue-400">
               {pinnedMessages.length > 1 ? `Закреплённое сообщение ${activePinIdx % pinnedMessages.length + 1}/${pinnedMessages.length}` : 'Закреплённое сообщение'}
             </p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{activePin.text || '📎 Вложение'}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 truncate flex items-center gap-1">
+              {!activePin.text && <Paperclip className="w-3 h-3 shrink-0" />}
+              {activePin.text || 'Вложение'}
+            </p>
           </div>
           <button onClick={(e) => { e.stopPropagation(); unpinMutation.mutate(activePin.id) }}
             title="Открепить"
-            className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-xs">
-            ✕
+            className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+            <X className="w-3 h-3" />
           </button>
         </div>
       )}
@@ -786,7 +793,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         )}
         {!isLoading && renderItems.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-2 py-16">
-            <span className="text-4xl">💬</span>
+            <MessageCircle className="w-10 h-10 opacity-50" />
             <p className="text-sm">{searchOpen && searchQuery ? 'Ничего не найдено' : 'Нет сообщений'}</p>
           </div>
         )}
@@ -855,7 +862,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
       {botActive && !searchOpen && !selectMode && (
         <div className="border-t border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 shrink-0">
           <div className="flex items-center gap-3">
-            <span className="text-2xl">🤖</span>
+            <Bot className="w-6 h-6 text-amber-600 dark:text-amber-400 shrink-0" />
             <div className="flex-1">
               <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Сейчас отвечает бот</p>
               <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">Чтобы ответить самостоятельно — возьмите чат</p>
@@ -920,9 +927,11 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
             <div className="flex flex-wrap gap-2 px-4 py-2 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-700/60">
               {pendingAttachments.map((a, i) => (
                 <div key={i} className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-700 dark:text-slate-300">
-                  <span>{a.mime_type.startsWith('image/') ? '🖼' : '📎'}</span>
+                  {a.mime_type.startsWith('image/') ? <ImageIcon className="w-3.5 h-3.5 shrink-0" /> : <Paperclip className="w-3.5 h-3.5 shrink-0" />}
                   <span className="max-w-32 truncate">{a.name}</span>
-                  <button onClick={() => setPendingAttachments((p) => p.filter((_, j) => j !== i))} className="text-slate-400 hover:text-red-500 ml-1 cursor-pointer">✕</button>
+                  <button onClick={() => setPendingAttachments((p) => p.filter((_, j) => j !== i))} className="text-slate-400 hover:text-red-500 ml-1 cursor-pointer">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               ))}
             </div>
@@ -935,8 +944,14 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                   {editingMessage ? 'Редактирование' : `Ответ: ${replyTo!.sender_name}`}
                 </p>
-                <p className="text-xs text-slate-400 dark:text-slate-500 truncate">
-                  {editingMessage ? (editingMessage.text ?? '') : (replyTo!.text || (replyTo!.attachments?.length ? '📎 Вложение' : ''))}
+                <p className="text-xs text-slate-400 dark:text-slate-500 truncate flex items-center gap-1">
+                  {editingMessage
+                    ? (editingMessage.text ?? '')
+                    : replyTo!.text
+                    ? replyTo!.text
+                    : replyTo!.attachments?.length
+                    ? <><Paperclip className="w-3 h-3 shrink-0" />Вложение</>
+                    : ''}
                 </p>
               </div>
               <button onClick={cancelContext} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 shrink-0 p-1 cursor-pointer">
@@ -1008,16 +1023,18 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
           <div className="relative w-full max-w-lg mx-4 max-h-[85vh] bg-white dark:bg-slate-900 rounded-2xl flex flex-col shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 shrink-0">
               <h3 className="font-semibold text-slate-800 dark:text-slate-100">Информация о чате</h3>
-              <button onClick={() => setAttachmentsOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer text-lg leading-none">✕</button>
+              <button onClick={() => setAttachmentsOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
             </div>
             <div className="flex items-center gap-4 px-5 py-4 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
               <div className={cn('w-14 h-14 rounded-full flex items-center justify-center text-2xl shrink-0', avatarBg)}>
-                {avatarEmoji}
+                <AvatarIcon className="w-7 h-7 text-white" />
               </div>
               <div className="min-w-0">
                 <p className="font-semibold text-slate-800 dark:text-slate-100 text-base truncate">{name}</p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {botActive ? '🤖 Бот отвечает' : '👤 Оператор отвечает'}
+                <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
+                  {botActive ? <><Bot className="w-3.5 h-3.5" />Бот отвечает</> : <><User className="w-3.5 h-3.5" />Оператор отвечает</>}
                 </p>
               </div>
             </div>
@@ -1054,7 +1071,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
                           onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, messageId: item.message_id }) }}>
                           {item.mime.startsWith('image/')
                             ? <img src={fullUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
-                            : <div className="w-full h-full flex items-center justify-center text-2xl">🎬</div>
+                            : <div className="w-full h-full flex items-center justify-center text-slate-400"><Video className="w-6 h-6" /></div>
                           }
                           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors" />
                         </div>
@@ -1071,7 +1088,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
                       return (
                         <div key={i} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
                           onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, messageId: item.message_id }) }}>
-                          <span className="text-2xl shrink-0">{fileIcon(item.mime)}</span>
+                          <FileTypeIcon mime={item.mime} className="w-6 h-6 shrink-0 text-slate-400" />
                           <div className="flex-1 min-w-0 cursor-pointer"
                             onClick={() => window.open(fullUrl, '_blank')}>
                             <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{item.name}</p>
@@ -1105,8 +1122,9 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
                       <div key={i} className="py-2.5"
                         onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, messageId: item.message_id }) }}>
                         <div className="flex items-center justify-between mb-1.5">
-                          <p className="text-xs text-slate-400">
-                            🎙 {item.duration != null ? `${Math.floor(item.duration / 60)}:${String(item.duration % 60).padStart(2, '0')}` : 'Голосовое'}
+                          <p className="text-xs text-slate-400 flex items-center gap-1">
+                            <MicIconLucide className="w-3.5 h-3.5" />
+                            {item.duration != null ? `${Math.floor(item.duration / 60)}:${String(item.duration % 60).padStart(2, '0')}` : 'Голосовое'}
                           </p>
                           <button
                             onClick={() => { setAttachmentsOpen(false); setTimeout(() => handleScrollToMessage(item.message_id), 100) }}
@@ -1238,8 +1256,8 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
                           </div>
                           <button
                             onClick={() => saveWallpaper({ wallpaper_id: null, wallpaper_url: null })}
-                            className="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer text-sm">
-                            ✕
+                            className="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer">
+                            <X className="w-3.5 h-3.5" />
                           </button>
                         </>
                       )}
@@ -1375,18 +1393,21 @@ function ForwardDialog({ messages, currentChatId, onClose }: { messages: ChatMes
         </button>
         <div className="overflow-y-auto flex-1 py-1">
           {chats.length === 0 && <p className="text-sm text-slate-400 text-center py-8">Нет других чатов</p>}
-          {chats.map((c) => (
+          {chats.map((c) => {
+            const ItemIcon = c.chat_type === 'cabinet' ? Package : c.chat_type === 'notes' ? FileText : MessageCircle
+            return (
             <button key={c.id} disabled={sending} onClick={() => forward(c.id)}
               className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors text-left disabled:opacity-50 cursor-pointer">
               <div className={cn('w-9 h-9 rounded-full flex items-center justify-center text-sm shrink-0', c.chat_type === 'cabinet' ? 'bg-[#1B3A72] text-white' : 'bg-slate-400 text-white')}>
-                {c.chat_type === 'cabinet' ? '📦' : c.chat_type === 'notes' ? '📝' : '💬'}
+                <ItemIcon className="w-4 h-4" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{chatDisplayName(c)}</p>
                 {c.last_message_text && <p className="text-xs text-slate-400 truncate">{c.last_message_text}</p>}
               </div>
             </button>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>
@@ -1396,7 +1417,7 @@ function ForwardDialog({ messages, currentChatId, onClose }: { messages: ChatMes
 function EmptyAttach({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center justify-center h-40 text-slate-400 text-sm gap-2">
-      <span className="text-3xl">📭</span>
+      <Inbox className="w-8 h-8 opacity-50" />
       {label}
     </div>
   )
@@ -1421,10 +1442,10 @@ function ColorSection({ title, value, onChange, colors }: {
           onClick={() => onChange(undefined)}
           title="По умолчанию"
           className={cn(
-            'w-8 h-8 rounded-lg border-2 text-xs font-bold flex items-center justify-center transition-all cursor-pointer shrink-0',
+            'w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer shrink-0',
             !value ? 'border-[#1B3A72] text-[#1B3A72] dark:text-blue-400 ring-2 ring-[#1B3A72]/20' : 'border-slate-300 dark:border-slate-600 text-slate-400 hover:border-slate-400'
           )}
-        >✕</button>
+        ><X className="w-3.5 h-3.5" /></button>
 
         {/* Пресеты */}
         {colors.map(c => (
@@ -1491,12 +1512,12 @@ function ColorSection({ title, value, onChange, colors }: {
   )
 }
 
-function HeaderMenuItem({ icon, onClick, danger, children }: { icon: string; onClick: () => void; danger?: boolean; children: React.ReactNode }) {
+function HeaderMenuItem({ icon, onClick, danger, children }: { icon: React.ReactNode; onClick: () => void; danger?: boolean; children: React.ReactNode }) {
   return (
     <button onClick={onClick}
       className={cn('w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors cursor-pointer',
         danger ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50')}>
-      <span className="text-base">{icon}</span>
+      <span className="w-4 h-4 flex items-center justify-center shrink-0">{icon}</span>
       {children}
     </button>
   )
@@ -1558,11 +1579,10 @@ function OpenExtIcon() {
 function DownloadSmIcon() {
   return <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
 }
-function fileIcon(mime: string): string {
-  if (mime.includes('pdf')) return '📄'
-  if (mime.includes('word') || mime.includes('doc')) return '📝'
-  if (mime.includes('excel') || mime.includes('sheet') || mime.includes('xls')) return '📊'
-  if (mime.includes('video')) return '🎬'
-  if (mime.includes('zip') || mime.includes('archive')) return '🗜'
-  return '📎'
+function FileTypeIcon({ mime, className }: { mime: string; className?: string }) {
+  if (mime.includes('pdf') || mime.includes('word') || mime.includes('doc')) return <FileText className={className} />
+  if (mime.includes('excel') || mime.includes('sheet') || mime.includes('xls')) return <FileSpreadsheet className={className} />
+  if (mime.includes('video')) return <Video className={className} />
+  if (mime.includes('zip') || mime.includes('archive')) return <Archive className={className} />
+  return <Paperclip className={className} />
 }

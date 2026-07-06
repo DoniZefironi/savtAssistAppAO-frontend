@@ -3,9 +3,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { X, FileText, Image, User, Wrench, CheckCircle2, XCircle, Package, AlertTriangle } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { AppModal } from '@/components/ui/app-modal'
 import { CabinetCard } from './cabinet-card'
 import { CabinetDetailDialog } from './cabinet-detail-dialog'
 import { CreateCabinetDialog } from './create-cabinet-dialog'
@@ -62,6 +64,7 @@ export function CabinetsView({ isAdmin }: Props) {
   const [openMode, setOpenMode] = useState<'view' | 'edit'>('view')
   const [qrCabinet, setQrCabinet] = useState<Cabinet | null>(null)
   const [showCreate, setShowCreate] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: number; name: string } | null>(null)
 
   const debouncedSearch = useDebounce(search)
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -127,6 +130,7 @@ export function CabinetsView({ isAdmin }: Props) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cabinets'] })
       toast.success('ШУ удалён')
+      setDeleteConfirm(null)
     },
     onError: () => toast.error('Не удалось удалить ШУ'),
   })
@@ -147,9 +151,10 @@ export function CabinetsView({ isAdmin }: Props) {
     setOpenId(id)
   }
 
-  const handleDelete = (id: number, name: string) => {
-    if (!confirm(`Удалить «${name}»?`)) return
-    deleteMutation.mutate(id)
+  const handleDelete = (id: number, name: string) => setDeleteConfirm({ id, name })
+
+  const handleConfirmDelete = () => {
+    if (deleteConfirm) deleteMutation.mutate(deleteConfirm.id)
   }
 
   const allItems = data?.pages.flatMap((p) => p.items) ?? []
@@ -216,7 +221,7 @@ export function CabinetsView({ isAdmin }: Props) {
               onClick={() => handleSearchChange('')}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
             >
-              ✕
+              <X className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -244,11 +249,11 @@ export function CabinetsView({ isAdmin }: Props) {
         <div className="flex gap-1.5 mt-3 flex-wrap items-center">
           <span className="text-xs text-slate-400 font-medium mr-0.5">Фильтр:</span>
           {([
-            { key: 'has_documents', label: 'Документы', icon: '📄' },
-            { key: 'has_photos', label: 'Фото', icon: '🖼' },
-            { key: 'has_users', label: 'Пользователь', icon: '👤' },
-            { key: 'has_service_requests', label: 'Заявки', icon: '🔧' },
-          ] as const).map(({ key, label, icon }) => (
+            { key: 'has_documents', label: 'Документы', icon: FileText },
+            { key: 'has_photos', label: 'Фото', icon: Image },
+            { key: 'has_users', label: 'Пользователь', icon: User },
+            { key: 'has_service_requests', label: 'Заявки', icon: Wrench },
+          ] as const).map(({ key, label, icon: Icon }) => (
             <button
               key={key}
               onClick={() => toggleBoolFilter(key)}
@@ -258,7 +263,7 @@ export function CabinetsView({ isAdmin }: Props) {
                   : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-[#4A8FE7] hover:text-[#4A8FE7]'
               }`}
             >
-              <span>{icon}</span>
+              <Icon className="w-3.5 h-3.5" />
               {label}
             </button>
           ))}
@@ -270,7 +275,7 @@ export function CabinetsView({ isAdmin }: Props) {
                 : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-emerald-400 hover:text-emerald-600'
             }`}
           >
-            <span>✅</span>
+            <CheckCircle2 className="w-3.5 h-3.5" />
             Гарантия есть
           </button>
           <button
@@ -281,7 +286,7 @@ export function CabinetsView({ isAdmin }: Props) {
                 : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-rose-400 hover:text-rose-500'
             }`}
           >
-            <span>❌</span>
+            <XCircle className="w-3.5 h-3.5" />
             Истекла
           </button>
           {activeFiltersCount > 0 && (
@@ -313,7 +318,7 @@ export function CabinetsView({ isAdmin }: Props) {
 
         {!isLoading && !isError && allItems.length === 0 && (
           <div className="flex flex-col items-center justify-center h-48 text-slate-400">
-            <p className="text-lg">📦</p>
+            <Package className="w-8 h-8 opacity-50" />
             <p className="mt-2">{search ? 'Ничего не найдено' : 'Нет шкафов управления'}</p>
           </div>
         )}
@@ -357,6 +362,33 @@ export function CabinetsView({ isAdmin }: Props) {
       <CabinetDetailDialog cabinetId={openId} isAdmin={isAdmin} initialMode={openMode} onClose={() => setOpenId(null)} />
       {isAdmin && <CreateCabinetDialog open={showCreate} onClose={() => setShowCreate(false)} />}
       <QrDialog cabinet={qrCabinet} onClose={() => setQrCabinet(null)} />
+
+      {deleteConfirm && (
+        <AppModal open onClose={() => setDeleteConfirm(null)}>
+          <div className="px-6 py-5 min-w-0">
+            <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-2">Удалить ШУ?</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-1 wrap-break-word">
+              <strong>«{deleteConfirm.name}»</strong> будет удалён безвозвратно.
+            </p>
+            <p className="text-sm text-red-500 dark:text-red-400 mt-1 flex items-start gap-1">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              Все связанные документы, фото и заявки также будут удалены.
+            </p>
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="ghost" onClick={() => setDeleteConfirm(null)} disabled={deleteMutation.isPending} className="cursor-pointer">
+                Отмена
+              </Button>
+              <Button
+                onClick={handleConfirmDelete}
+                disabled={deleteMutation.isPending}
+                className="bg-red-500 hover:bg-red-600 cursor-pointer"
+              >
+                {deleteMutation.isPending ? 'Удаление...' : 'Удалить'}
+              </Button>
+            </div>
+          </div>
+        </AppModal>
+      )}
     </div>
   )
 }
