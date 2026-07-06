@@ -700,7 +700,7 @@ export function ServiceDialog({ request, onClose }: { request: ServiceRequest; o
             <Button
               onClick={() => mutation.mutate()}
               disabled={mutation.isPending}
-              className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
+              className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white"
             >
               {mutation.isPending ? 'Сохранение...' : 'Сохранить'}
             </Button>
