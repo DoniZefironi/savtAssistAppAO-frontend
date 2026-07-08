@@ -884,6 +884,7 @@ function AttachmentsTab({ article }: { article: KbArticleDetail }) {
   const qc = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
   const [isDragOver, setIsDragOver] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<KbAttachment | null>(null)
   const currentUser = useAuthStore(s => s.user)
   const isReadOnly = currentUser?.role === 'operator'
 
@@ -899,6 +900,7 @@ function AttachmentsTab({ article }: { article: KbArticleDetail }) {
       qc.invalidateQueries({ queryKey: ['kb-article', article.id] })
       qc.invalidateQueries({ queryKey: ['kb-articles'] })
       toast.success('Файл удалён')
+      setDeleteTarget(null)
     },
     onError: () => toast.error('Ошибка удаления'),
   })
@@ -956,11 +958,34 @@ function AttachmentsTab({ article }: { article: KbArticleDetail }) {
               key={att.id}
               att={att}
               articleId={article.id}
-              onDelete={isReadOnly ? undefined : () => deleteMut.mutate(att.id)}
+              onDelete={isReadOnly ? undefined : () => setDeleteTarget(att)}
               deleting={deleteMut.isPending}
             />
           ))}
         </div>
+      )}
+
+      {deleteTarget && (
+        <AppModal open onClose={() => setDeleteTarget(null)}>
+          <div className="px-6 py-5 min-w-0">
+            <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-2">Удалить вложение?</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-1 wrap-break-word">
+              <strong>«{deleteTarget.title}»</strong> будет удалено безвозвратно.
+            </p>
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleteMut.isPending} className="cursor-pointer">
+                Отмена
+              </Button>
+              <Button
+                onClick={() => deleteMut.mutate(deleteTarget.id)}
+                disabled={deleteMut.isPending}
+                className="bg-red-500 hover:bg-red-600 cursor-pointer"
+              >
+                {deleteMut.isPending ? 'Удаление...' : 'Удалить'}
+              </Button>
+            </div>
+          </div>
+        </AppModal>
       )}
     </div>
   )

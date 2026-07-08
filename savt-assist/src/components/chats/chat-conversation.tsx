@@ -99,7 +99,8 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const [attachTab, setAttachTab] = useState<'media' | 'files' | 'voice' | 'colors' | 'wallpaper'>('media')
   const [colorScope, setColorScope] = useState<'chat' | 'global'>('chat')
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
-  const [confirmModal, setConfirmModal] = useState<null | 'clear' | 'delete'>(null)
+  const [confirmModal, setConfirmModal] = useState<null | 'clear' | 'delete' | 'delete-message' | 'delete-selected'>(null)
+  const [deleteMessageId, setDeleteMessageId] = useState<number | null>(null)
   const [stickerPickerOpen, setStickerPickerOpen] = useState(false)
   const [stickerCat, setStickerCat] = useState(Object.keys(STICKERS)[0])
   const [transcriptions, setTranscriptions] = useState<Map<number, { text: string; loading: boolean }>>(new Map())
@@ -592,9 +593,18 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   const handleCancelSelect = () => { setSelectMode(false); setSelectedIds(new Set()) }
 
-  const handleDeleteSelected = () => {
+  const handleDeleteSelected = () => setConfirmModal('delete-selected')
+
+  const confirmDeleteSelected = () => {
     selectedIds.forEach(id => deleteMutation.mutate(id))
     handleCancelSelect()
+    setConfirmModal(null)
+  }
+
+  const confirmDeleteMessage = () => {
+    if (deleteMessageId != null) deleteMutation.mutate(deleteMessageId)
+    setDeleteMessageId(null)
+    setConfirmModal(null)
   }
 
   const handleForwardSelected = () => {
@@ -836,7 +846,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
               pinnedMessageIds={pinnedIds}
               onReply={handleReply}
               onEdit={item.isOwn ? handleEdit : undefined}
-              onDelete={item.isOwn ? (msg) => deleteMutation.mutate(msg.id) : undefined}
+              onDelete={item.isOwn ? (msg) => { setDeleteMessageId(msg.id); setConfirmModal('delete-message') } : undefined}
               onForward={(msg) => setForwardMessages([msg])}
               onReact={handleReact}
               onScrollToMessage={handleScrollToMessage}
@@ -1317,31 +1327,59 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         </div>
       )}
 
-      {confirmModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setConfirmModal(null)}>
-          <div className="absolute inset-0 bg-black/50" />
-          <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 max-w-xs w-full mx-4" onClick={e => e.stopPropagation()}>
-            <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-100 mb-2">
-              {confirmModal === 'clear' ? 'Очистить историю?' : 'Удалить чат?'}
-            </h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">
-              {confirmModal === 'clear' ? 'Все сообщения будут удалены без возможности восстановления.' : 'Чат и вся история будут удалены навсегда.'}
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => setConfirmModal(null)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer">
-                Отмена
-              </button>
-              <button
-                onClick={confirmModal === 'clear' ? () => clearMutation.mutate() : () => deleteChatMutation.mutate()}
-                disabled={clearMutation.isPending || deleteChatMutation.isPending}
-                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-sm font-medium hover:bg-red-600 disabled:opacity-50 transition-colors cursor-pointer">
-                {clearMutation.isPending || deleteChatMutation.isPending ? '...' : confirmModal === 'clear' ? 'Очистить' : 'Удалить'}
-              </button>
+      {confirmModal && (() => {
+        const cfg = {
+          clear: {
+            title: 'Очистить историю?',
+            body: 'Все сообщения будут удалены без возможности восстановления.',
+            label: 'Очистить',
+            onConfirm: () => clearMutation.mutate(),
+            pending: clearMutation.isPending,
+          },
+          delete: {
+            title: 'Удалить чат?',
+            body: 'Чат и вся история будут удалены навсегда.',
+            label: 'Удалить',
+            onConfirm: () => deleteChatMutation.mutate(),
+            pending: deleteChatMutation.isPending,
+          },
+          'delete-message': {
+            title: 'Удалить сообщение?',
+            body: 'Сообщение будет удалено без возможности восстановления.',
+            label: 'Удалить',
+            onConfirm: confirmDeleteMessage,
+            pending: deleteMutation.isPending,
+          },
+          'delete-selected': {
+            title: 'Удалить сообщения?',
+            body: `Будет удалено сообщений: ${selectedIds.size}. Это действие нельзя отменить.`,
+            label: 'Удалить',
+            onConfirm: confirmDeleteSelected,
+            pending: deleteMutation.isPending,
+          },
+        }[confirmModal]
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setConfirmModal(null)}>
+            <div className="absolute inset-0 bg-black/50" />
+            <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 max-w-xs w-full mx-4" onClick={e => e.stopPropagation()}>
+              <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-100 mb-2">{cfg.title}</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">{cfg.body}</p>
+              <div className="flex gap-3">
+                <button onClick={() => setConfirmModal(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer">
+                  Отмена
+                </button>
+                <button
+                  onClick={cfg.onConfirm}
+                  disabled={cfg.pending}
+                  className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-sm font-medium hover:bg-red-600 disabled:opacity-50 transition-colors cursor-pointer">
+                  {cfg.pending ? '...' : cfg.label}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

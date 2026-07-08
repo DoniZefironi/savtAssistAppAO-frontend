@@ -221,6 +221,7 @@ function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }
   const qc = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
   const [pending, setPending] = useState<{ file: File; title: string; requiresApproval: boolean } | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; title: string } | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['cabinet-docs', cabinetId],
@@ -245,6 +246,7 @@ function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cabinet-docs', cabinetId] })
       toast.success('Документ удалён')
+      setDeleteTarget(null)
     },
     onError: () => toast.error('Ошибка при удалении'),
   })
@@ -341,11 +343,34 @@ function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }
               isAdmin={isAdmin}
               onOpen={() => window.open(mediaApi.toFullUrl(doc.file_url), '_blank')}
               onDownload={() => mediaApi.downloadDocument(doc.file_url, doc.title)}
-              onDelete={isAdmin ? () => deleteMut.mutate(doc.id) : undefined}
+              onDelete={isAdmin ? () => setDeleteTarget({ id: doc.id, title: doc.title }) : undefined}
               deleting={deleteMut.isPending}
             />
           ))}
         </div>
+      )}
+
+      {deleteTarget && (
+        <AppModal open onClose={() => setDeleteTarget(null)}>
+          <div className="px-6 py-5 min-w-0">
+            <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-2">Удалить документ?</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-1 wrap-break-word">
+              <strong>«{deleteTarget.title}»</strong> будет удалён безвозвратно.
+            </p>
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleteMut.isPending} className="cursor-pointer">
+                Отмена
+              </Button>
+              <Button
+                onClick={() => deleteMut.mutate(deleteTarget.id)}
+                disabled={deleteMut.isPending}
+                className="bg-red-500 hover:bg-red-600 cursor-pointer"
+              >
+                {deleteMut.isPending ? 'Удаление...' : 'Удалить'}
+              </Button>
+            </div>
+          </div>
+        </AppModal>
       )}
     </div>
   )
@@ -518,6 +543,7 @@ function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [caption, setCaption] = useState('')
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<CabinetPhoto | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['cabinet-photos', cabinetId],
@@ -540,6 +566,7 @@ function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cabinet-photos', cabinetId] })
       toast.success('Фото удалено')
+      setDeleteTarget(null)
     },
     onError: () => toast.error('Ошибка при удалении'),
   })
@@ -636,7 +663,7 @@ function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean
               key={photo.id}
               photo={photo}
               onOpen={() => setLightboxIdx(idx)}
-              onDelete={isAdmin ? () => deleteMut.mutate(photo.id) : undefined}
+              onDelete={isAdmin ? () => setDeleteTarget(photo) : undefined}
               onUpdate={isAdmin ? (cap, order) => updateMut.mutate({ id: photo.id, caption: cap, sort_order: order }) : undefined}
               deleting={deleteMut.isPending}
               updating={updateMut.isPending}
@@ -651,6 +678,29 @@ function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean
           initialIdx={lightboxIdx}
           onClose={() => setLightboxIdx(null)}
         />
+      )}
+
+      {deleteTarget && (
+        <AppModal open onClose={() => setDeleteTarget(null)}>
+          <div className="px-6 py-5 min-w-0">
+            <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-2">Удалить фото?</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-1 wrap-break-word">
+              {deleteTarget.caption ? <><strong>«{deleteTarget.caption}»</strong> будет удалено безвозвратно.</> : 'Фото будет удалено безвозвратно.'}
+            </p>
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleteMut.isPending} className="cursor-pointer">
+                Отмена
+              </Button>
+              <Button
+                onClick={() => deleteMut.mutate(deleteTarget.id)}
+                disabled={deleteMut.isPending}
+                className="bg-red-500 hover:bg-red-600 cursor-pointer"
+              >
+                {deleteMut.isPending ? 'Удаление...' : 'Удалить'}
+              </Button>
+            </div>
+          </div>
+        </AppModal>
       )}
     </div>
   )
@@ -1268,6 +1318,7 @@ function ServiceRequestsTab({ cabinetId }: { cabinetId: number }) {
   const qc = useQueryClient()
   const [status, setStatus] = useState('open')
   const [selectedRequest, setSelectedRequest] = useState<ServiceRequest | null>(null)
+  const [statusConfirm, setStatusConfirm] = useState<{ id: number; next: string } | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['cabinet-service-requests', cabinetId, status],
@@ -1280,6 +1331,7 @@ function ServiceRequestsTab({ cabinetId }: { cabinetId: number }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cabinet-service-requests', cabinetId] })
       toast.success('Статус обновлён')
+      setStatusConfirm(null)
     },
     onError: () => toast.error('Не удалось обновить статус'),
   })
@@ -1332,7 +1384,7 @@ function ServiceRequestsTab({ cabinetId }: { cabinetId: number }) {
                 key={req.id}
                 req={req}
                 onSelect={() => setSelectedRequest(req)}
-                onStatusChange={next => statusMut.mutate({ id: req.id, status: next })}
+                onStatusChange={next => setStatusConfirm({ id: req.id, next })}
                 pending={statusMut.isPending}
               />
             ))}
@@ -1341,6 +1393,28 @@ function ServiceRequestsTab({ cabinetId }: { cabinetId: number }) {
       </div>
       {selectedRequest && (
         <ServiceDialog request={selectedRequest} onClose={() => setSelectedRequest(null)} />
+      )}
+      {statusConfirm && (
+        <AppModal open onClose={() => setStatusConfirm(null)}>
+          <div className="px-6 py-5 min-w-0">
+            <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-2">Изменить статус заявки?</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              Статус заявки #{statusConfirm.id} изменится на «{REQUEST_STATUS_LABELS[statusConfirm.next]}».
+            </p>
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="ghost" onClick={() => setStatusConfirm(null)} disabled={statusMut.isPending} className="cursor-pointer">
+                Отмена
+              </Button>
+              <Button
+                onClick={() => statusMut.mutate({ id: statusConfirm.id, status: statusConfirm.next })}
+                disabled={statusMut.isPending}
+                className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white"
+              >
+                {statusMut.isPending ? 'Сохранение...' : 'Подтвердить'}
+              </Button>
+            </div>
+          </div>
+        </AppModal>
       )}
     </>
   )
