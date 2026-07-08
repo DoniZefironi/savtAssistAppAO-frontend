@@ -26,20 +26,33 @@ export function CabinetCard({ cabinet, isAdmin, loading, view = 'list', onOpen, 
             <p className="font-semibold text-slate-800 dark:text-slate-100 truncate leading-tight">{displayName}</p>
             <p className="text-xs text-slate-400 mt-0.5">{cabinet.object_number}</p>
           </div>
-          <button
-            onClick={(e) => { e.stopPropagation(); onQr() }}
-            title="Показать QR-код"
-            className="w-8 h-8 bg-[#1B3A72] rounded-lg flex items-center justify-center shrink-0 hover:bg-[#1B3A72]/80 transition-colors cursor-pointer"
-          >
-            {loading ? (
-              <svg className="w-3.5 h-3.5 text-white animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
-            ) : (
-              <QrIcon className="w-4 h-4 text-white" />
+          {/* Действия в шапке карточки, а не поверх контента внизу — раньше перекрывали даты гарантии */}
+          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+            {isAdmin && (
+              <>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-[#1B3A72] cursor-pointer" title="Редактировать" onClick={onEdit}>
+                  <EditIcon />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-500 cursor-pointer" title="Удалить" onClick={onDelete}>
+                  <TrashIcon />
+                </Button>
+              </>
             )}
-          </button>
+            <button
+              onClick={onQr}
+              title="Показать QR-код"
+              className="w-8 h-8 bg-[#1B3A72] rounded-lg flex items-center justify-center shrink-0 hover:bg-[#1B3A72]/80 transition-colors cursor-pointer"
+            >
+              {loading ? (
+                <svg className="w-3.5 h-3.5 text-white animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              ) : (
+                <QrIcon className="w-4 h-4 text-white" />
+              )}
+            </button>
+          </div>
         </div>
 
         {(cabinet.type || cabinet.purpose) && (
@@ -59,31 +72,17 @@ export function CabinetCard({ cabinet, isAdmin, loading, view = 'list', onOpen, 
             </span>
           )}
         </div>
-
-        {isAdmin && (
-          <div
-            className="absolute bottom-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-[#1B3A72] cursor-pointer" title="Редактировать" onClick={onEdit}>
-              <EditIcon />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-500 cursor-pointer" title="Удалить" onClick={onDelete}>
-              <TrashIcon />
-            </Button>
-          </div>
-        )}
       </div>
     )
   }
 
   return (
-    <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-4 flex items-center gap-4 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-600 transition-all group">
+    <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 sm:p-4 flex items-center gap-3 sm:gap-4 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-600 transition-all group">
 
       <button
         onClick={onQr}
         title="Показать QR-код"
-        className="w-12 h-12 bg-[#1B3A72] rounded-xl flex items-center justify-center shrink-0 hover:bg-[#1B3A72]/80 transition-colors relative cursor-pointer"
+        className="w-10 h-10 sm:w-12 sm:h-12 bg-[#1B3A72] rounded-xl flex items-center justify-center shrink-0 hover:bg-[#1B3A72]/80 transition-colors relative cursor-pointer"
       >
         {loading ? (
           <svg className="w-5 h-5 text-white animate-spin" fill="none" viewBox="0 0 24 24">
@@ -119,8 +118,9 @@ export function CabinetCard({ cabinet, isAdmin, loading, view = 'list', onOpen, 
       </div>
 
       {isAdmin && (
+        // pointer-coarse: на тач-устройствах hover нет — кнопки видны всегда
         <div
-          className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+          className="flex items-center gap-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity"
           onClick={(e) => e.stopPropagation()}
         >
           <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-[#1B3A72] cursor-pointer" title="Редактировать" onClick={onEdit}>

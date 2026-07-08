@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { X, CheckCircle2, XCircle, Smartphone, PhoneOff, Users } from 'lucide-react'
+import { X, CheckCircle2, XCircle, Smartphone, PhoneOff, Users, SlidersHorizontal } from 'lucide-react'
 import { cn, isSuperadminRole } from '@/lib/utils'
 import { usersApi } from '@/lib/api/users'
 import type { AdminUser } from '@/lib/api/users'
@@ -12,8 +12,12 @@ import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import { RequestCard, StatusPill, TypePill } from '@/components/requests/request-card'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
+
+// Сетка карточек: 1 колонка на самых узких, до 4 на широких мониторах
+const GRID_CLASSES = 'grid grid-cols-1 min-[640px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3'
 
 const STATUS_FILTERS = [
   { value: 'all', label: 'Все' },
@@ -96,6 +100,7 @@ export function UsersView() {
     const saved = localStorage.getItem('view-mode-users')
     if (saved === 'list' || saved === 'grid') setView(saved)
   }, [])
+  const [filtersOpen, setFiltersOpen] = usePersistentState('filters-open-users', true)
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
   const [createOperatorOpen, setCreateOperatorOpen] = useState(false)
   const [createAdminOpen, setCreateAdminOpen] = useState(false)
@@ -167,18 +172,20 @@ export function UsersView() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 pt-6 pb-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
-        <div className="flex items-end justify-between mb-4">
-          <div>
+      <div className="px-3 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
+        <div className="max-w-425 mx-auto w-full">
+        <div className="flex flex-wrap items-end justify-between gap-x-2 gap-y-3 mb-4">
+          <div className="min-w-0">
             {total != null && (
               <p className="text-xs text-slate-400 font-medium mb-0.5">{total} записей</p>
             )}
-            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Пользователи</h1>
+            <h1 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100">Пользователи</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
               <button onClick={() => { setView('list'); localStorage.setItem('view-mode-users', 'list') }} title="Список" className={`p-2 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon /></button>
               <button onClick={() => { setView('grid'); localStorage.setItem('view-mode-users', 'grid') }} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon /></button>
+              <button onClick={() => setFiltersOpen(v => !v)} title={filtersOpen ? 'Скрыть поиск и фильтры' : 'Показать поиск и фильтры'} className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${filtersOpen ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><SlidersHorizontal className="w-4 h-4" /></button>
             </div>
             {!isReadOnly && isSuperadmin && (
               <Button onClick={() => setCreateAdminOpen(true)} className="bg-purple-600 hover:bg-purple-700 cursor-pointer dark:text-white">
@@ -194,13 +201,14 @@ export function UsersView() {
             )}
           </div>
         </div>
-        <div className="flex gap-0 mb-3">
+        {/* Не переносится (сломает вид подчёркнутой навигации) — на узких экранах скроллится горизонтально */}
+        <div className="flex gap-0 mb-3 overflow-x-auto">
           {ROLE_TABS.map(t => (
             <button
               key={t.value}
               onClick={() => setRoleTab(t.value)}
               className={cn(
-                'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer',
+                'px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer shrink-0 whitespace-nowrap',
                 roleTab === t.value
                   ? 'border-[#1B3A72] text-[#1B3A72] dark:text-blue-400 dark:border-blue-400'
                   : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
@@ -210,6 +218,8 @@ export function UsersView() {
             </button>
           ))}
         </div>
+        {filtersOpen && (
+        <>
         <div className="relative mb-3">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
           <Input
@@ -331,11 +341,15 @@ export function UsersView() {
             Номер не подтверждён
           </button>
         </div>
+        </>
+        )}
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-4 bg-slate-50 dark:bg-slate-900">
+      <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-3 sm:py-4 bg-slate-50 dark:bg-slate-900">
+        <div className="max-w-425 mx-auto">
         {isLoading && (
-          <div className={view === 'grid' ? 'grid grid-cols-2 gap-3' : 'space-y-2'}>
+          <div className={view === 'grid' ? GRID_CLASSES : 'space-y-2'}>
             {[1, 2, 3, 4].map(i => <div key={i} className={`bg-white dark:bg-slate-800 rounded-xl animate-pulse ${view === 'grid' ? 'h-36' : 'h-20'}`} />)}
           </div>
         )}
@@ -352,7 +366,7 @@ export function UsersView() {
           </div>
         )}
         {allItems.length > 0 && (
-          <div className={view === 'grid' ? 'grid grid-cols-2 gap-3' : 'space-y-2'}>
+          <div className={view === 'grid' ? GRID_CLASSES : 'space-y-2'}>
             {allItems.map(user => (
               <RequestCard
                 key={user.id}
@@ -395,6 +409,7 @@ export function UsersView() {
             Все {total} записей загружены
           </p>
         )}
+        </div>
       </div>
 
       {selectedUser && (
@@ -466,9 +481,9 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
         <UserSkeleton />
       ) : !canFetchDetail ? (
         <div className="flex flex-col">
-          <div className="bg-linear-to-r from-[#7C3AED] to-[#4C1D95] px-6 py-5 shrink-0">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0">
+          <div className="bg-linear-to-r from-[#7C3AED] to-[#4C1D95] px-4 sm:px-6 py-4 sm:py-5 shrink-0">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0">
                 <UserIcon />
               </div>
               <div>
@@ -477,15 +492,15 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
               </div>
             </div>
           </div>
-          <div className="px-6 py-8 text-center text-slate-400 text-sm">
+          <div className="px-4 sm:px-6 py-8 text-center text-slate-400 text-sm">
             Детальная информация об администраторах недоступна.
           </div>
         </div>
       ) : !user ? null : (
         <div className="flex flex-col max-h-[85vh]">
-          <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-6 py-5 shrink-0">
-            <div className="flex items-start gap-4 pr-2">
-              <div className="w-12 h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
+          <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-4 sm:px-6 py-4 sm:py-5 shrink-0">
+            <div className="flex items-start gap-3 sm:gap-4 pr-2">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
                 <UserIcon />
               </div>
               <div className="flex-1 min-w-0">
@@ -532,7 +547,7 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
             </div>
 
             {(user.cabinets?.length ?? 0) > 0 && (
-              <div className="px-6 py-3 border-t border-slate-100 dark:border-slate-700">
+              <div className="px-4 sm:px-6 py-3 border-t border-slate-100 dark:border-slate-700">
                 <p className="text-xs text-slate-400 mb-2">Шкафы управления ({user.cabinets.length})</p>
                 <div className="space-y-1.5">
                   {user.cabinets.map(c => (
@@ -560,7 +575,7 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
             )}
           </div>
 
-          {!isReadOnly && !isStaffAdmin && <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 shrink-0">
+          {!isReadOnly && !isStaffAdmin && <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700 shrink-0">
             {deleteStep ? (
               <div className="space-y-2">
                 <p className="text-sm text-slate-600 dark:text-slate-300 wrap-break-word">
@@ -641,8 +656,10 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
 
 function DRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex gap-4 px-6 py-3">
-      <span className="text-xs text-slate-400 w-32 shrink-0 pt-0.5">{label}</span>
+    // На мобильном лейбл над значением (не колонка фикс. ширины) — длинные слова вроде
+    // «Зарегистрирован» иначе переносились посреди слова, налезая на значение
+    <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4 px-4 sm:px-6 py-3">
+      <span className="text-xs text-slate-400 sm:w-32 shrink-0 sm:pt-0.5">{label}</span>
       <div className="flex-1 text-sm font-medium text-slate-700 dark:text-slate-200">{value}</div>
     </div>
   )
@@ -651,16 +668,16 @@ function DRow({ label, value }: { label: string; value: React.ReactNode }) {
 function UserSkeleton() {
   return (
     <div>
-      <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-6 py-5">
-        <div className="flex items-center gap-4">
-          <Skeleton className="w-12 h-12 rounded-xl bg-white/20" />
+      <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-4 sm:px-6 py-4 sm:py-5">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <Skeleton className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-white/20" />
           <div className="space-y-2 flex-1">
             <Skeleton className="h-5 w-40 bg-white/20" />
             <Skeleton className="h-3 w-24 bg-white/20" />
           </div>
         </div>
       </div>
-      <div className="px-6 py-4 space-y-4">
+      <div className="px-4 sm:px-6 py-4 space-y-4">
         {[1, 2, 3, 4].map(i => (
           <div key={i} className="flex gap-4">
             <Skeleton className="h-3 w-24 shrink-0" />
@@ -696,16 +713,16 @@ function CreateOperatorModal({ onClose }: { onClose: () => void }) {
   return (
     <AppModal open onClose={onClose}>
       <div className="flex flex-col">
-        <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-6 py-5 shrink-0">
-          <div className="flex items-start gap-4 pr-8">
-            <div className="w-12 h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0"><UserIcon /></div>
+        <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-4 sm:px-6 py-4 sm:py-5 shrink-0">
+          <div className="flex items-start gap-3 sm:gap-4 pr-8">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0"><UserIcon /></div>
             <div>
               <p className="font-bold text-lg text-white">Новый оператор</p>
               <p className="text-sm text-white/60 mt-0.5">Создание аккаунта оператора</p>
             </div>
           </div>
         </div>
-        <div className="px-6 py-4 space-y-4">
+        <div className="px-4 sm:px-6 py-4 space-y-4">
           <StaffField label="Логин" hint="мин. 3 символа, без пробелов" value={login} onChange={setLogin}
             error={login && !loginValid ? 'Мин. 3 символа, без пробелов' : ''} placeholder="operator1" />
           <PasswordField label="Пароль" hint="мин. 8 символов" value={password} onChange={setPassword}
@@ -713,7 +730,7 @@ function CreateOperatorModal({ onClose }: { onClose: () => void }) {
             error={password && !passwordValid ? 'Минимум 8 символов' : ''} />
           <StaffField label="ФИО" value={fullName} onChange={setFullName} placeholder="Иванов Иван Иванович" />
         </div>
-        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end shrink-0">
+        <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end shrink-0">
           <Button onClick={() => createMut.mutate()} disabled={!canSave} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white">
             {createMut.isPending ? 'Создание...' : 'Создать'}
           </Button>
@@ -747,16 +764,16 @@ function CreateStaffModal({ onClose }: { onClose: () => void }) {
   return (
     <AppModal open onClose={onClose}>
       <div className="flex flex-col">
-        <div className="bg-linear-to-r from-[#7C3AED] to-[#4C1D95] px-6 py-5 shrink-0">
-          <div className="flex items-start gap-4 pr-8">
-            <div className="w-12 h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0"><UserIcon /></div>
+        <div className="bg-linear-to-r from-[#7C3AED] to-[#4C1D95] px-4 sm:px-6 py-4 sm:py-5 shrink-0">
+          <div className="flex items-start gap-3 sm:gap-4 pr-8">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0"><UserIcon /></div>
             <div>
               <p className="font-bold text-lg text-white">Новый администратор</p>
               <p className="text-sm text-white/60 mt-0.5">Создание аккаунта администратора</p>
             </div>
           </div>
         </div>
-        <div className="px-6 py-4 space-y-4">
+        <div className="px-4 sm:px-6 py-4 space-y-4">
           <StaffField label="Логин" hint="мин. 3 символа, без пробелов" value={login} onChange={setLogin}
             error={login && !loginValid ? 'Мин. 3 символа, без пробелов' : ''} placeholder="admin2" />
           <PasswordField label="Пароль" hint="мин. 8 символов" value={password} onChange={setPassword}
@@ -764,7 +781,7 @@ function CreateStaffModal({ onClose }: { onClose: () => void }) {
             error={password && !passwordValid ? 'Минимум 8 символов' : ''} />
           <StaffField label="ФИО" value={fullName} onChange={setFullName} placeholder="Иванов Иван Иванович" />
         </div>
-        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end shrink-0">
+        <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end shrink-0">
           <Button onClick={() => createMut.mutate()} disabled={!canSave} className="bg-purple-600 hover:bg-purple-700 cursor-pointer dark:text-white">
             {createMut.isPending ? 'Создание...' : 'Создать'}
           </Button>

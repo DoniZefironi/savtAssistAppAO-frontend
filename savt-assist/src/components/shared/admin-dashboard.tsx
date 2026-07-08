@@ -41,21 +41,21 @@ export function AdminDashboard() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-900">
-      <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+      <div className="max-w-5xl 2xl:max-w-375 mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6">
 
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Добрый день, {displayName}</h1>
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl 2xl:text-2xl font-bold text-slate-800 dark:text-slate-100">Добрый день, {displayName}</h1>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2.5 2xl:gap-4">
           {statCards.map((s) => {
             const value = stats?.[s.key]
             const urgent = typeof value === 'number' && value > s.urgentAbove
             return (
               <Link key={s.key} href={s.href} className="block group">
-                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-sm transition-all">
+                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3 2xl:p-4 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-sm transition-all">
                   <div className="flex items-center justify-between mb-2">
                     <div className="w-6 h-6 rounded-md flex items-center justify-center text-white" style={{ backgroundColor: s.accent }}>
                       <span className="scale-75">{s.icon}</span>
@@ -65,60 +65,62 @@ export function AdminDashboard() {
                   {statsLoading ? (
                     <Skeleton className="h-6 w-10 mb-1" />
                   ) : (
-                    <p className={cn('text-xl font-extrabold leading-none', urgent ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500')}>
+                    <p className={cn('text-xl 2xl:text-2xl font-extrabold leading-none', urgent ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500')}>
                       {Number.isFinite(value) ? value : '—'}
                     </p>
                   )}
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-tight">{s.label}</p>
+                  <p className="text-[11px] 2xl:text-xs text-slate-500 dark:text-slate-400 mt-1 leading-tight">{s.label}</p>
                 </div>
               </Link>
             )
           })}
         </div>
 
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-700/60">
-            <span className="font-semibold text-sm text-slate-800 dark:text-slate-100">Карта расположения ШУ</span>
-          </div>
-          <div className="h-[500px] p-3">
-            <CabinetsMap isAdmin={!isOperator} />
-          </div>
-        </div>
-
-        {!isOperator && (
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-slate-700/60">
-              <span className="font-semibold text-sm text-slate-800 dark:text-slate-100">Последняя активность</span>
-              <span className="text-xs text-slate-400">последние 10 событий</span>
+        <div className={cn('grid grid-cols-1 gap-4 sm:gap-6 2xl:items-start', !isOperator && '2xl:grid-cols-5')}>
+          <div className={cn('bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden', !isOperator && '2xl:col-span-3')}>
+            <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b border-slate-100 dark:border-slate-700/60">
+              <span className="font-semibold text-sm text-slate-800 dark:text-slate-100">Карта расположения ШУ</span>
             </div>
-            {activityLoading ? (
-              <div className="divide-y divide-slate-50 dark:divide-slate-700/40">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-3 px-5 py-3">
-                    <Skeleton className="w-7 h-7 rounded-full shrink-0" />
-                    <div className="flex-1 space-y-1.5">
-                      <Skeleton className="h-3 w-48" />
-                      <Skeleton className="h-3 w-32" />
-                    </div>
-                    <Skeleton className="h-5 w-16 rounded-full" />
-                    <Skeleton className="h-3 w-14" />
-                  </div>
-                ))}
-              </div>
-            ) : !activity || activity.length === 0 ? (
-              <div className="py-12 flex flex-col items-center gap-2 text-slate-400">
-                <InboxIcon className="w-8 h-8" />
-                <p className="text-sm">Нет активности</p>
-              </div>
-            ) : (
-              <ul className="divide-y divide-slate-50 dark:divide-slate-700/40">
-                {activity.map((item) => (
-                  <ActivityRow key={`${item.type}-${item.id}`} item={item} />
-                ))}
-              </ul>
-            )}
+            <div className="h-[clamp(280px,55vh,560px)] p-2 sm:p-3">
+              <CabinetsMap isAdmin={!isOperator} />
+            </div>
           </div>
-        )}
+
+          {!isOperator && (
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 2xl:col-span-2">
+              <div className="flex items-center justify-between gap-2 px-4 sm:px-5 py-3 sm:py-3.5 border-b border-slate-100 dark:border-slate-700/60">
+                <span className="font-semibold text-sm text-slate-800 dark:text-slate-100">Последняя активность</span>
+                <span className="text-xs text-slate-400 whitespace-nowrap">последние 10 событий</span>
+              </div>
+              {activityLoading ? (
+                <div className="divide-y divide-slate-50 dark:divide-slate-700/40">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-3 px-3 sm:px-5 py-3">
+                      <Skeleton className="w-7 h-7 rounded-full shrink-0" />
+                      <div className="flex-1 space-y-1.5">
+                        <Skeleton className="h-3 w-48 max-w-full" />
+                        <Skeleton className="h-3 w-32 max-w-full" />
+                      </div>
+                      <Skeleton className="h-5 w-16 rounded-full" />
+                      <Skeleton className="h-3 w-14" />
+                    </div>
+                  ))}
+                </div>
+              ) : !activity || activity.length === 0 ? (
+                <div className="py-12 flex flex-col items-center gap-2 text-slate-400">
+                  <InboxIcon className="w-8 h-8" />
+                  <p className="text-sm">Нет активности</p>
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-50 dark:divide-slate-700/40">
+                  {activity.map((item) => (
+                    <ActivityRow key={`${item.type}-${item.id}`} item={item} />
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
 
       </div>
     </div>
@@ -149,23 +151,27 @@ const STATUS_LABEL: Record<string, string> = {
 function ActivityRow({ item }: { item: ActivityItem }) {
   const meta = TYPE_META[item.type]
   return (
-    <li className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/20 transition-colors">
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 sm:px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/20 transition-colors">
       <div className={cn('w-7 h-7 rounded-full flex items-center justify-center shrink-0', meta.color)}>
         <span className="scale-75">{meta.icon}</span>
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-slate-700 dark:text-slate-200 truncate">
+        {/* На узких экранах текст переносится целиком, на ≥sm — одна строка с многоточием */}
+        <p className="text-sm text-slate-700 dark:text-slate-200 wrap-break-word sm:truncate">
           <span className="font-medium">{meta.label}</span>
           {item.user && <span className="text-slate-400 dark:text-slate-500"> · {item.user}</span>}
           {item.detail && <span className="text-slate-400 dark:text-slate-500"> · {item.detail}</span>}
         </p>
       </div>
-      <span className={cn('shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium', STATUS_STYLE[item.status] ?? STATUS_STYLE.pending)}>
-        {STATUS_LABEL[item.status] ?? item.status}
-      </span>
-      <span className="shrink-0 text-[11px] text-slate-300 dark:text-slate-600 w-20 text-right">
-        {relativeTime(item.created_at)}
-      </span>
+      {/* На узких экранах статус и время уходят на вторую строку под текст (pl-10 = иконка 28px + gap 12px) */}
+      <div className="flex w-full sm:w-auto items-center justify-between sm:justify-end gap-2 pl-10 sm:pl-0">
+        <span className={cn('shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium', STATUS_STYLE[item.status] ?? STATUS_STYLE.pending)}>
+          {STATUS_LABEL[item.status] ?? item.status}
+        </span>
+        <span className="shrink-0 text-[11px] text-slate-300 dark:text-slate-600 sm:w-20 text-right">
+          {relativeTime(item.created_at)}
+        </span>
+      </div>
     </li>
   )
 }

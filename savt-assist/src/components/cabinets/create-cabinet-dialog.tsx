@@ -102,9 +102,9 @@ export function CreateCabinetDialog({ open, onClose }: Props) {
       <div className="flex flex-col max-h-[85vh]">
 
         {/* Gradient header */}
-        <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-6 py-5 shrink-0">
-          <div className="flex items-start gap-4 pr-8">
-            <div className="w-12 h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
+        <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-4 sm:px-6 py-4 sm:py-5 shrink-0">
+          <div className="flex items-start gap-3 sm:gap-4 pr-8">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
               <CabinetIcon className="w-6 h-6 text-white" />
             </div>
             <div className="flex-1 min-w-0">
@@ -116,9 +116,9 @@ export function CreateCabinetDialog({ open, onClose }: Props) {
 
         {/* Body */}
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-5">
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={cn('text-xs font-medium block mb-1.5', errors.type ? 'text-red-500' : 'text-slate-500')}>
                   Тип ШУ <span className="text-red-500">*</span>
@@ -154,7 +154,7 @@ export function CreateCabinetDialog({ open, onClose }: Props) {
               multiline
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field
                 label="Назначение"
                 value={form.purpose ?? ''}
@@ -169,7 +169,7 @@ export function CreateCabinetDialog({ open, onClose }: Props) {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field
                 label="Гарантия с"
                 value={form.warranty_starts_at ?? ''}
@@ -202,7 +202,7 @@ export function CreateCabinetDialog({ open, onClose }: Props) {
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-2 shrink-0">
+          <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-2 shrink-0">
             <Button type="button" variant="ghost" onClick={handleClose} disabled={mutation.isPending} className="cursor-pointer">
               Отмена
             </Button>

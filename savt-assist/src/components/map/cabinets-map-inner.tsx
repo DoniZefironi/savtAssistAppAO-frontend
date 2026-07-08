@@ -151,7 +151,8 @@ export function CabinetsMapInner({ isAdmin }: Props) {
 
   return (
     <>
-      <div className="relative w-full h-full">
+      {/* isolate запирает z-index слоёв Leaflet (400–1000) внутри карты, иначе она перекрывает мобильный сайдбар (z-50) */}
+      <div className="relative isolate w-full h-full">
         {isLoading && (
           <div className="absolute inset-0 z-[1001] bg-white/70 dark:bg-slate-800/70 rounded-xl flex items-center justify-center">
             <span className="text-xs text-slate-400">Загрузка...</span>
@@ -192,11 +193,11 @@ export function CabinetsMapInner({ isAdmin }: Props) {
           ))}
         </MapContainer>
 
-        <div className="absolute bottom-3 left-3 z-[1000] bg-white/90 dark:bg-slate-800/90 rounded-lg px-2.5 py-2 shadow text-xs space-y-1 pointer-events-none">
+        <div className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3 z-[1000] bg-white/90 dark:bg-slate-800/90 rounded-lg px-2 py-1.5 sm:px-2.5 sm:py-2 shadow text-[10px] sm:text-xs space-y-0.5 sm:space-y-1 pointer-events-none">
           {LEGEND.map(({ color, label }) => (
             <div key={color} className="flex items-center gap-1.5">
               <span
-                className="w-2.5 h-2.5 rounded-full border border-white/50 shadow-sm shrink-0"
+                className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full border border-white/50 shadow-sm shrink-0"
                 style={{ backgroundColor: MARKER_COLORS[color] }}
               />
               <span className="text-slate-600 dark:text-slate-300">{label}</span>
@@ -205,7 +206,7 @@ export function CabinetsMapInner({ isAdmin }: Props) {
         </div>
 
         {cabinets.length > 0 && (
-          <div className="absolute top-3 right-3 z-[1000] bg-white/90 dark:bg-slate-800/90 rounded-lg px-2.5 py-1.5 shadow text-xs text-slate-500 dark:text-slate-400 pointer-events-none">
+          <div className="absolute top-2 right-2 sm:top-3 sm:right-3 z-[1000] bg-white/90 dark:bg-slate-800/90 rounded-lg px-2 py-1 sm:px-2.5 sm:py-1.5 shadow text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 pointer-events-none">
             {withGeo.length} из {cabinets.length} ШУ на карте
           </div>
         )}

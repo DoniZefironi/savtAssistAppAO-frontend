@@ -109,9 +109,9 @@ function DetailContent({ cabinetId, initialMode }: {
 
   return (
     <div className="flex flex-col max-h-[85vh]">
-      <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-6 py-5 shrink-0">
-        <div className="flex items-start gap-4 pr-2">
-          <div className="w-12 h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
+      <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-4 sm:px-6 py-4 sm:py-5 shrink-0">
+        <div className="flex items-start gap-3 sm:gap-4 pr-2">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
             <BoardIcon className="w-6 h-6 text-white" />
           </div>
           <div className="flex-1 min-w-0">
@@ -145,13 +145,14 @@ function DetailContent({ cabinetId, initialMode }: {
         </div>
       </div>
 
-      <div className="flex border-b border-slate-100 dark:border-slate-700/60 bg-white dark:bg-slate-800 shrink-0">
+      {/* Не переносится (сломает вид подчёркнутой навигации) — на узкой модалке скроллится горизонтально */}
+      <div className="flex border-b border-slate-100 dark:border-slate-700/60 bg-white dark:bg-slate-800 shrink-0 overflow-x-auto">
         {TABS.map(t => (
           <button
             key={t.id}
             onClick={() => handleTabChange(t.id)}
             className={cn(
-              'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer',
+              'px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer shrink-0 whitespace-nowrap',
               tab === t.id
                 ? 'border-[#1B3A72] text-[#1B3A72] dark:text-blue-400 dark:border-blue-400'
                 : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
@@ -186,7 +187,7 @@ function DetailContent({ cabinetId, initialMode }: {
       </div>
 
       {tab === 'info' && (
-        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-2 shrink-0">
+        <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-2 shrink-0">
           {!editing && isAdmin && (
             <button
               onClick={() => setEditing(true)}
@@ -973,8 +974,10 @@ function DetailRow({ label, value, editing, onChange, placeholder, multiline }: 
 }) {
   const isEmpty = !value.trim()
   return (
-    <div className="flex gap-4 px-6 py-3">
-      <span className="text-xs text-slate-400 w-28 shrink-0 pt-0.5">{label}</span>
+    // На мобильном лейбл над значением — «Местоположение»/длинные лейблы иначе переносились
+    // посреди слова при фикс. ширине колонки
+    <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4 px-4 sm:px-6 py-3">
+      <span className="text-xs text-slate-400 sm:w-28 shrink-0 sm:pt-0.5">{label}</span>
       {editing ? (
         multiline ? (
           <textarea
@@ -1009,8 +1012,8 @@ function DateRow({ label, value, editing, onChange }: {
 }) {
   const display = value ? formatDate(new Date(value).toISOString()) : ''
   return (
-    <div className="flex gap-4 px-6 py-3">
-      <span className="text-xs text-slate-400 w-28 shrink-0 pt-0.5">{label}</span>
+    <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4 px-4 sm:px-6 py-3">
+      <span className="text-xs text-slate-400 sm:w-28 shrink-0 sm:pt-0.5">{label}</span>
       {editing ? (
         <input
           type="date"
@@ -1078,8 +1081,8 @@ function LocationRow({ lat, lng, editing, onChange }: {
 }) {
   const hasLocation = lat != null && lng != null
   return (
-    <div className="flex gap-4 px-6 py-3">
-      <span className="text-xs text-slate-400 w-28 shrink-0 pt-0.5">Местоположение</span>
+    <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4 px-4 sm:px-6 py-3">
+      <span className="text-xs text-slate-400 sm:w-28 shrink-0 sm:pt-0.5">Местоположение</span>
       {editing ? (
         <div className="flex-1 min-w-0">
           <LocationPicker
@@ -1292,13 +1295,13 @@ function ServiceRequestsTab({ cabinetId }: { cabinetId: number }) {
   return (
     <>
       <div>
-        <div className="flex border-b border-slate-100 dark:border-slate-700/30 shrink-0">
+        <div className="flex border-b border-slate-100 dark:border-slate-700/30 shrink-0 overflow-x-auto">
           {STATUS_TABS.map(t => (
             <button
               key={t.value}
               onClick={() => setStatus(t.value)}
               className={cn(
-                'px-4 py-2.5 text-sm transition-colors cursor-pointer border-b-2',
+                'px-3 sm:px-4 py-2.5 text-sm transition-colors cursor-pointer border-b-2 shrink-0 whitespace-nowrap',
                 status === t.value
                   ? 'border-[#1B3A72] text-[#1B3A72] dark:text-blue-400 dark:border-blue-400 font-medium'
                   : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'

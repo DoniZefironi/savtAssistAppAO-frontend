@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef, Fragment } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { isAxiosError } from 'axios'
 import { toast } from 'sonner'
-import { X, ClipboardList, CheckCircle2 } from 'lucide-react'
+import { X, ClipboardList, CheckCircle2, SlidersHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toFullUrl } from '@/lib/api/base-url'
 import { requestsApi } from '@/lib/api/requests'
@@ -13,11 +14,15 @@ import { useAuthStore } from '@/lib/store/auth'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import { RequestCard, ServiceCardIcon, AdditionCardIcon, ShareCardIcon, StatusPill, TypePill } from './request-card'
 import { UserDialog } from '@/components/users/users-view'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
 
 type Tab = 'service' | 'additions' | 'shares' | 'docs'
+
+// Сетка карточек заявок: 1 колонка на самых узких, до 4 на широких мониторах
+const GRID_CLASSES = 'grid grid-cols-1 min-[640px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'service', label: 'Сервисные' },
@@ -134,6 +139,7 @@ export function RequestsView() {
     const saved = localStorage.getItem('view-mode-requests')
     if (saved === 'list' || saved === 'grid') setView(saved)
   }, [])
+  const [filtersOpen, setFiltersOpen] = usePersistentState('filters-open-requests', true)
   const [selectedService, setSelectedService] = useState<ServiceRequest | null>(null)
   const [selectedAddition, setSelectedAddition] = useState<AdditionRequest | null>(null)
   const [selectedShare, setSelectedShare] = useState<ShareRequest | null>(null)
@@ -231,24 +237,27 @@ export function RequestsView() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 pt-6 pb-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60">
-        <div className="flex items-end justify-between mb-4">
-          <div>
+      <div className="px-3 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60">
+        <div className="max-w-425 mx-auto w-full">
+        <div className="flex items-end justify-between gap-2 mb-4">
+          <div className="min-w-0">
             {total != null && <p className="text-xs text-slate-400 font-medium mb-0.5">{total} заявок</p>}
-            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Заявки</h1>
+            <h1 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100">Заявки</h1>
           </div>
-          <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+          <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shrink-0">
             <button onClick={() => { setView('list'); localStorage.setItem('view-mode-requests', 'list') }} title="Список" className={`p-2 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon /></button>
             <button onClick={() => { setView('grid'); localStorage.setItem('view-mode-requests', 'grid') }} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon /></button>
+            <button onClick={() => setFiltersOpen(v => !v)} title={filtersOpen ? 'Скрыть поиск и фильтры' : 'Показать поиск и фильтры'} className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${filtersOpen ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><SlidersHorizontal className="w-4 h-4" /></button>
           </div>
         </div>
-        <div className="flex gap-0 mb-3">
+        {/* Табы не переносятся (сломали бы вид подчёркнутой навигации) — на узких экранах скроллятся горизонтально */}
+        <div className="flex gap-0 mb-3 overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
           {TABS.map(t => (
             <button
               key={t.id}
               onClick={() => handleTabChange(t.id)}
               className={cn(
-                'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer',
+                'px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer shrink-0 whitespace-nowrap',
                 tab === t.id
                   ? 'border-[#1B3A72] text-[#1B3A72] dark:text-blue-400 dark:border-blue-400'
                   : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
@@ -258,6 +267,8 @@ export function RequestsView() {
             </button>
           ))}
         </div>
+        {filtersOpen && (
+        <>
         <div className="relative mb-3">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
           <Input
@@ -334,11 +345,15 @@ export function RequestsView() {
             ))}
           </div>
         )}
+        </>
+        )}
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-4 bg-slate-50 dark:bg-slate-900">
+      <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-3 sm:py-4 bg-slate-50 dark:bg-slate-900">
+        <div className="max-w-425 mx-auto">
         {curQ.isLoading && (
-          <div className={view === 'grid' ? 'grid grid-cols-2 gap-3' : 'space-y-2'}>
+          <div className={view === 'grid' ? GRID_CLASSES : 'space-y-2'}>
             {[1, 2, 3, 4].map(i => (
               <div key={i} className={`bg-white dark:bg-slate-800 rounded-xl animate-pulse ${view === 'grid' ? 'h-36' : 'h-16'}`} />
             ))}
@@ -378,6 +393,7 @@ export function RequestsView() {
             Все {total} записей загружены
           </p>
         )}
+        </div>
       </div>
 
       {selectedService && <ServiceDialog request={selectedService} onClose={() => setSelectedService(null)} />}
@@ -398,7 +414,7 @@ function Empty({ text }: { text: string }) {
 }
 
 function gridCls(view: ViewMode) {
-  return view === 'grid' ? 'grid grid-cols-2 gap-3' : 'space-y-2'
+  return view === 'grid' ? GRID_CLASSES : 'space-y-2'
 }
 
 function ServiceList({ items, onSelect, view }: { items: ServiceRequest[]; onSelect: (r: ServiceRequest) => void; view: ViewMode }) {
@@ -496,8 +512,10 @@ function DocumentRequestList({ items, onSelect, view }: { items: DocumentRequest
 
 function DRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex gap-4 px-6 py-3">
-      <span className="text-xs text-slate-400 w-32 shrink-0 pt-0.5">{label}</span>
+    // На мобильном лейбл над значением — длинные слова («Зарегистрирован») иначе
+    // переносились посреди слова при фикс. ширине колонки
+    <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4 px-4 sm:px-6 py-3">
+      <span className="text-xs text-slate-400 sm:w-32 shrink-0 sm:pt-0.5">{label}</span>
       <div className="flex-1 text-sm font-medium text-slate-700 dark:text-slate-200">{value}</div>
     </div>
   )
@@ -507,9 +525,9 @@ function DRowLink({ label, value, onClick }: { label: string; value: string; onC
   return (
     <button
       onClick={onClick}
-      className="w-full flex gap-4 px-6 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group text-left cursor-pointer"
+      className="w-full flex flex-col gap-0.5 sm:flex-row sm:gap-4 px-4 sm:px-6 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group text-left cursor-pointer"
     >
-      <span className="text-xs text-slate-400 w-32 shrink-0 pt-0.5">{label}</span>
+      <span className="text-xs text-slate-400 sm:w-32 shrink-0 sm:pt-0.5">{label}</span>
       <div className="flex-1 flex items-center gap-1 min-w-0">
         <span className="text-sm font-medium text-[#1B3A72] dark:text-blue-400 group-hover:underline underline-offset-2 truncate">{value}</span>
         <svg className="w-3 h-3 text-[#1B3A72]/40 dark:text-blue-400/40 shrink-0 group-hover:text-[#1B3A72] dark:group-hover:text-blue-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -538,9 +556,9 @@ function DialogHeader({ icon, title, subtitle, badge }: {
   icon: React.ReactNode; title: string; subtitle: string; badge?: React.ReactNode
 }) {
   return (
-    <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-6 py-5">
-      <div className="flex items-start gap-4">
-        <div className="w-12 h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
+    <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-4 sm:px-6 py-4 sm:py-5">
+      <div className="flex items-start gap-3 sm:gap-4">
+        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
           {icon}
         </div>
         <div className="flex-1 min-w-0">
@@ -657,6 +675,9 @@ export function ServiceDialog({ request, onClose }: { request: ServiceRequest; o
 
   return (
     <AppModal open onClose={onClose}>
+      {/* max-h + внутренний скролл — на низких экранах (320×480) длинный список полей
+          не вылезает за пределы вьюпорта, шапка и кнопка сохранения остаются на месте */}
+      <div className="flex flex-col max-h-[85vh]">
       <DialogHeader
         icon={<WrenchModalIcon />}
         title={`Заявка #${request.id}`}
@@ -672,6 +693,7 @@ export function ServiceDialog({ request, onClose }: { request: ServiceRequest; o
           </div>
         }
       />
+      <div className="flex-1 overflow-y-auto">
       <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
         <DRowLink label="Пользователь" value={request.user_full_name ?? `#${request.user_id}`} onClick={() => setSubUserId(request.user_id)} />
         <DRow label="Телефон" value={request.user_phone ?? '—'} />
@@ -683,14 +705,15 @@ export function ServiceDialog({ request, onClose }: { request: ServiceRequest; o
         <DRow label="Создана" value={fmtDate(request.created_at)} />
         <DRow label="Закрыта" value={request.closed_at ? fmtDate(request.closed_at) : '—'} />
         <DRow label="Bitrix-задача" value={request.bitrix_task_id ?? '—'} />
-        <div className="flex gap-4 px-6 py-3">
-          <span className="text-xs text-slate-400 w-32 shrink-0 pt-0.5">Описание</span>
+        <div className="flex gap-3 sm:gap-4 px-4 sm:px-6 py-3">
+          <span className="text-xs text-slate-400 w-20 sm:w-32 shrink-0 pt-0.5">Описание</span>
           <p className="flex-1 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
             {request.description}
           </p>
         </div>
       </div>
-      <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700">
+      </div>
+      <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700">
         <p className="text-xs text-slate-400 mb-4">Изменить статус <b className='font-extrabold animate-pulse bg-gradient-to-r bg-clip-text  text-transparent from-indigo-500 via-purple-500 to-indigo-500 animate-text'>(кликабельно!)</b></p>
         <div className="mb-4">
           <StatusStepper status={status} onChange={setStatus} />
@@ -706,6 +729,7 @@ export function ServiceDialog({ request, onClose }: { request: ServiceRequest; o
             </Button>
           </div>
         )}
+      </div>
       </div>
       {subUserId !== null && <UserDialog userId={subUserId} role="user" onClose={() => setSubUserId(null)} />}
       {subCabinetId !== null && <CabinetDetailDialog cabinetId={subCabinetId} isAdmin onClose={() => setSubCabinetId(null)} />}
@@ -731,7 +755,12 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
   const approveMut = useMutation({
     mutationFn: () => requestsApi.approveAddition(request.id, parseInt(cabinetId), approveNote || null),
     onSuccess: () => { invalidate(); toast.success('Заявка одобрена'); onClose() },
-    onError: () => toast.error('Ошибка при одобрении'),
+    // 404 — указанный ШУ не существует (опечатка в ID или ШУ удалили, пока заявка ждала одобрения)
+    onError: (e) => {
+      if (isAxiosError(e) && e.response?.status === 404) {
+        toast.error('ШУ с таким ID не найден — проверьте ID или создайте ШУ заново')
+      } else toast.error('Ошибка при одобрении')
+    },
   })
   const rejectMut = useMutation({
     mutationFn: () => requestsApi.rejectAddition(request.id, rejectNote),
@@ -743,6 +772,7 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
 
   return (
     <AppModal open onClose={onClose}>
+      <div className="flex flex-col max-h-[85vh]">
       <DialogHeader
         icon={<AddModalIcon />}
         title={`Заявка на добавление #${request.id}`}
@@ -753,6 +783,7 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
           </span>
         }
       />
+      <div className="flex-1 overflow-y-auto">
       <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
         <DRowLink label="Пользователь" value={request.user_full_name ?? `#${request.user_id}`} onClick={() => setSubUserId(request.user_id)} />
         <DRow label="Телефон" value={request.user_phone ?? '—'} />
@@ -777,7 +808,7 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
       </div>
 
       {request.photo_url && (
-        <div className="px-6 pb-4">
+        <div className="px-4 sm:px-6 pb-4 pt-3">
           <p className="text-xs text-slate-400 mb-2">Фото</p>
           <img
             src={toFullUrl(request.photo_url)}
@@ -786,8 +817,9 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
           />
         </div>
       )}
+      </div>
 
-      <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700">
+      <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700">
         {!isPending ? null : action === null ? (
           <div className="flex gap-2 justify-end">
             <Button onClick={() => setAction('reject')} className="bg-red-500 hover:bg-red-600 cursor-pointer">Отклонить</Button>
@@ -843,6 +875,7 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
           </div>
         )}
       </div>
+      </div>
       {subUserId !== null && <UserDialog userId={subUserId} role="user" onClose={() => setSubUserId(null)} />}
       {subCabinetId !== null && <CabinetDetailDialog cabinetId={subCabinetId} isAdmin onClose={() => setSubCabinetId(null)} />}
     </AppModal>
@@ -866,7 +899,13 @@ function ShareDialog({ request, onClose }: { request: ShareRequest; onClose: () 
   const approveMut = useMutation({
     mutationFn: () => requestsApi.approveShare(request.id, approveNote || null),
     onSuccess: () => { invalidate(); toast.success('Заявка одобрена'); onClose() },
-    onError: () => toast.error('Ошибка при одобрении'),
+    // 404 — ШУ удалили после подачи заявки; одобрить такую заявку уже нельзя, только отклонить
+    onError: (e) => {
+      if (isAxiosError(e) && e.response?.status === 404) {
+        invalidate()
+        toast.error('ШУ этой заявки уже удалён — одобрение невозможно, заявку можно отклонить')
+      } else toast.error('Ошибка при одобрении')
+    },
   })
   const rejectMut = useMutation({
     mutationFn: () => requestsApi.rejectShare(request.id, rejectNote),
@@ -878,6 +917,7 @@ function ShareDialog({ request, onClose }: { request: ShareRequest; onClose: () 
 
   return (
     <AppModal open onClose={onClose}>
+      <div className="flex flex-col max-h-[85vh]">
       <DialogHeader
         icon={<ShareModalIcon />}
         title={`Заявка на доступ #${request.id}`}
@@ -888,6 +928,7 @@ function ShareDialog({ request, onClose }: { request: ShareRequest; onClose: () 
           </span>
         }
       />
+      <div className="flex-1 overflow-y-auto">
       <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
         <DRowLink label="Пользователь" value={request.user_full_name ?? `#${request.user_id}`} onClick={() => setSubUserId(request.user_id)} />
         <DRow label="Телефон" value={request.user_phone ?? '—'} />
@@ -911,8 +952,9 @@ function ShareDialog({ request, onClose }: { request: ShareRequest; onClose: () 
           } />
         )}
       </div>
+      </div>
 
-      <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700">
+      <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700">
         {!isPending ? null : action === null ? (
           <div className="flex gap-2 justify-end">
             <Button onClick={() => setAction('reject')} className="bg-red-500 hover:bg-red-600 cursor-pointer">Отклонить</Button>
@@ -956,6 +998,7 @@ function ShareDialog({ request, onClose }: { request: ShareRequest; onClose: () 
           </div>
         )}
       </div>
+      </div>
       {subUserId !== null && <UserDialog userId={subUserId} role="user" onClose={() => setSubUserId(null)} />}
       {subCabinetId !== null && <CabinetDetailDialog cabinetId={subCabinetId} isAdmin onClose={() => setSubCabinetId(null)} />}
     </AppModal>
@@ -987,6 +1030,7 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
 
   return (
     <AppModal open onClose={onClose}>
+      <div className="flex flex-col max-h-[85vh]">
       <DialogHeader
         icon={<DocRequestModalIcon />}
         title={`Заявка на документ #${request.id}`}
@@ -997,6 +1041,7 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
           </span>
         }
       />
+      <div className="flex-1 overflow-y-auto">
       <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
         <DRowLink label="Пользователь" value={request.user_full_name ?? `#${request.user_id}`} onClick={() => setSubUserId(request.user_id)} />
         <DRow label="Телефон" value={request.user_phone ?? '—'} />
@@ -1031,8 +1076,9 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
           } />
         )}
       </div>
+      </div>
 
-      <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700">
+      <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700">
         {!isPending ? null : action === null ? (
           <div className="flex gap-2 justify-end">
             <Button onClick={() => setAction('reject')} className="bg-red-500 hover:bg-red-600 cursor-pointer">Отклонить</Button>
@@ -1075,6 +1121,7 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
             </div>
           </div>
         )}
+      </div>
       </div>
       {subUserId !== null && <UserDialog userId={subUserId} role="user" onClose={() => setSubUserId(null)} />}
       {subCabinetId !== null && <CabinetDetailDialog cabinetId={subCabinetId} isAdmin onClose={() => setSubCabinetId(null)} />}

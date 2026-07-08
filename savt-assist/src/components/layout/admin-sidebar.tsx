@@ -12,6 +12,9 @@ import Image from 'next/image'
 
 export function AdminSidebar({ mobileOpen, onMobileClose }: { mobileOpen: boolean; onMobileClose: () => void }) {
   const [collapsed, setCollapsed] = usePersistentState('sidebar-collapsed', false)
+  // Сворачивание — только для десктопа: мобильная шторка фиксированной ширины,
+  // поэтому в открытом mobileOpen-состоянии всегда показываем развёрнутый вид
+  const isCollapsed = collapsed && !mobileOpen
   const pathname = usePathname()
   const router = useRouter()
   const { user, logout } = useAuthStore()
@@ -60,7 +63,7 @@ export function AdminSidebar({ mobileOpen, onMobileClose }: { mobileOpen: boolea
         collapsed ? 'md:w-16' : 'md:w-64'
       )}>
         <div className="border-b border-white/10 px-3 py-5">
-          {collapsed ? (
+          {isCollapsed ? (
             <div className="flex flex-col items-center gap-3">
               <button
                 onClick={() => setCollapsed(false)}
@@ -82,7 +85,7 @@ export function AdminSidebar({ mobileOpen, onMobileClose }: { mobileOpen: boolea
               <button
                 onClick={() => setCollapsed(true)}
                 title="Свернуть"
-                className="w-7 h-7 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
+                className="w-7 h-7 hidden md:flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
               >
                 <ChevronLeftIcon />
               </button>
@@ -98,23 +101,23 @@ export function AdminSidebar({ mobileOpen, onMobileClose }: { mobileOpen: boolea
                 key={item.href}
                 href={item.href}
                 onClick={onMobileClose}
-                title={collapsed ? item.label : undefined}
+                title={isCollapsed ? item.label : undefined}
                 className={cn(
                   'flex items-center rounded-lg text-sm transition-colors',
-                  collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5',
+                  isCollapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5',
                   isActive
                     ? 'bg-white/15 text-white font-medium'
                     : 'text-white/60 hover:text-white hover:bg-white/10'
                 )}
               >
                 <item.icon className="w-5 h-5 flex-shrink-0" />
-                {!collapsed && item.label}
+                {!isCollapsed && item.label}
               </Link>
             )
           })}
         </nav>
 
-        {collapsed ? (
+        {isCollapsed ? (
           <div />
         ) : (
           <div className='pb-4 pl-4'>

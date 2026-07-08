@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { X, FileText, Image, User, Wrench, CheckCircle2, XCircle, Package, AlertTriangle } from 'lucide-react'
+import { X, FileText, Image, User, Wrench, CheckCircle2, XCircle, Package, AlertTriangle, SlidersHorizontal } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -14,9 +14,13 @@ import { CreateCabinetDialog } from './create-cabinet-dialog'
 import { QrDialog } from './qr-dialog'
 import { cabinetsApi } from '@/lib/api/cabinets'
 import { useDebounce } from '@/lib/hooks/use-debounce'
+import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import type { Cabinet } from '@/types'
 
 const PAGE_SIZE = 20
+
+// Сетка карточек: 1 колонка на самых узких, до 4 на широких мониторах
+const GRID_CLASSES = 'grid grid-cols-1 min-[640px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3'
 
 const SORT_OPTIONS = [
   { label: 'По типу', value: 'type' },
@@ -60,6 +64,7 @@ export function CabinetsView({ isAdmin }: Props) {
     const saved = localStorage.getItem('view-mode-cabinets')
     if (saved === 'list' || saved === 'grid') setView(saved)
   }, [])
+  const [filtersOpen, setFiltersOpen] = usePersistentState('filters-open-cabinets', true)
   const [openId, setOpenId] = useState<number | null>(null)
   const [openMode, setOpenMode] = useState<'view' | 'edit'>('view')
   const [qrCabinet, setQrCabinet] = useState<Cabinet | null>(null)
@@ -162,13 +167,14 @@ export function CabinetsView({ isAdmin }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
-        <div className="flex items-end justify-between mb-4">
-          <div>
+      <div className="px-3 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 border-b border-slate-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+        <div className="max-w-425 mx-auto">
+        <div className="flex flex-wrap items-end justify-between gap-x-2 gap-y-3 mb-4">
+          <div className="min-w-0">
             {data && (
               <p className="text-xs text-slate-400 font-medium mb-0.5">{total} устройств</p>
             )}
-            <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Шкафы управления</h1>
+            <h1 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100">Шкафы управления</h1>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
@@ -194,6 +200,17 @@ export function CabinetsView({ isAdmin }: Props) {
               >
                 <GridIcon />
               </button>
+              <button
+                onClick={() => setFiltersOpen(v => !v)}
+                title={filtersOpen ? 'Скрыть поиск и фильтры' : 'Показать поиск и фильтры'}
+                className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${
+                  filtersOpen
+                    ? 'bg-[#1B3A72] text-white'
+                    : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+                }`}
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+              </button>
             </div>
 
             {isAdmin && (
@@ -208,6 +225,8 @@ export function CabinetsView({ isAdmin }: Props) {
           </div>
         </div>
 
+        {filtersOpen && (
+        <>
         <div className="relative">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
           <Input
@@ -298,11 +317,15 @@ export function CabinetsView({ isAdmin }: Props) {
             </button>
           )}
         </div>
+        </>
+        )}
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-3 sm:py-4">
+        <div className="max-w-425 mx-auto">
         {isLoading && (
-          <div className={view === 'grid' ? 'grid grid-cols-2 gap-3' : 'space-y-3'}>
+          <div className={view === 'grid' ? GRID_CLASSES : 'space-y-3'}>
             {Array.from({ length: view === 'grid' ? 6 : 5 }).map((_, i) => (
               <Skeleton key={i} className={view === 'grid' ? 'h-36 w-full rounded-xl' : 'h-20 w-full rounded-xl'} />
             ))}
@@ -324,7 +347,7 @@ export function CabinetsView({ isAdmin }: Props) {
         )}
 
         {allItems.length > 0 && (
-          <div className={view === 'grid' ? 'grid grid-cols-2 gap-3' : 'space-y-3'}>
+          <div className={view === 'grid' ? GRID_CLASSES : 'space-y-3'}>
             {allItems.map((cabinet) => (
               <CabinetCard
                 key={cabinet.id}
@@ -357,6 +380,7 @@ export function CabinetsView({ isAdmin }: Props) {
             Все {total} записей загружены
           </p>
         )}
+        </div>
       </div>
 
       <CabinetDetailDialog cabinetId={openId} isAdmin={isAdmin} initialMode={openMode} onClose={() => setOpenId(null)} />

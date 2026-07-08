@@ -11,14 +11,18 @@ import { Button } from '@/components/ui/button'
 export default function AdminSettingsPage() {
   return (
     <div className="flex flex-col h-full overflow-y-auto bg-slate-50 dark:bg-slate-900">
-      <div className="px-6 pt-6 pb-5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
-        <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">Настройки</h1>
-        <p className="text-sm text-slate-400 mt-0.5">Управление системой и инструменты администратора</p>
+      <div className="px-3 sm:px-6 pt-4 sm:pt-6 pb-4 sm:pb-5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
+        <div className="max-w-300 mx-auto w-full">
+          <h1 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100">Настройки</h1>
+          <p className="text-sm text-slate-400 mt-0.5">Управление системой и инструменты администратора</p>
+        </div>
       </div>
 
-      <div className="px-6 py-6 grid grid-cols-2 gap-4 items-start">
-        <BroadcastSection />
-        <BotSection />
+      <div className="px-3 sm:px-6 py-4 sm:py-6">
+        <div className="max-w-300 mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          <BroadcastSection />
+          <BotSection />
+        </div>
       </div>
     </div>
   )
@@ -83,12 +87,13 @@ function BroadcastSection() {
           />
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* На узких экранах селект получателей и кнопка не помещаются в одну строку с лейблом */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
           <span className="text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">Получатели:</span>
           <select
             value={role ?? ''}
             onChange={e => setRole(e.target.value || null)}
-            className="flex-1 h-9 px-3 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] cursor-pointer transition-colors"
+            className="flex-1 min-w-0 h-9 px-3 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] cursor-pointer transition-colors"
           >
             {ROLES.map(r => (
               <option key={String(r.value)} value={r.value ?? ''}>{r.label}</option>
@@ -212,16 +217,16 @@ function Card({ icon, iconBg, title, subtitle, children }: {
 }) {
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-xs">
-      <div className="flex items-center gap-4 px-5 py-4 border-b border-slate-100 dark:border-slate-700/60">
+      <div className="flex items-center gap-3 sm:gap-4 px-4 sm:px-5 py-4 border-b border-slate-100 dark:border-slate-700/60">
         <div className={cn('w-10 h-10 rounded-xl bg-linear-to-br flex items-center justify-center shrink-0', iconBg)}>
           {icon}
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="font-semibold text-slate-800 dark:text-slate-100">{title}</p>
           <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>
         </div>
       </div>
-      <div className="px-5 py-5">
+      <div className="px-4 sm:px-5 py-5">
         {children}
       </div>
     </div>
