@@ -723,8 +723,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
                     <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
                   </div>
                 )}
-                <HeaderMenuItem icon={<Paperclip className="w-4 h-4" />} onClick={() => { setAttachmentsOpen(true); setHeaderMenuOpen(false) }}>Вложения чата</HeaderMenuItem>
-                <HeaderMenuItem icon={<ImageIcon className="w-4 h-4" />} onClick={() => { setAttachTab('wallpaper'); setAttachmentsOpen(true); setHeaderMenuOpen(false) }}>Обои</HeaderMenuItem>
                 {pinnedMessages.length > 0 && (
                   <HeaderMenuItem icon={<Pin className="w-4 h-4" />} onClick={() => { if (activePin) handleScrollToMessage(activePin.id); setHeaderMenuOpen(false) }}>Перейти к закреплённому</HeaderMenuItem>
                 )}
