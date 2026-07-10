@@ -5,7 +5,18 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://helper.savt.by}
     image: savt-assist-frontend
+    container_name: savt-assist-frontend
     restart: unless-stopped
     ports:
       # Слушаем только на localhost — наружу отдаёт nginx через reverse proxy.
       - "127.0.0.1:3000:3000"
+    networks:
+      - backend
+
+networks:
+  backend:
+    # Та же docker-сеть, что и у бэкенда/nginx, чтобы nginx мог достучаться
+    # до контейнера по имени (savt-assist-frontend:3000). Имя сети — из
+    # `docker network ls` на сервере (обычно `<compose-проект>_default`).
+    external: true
+    name: ${BACKEND_NETWORK:-savt-backend_default}
