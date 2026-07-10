@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import { API_URL } from "./src/lib/api/base-url";
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
   images: {
     remotePatterns: [
       { protocol: 'http', hostname: '**' },

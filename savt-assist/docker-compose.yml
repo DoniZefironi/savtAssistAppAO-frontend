@@ -1,0 +1,10 @@
+services:
+  frontend:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://helper.savt.by}
+    image: savt-assist-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"

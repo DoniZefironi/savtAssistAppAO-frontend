@@ -3,11 +3,11 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import Cookies from 'js-cookie'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { authApi } from '@/lib/api/auth'
+import { setAuthCookies } from '@/lib/api/client'
 import { useAuthStore } from '@/lib/store/auth'
 import { isEndUserRole } from '@/lib/utils'
 
@@ -30,8 +30,7 @@ export function LoginForm() {
     setLoading(true)
     try {
       const tokens = await authApi.login(loginVal, passVal)
-      Cookies.set('access_token', tokens.access_token, { sameSite: 'strict' })
-      Cookies.set('refresh_token', tokens.refresh_token, { sameSite: 'strict' })
+      setAuthCookies(tokens)
 
       const user = await authApi.me()
 

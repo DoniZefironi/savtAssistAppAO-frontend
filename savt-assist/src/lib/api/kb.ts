@@ -1,5 +1,4 @@
-import Cookies from 'js-cookie'
-import { apiClient } from './client'
+import { apiClient, authorizedFetch } from './client'
 import type { PaginatedResponse } from '@/types'
 
 export interface KbCategory {
@@ -55,12 +54,7 @@ export interface Tag {
 }
 
 async function multipartPost<T>(path: string, form: FormData): Promise<T> {
-  const token = Cookies.get('access_token')
-  const res = await fetch(`/backend${path}`, {
-    method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body: form,
-  })
+  const res = await authorizedFetch(path, { method: 'POST', body: form })
   if (!res.ok) throw new Error('Upload failed')
   return res.json()
 }
@@ -116,12 +110,9 @@ export const kbApi = {
     apiClient.delete(`/admin/kb/articles/${articleId}/attachments/${attId}`),
 
   downloadAttachment: async (articleId: number, attId: number, filename: string) => {
-    const token = Cookies.get('access_token')
-    const url = `/backend/kb/articles/${articleId}/attachments/${attId}/download`
+    const path = `/kb/articles/${articleId}/attachments/${attId}/download`
     try {
-      const res = await fetch(url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
+      const res = await authorizedFetch(path)
       if (!res.ok) throw new Error('Download failed')
       const blob = await res.blob()
       const blobUrl = URL.createObjectURL(blob)
@@ -133,7 +124,7 @@ export const kbApi = {
       document.body.removeChild(a)
       URL.revokeObjectURL(blobUrl)
     } catch {
-      window.open(url, '_blank')
+      window.open(`/backend${path}`, '_blank')
     }
   },
 

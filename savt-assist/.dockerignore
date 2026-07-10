@@ -1,0 +1,17 @@
+node_modules
+.next
+out
+build
+coverage
+.git
+.claude
+.env*
+!.env.example
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.DS_Store
+README.md
+README-backend.md

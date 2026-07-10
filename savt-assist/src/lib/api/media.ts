@@ -1,5 +1,4 @@
-import Cookies from 'js-cookie'
-import { apiClient } from './client'
+import { apiClient, authorizedFetch } from './client'
 import { toFullUrl } from './base-url'
 import type { PaginatedResponse } from '@/types'
 
@@ -28,12 +27,7 @@ export interface CabinetPhoto {
 }
 
 async function uploadMultipart<T>(path: string, form: FormData): Promise<T> {
-  const token = Cookies.get('access_token')
-  const res = await fetch(`/backend${path}`, {
-    method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body: form,
-  })
+  const res = await authorizedFetch(path, { method: 'POST', body: form })
   if (!res.ok) {
     const err = await res.text().catch(() => 'Upload failed')
     throw new Error(err)
