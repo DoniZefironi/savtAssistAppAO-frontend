@@ -7,4 +7,5 @@ services:
     image: savt-assist-frontend
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # Слушаем только на localhost — наружу отдаёт nginx через reverse proxy.
+      - "127.0.0.1:3000:3000"
