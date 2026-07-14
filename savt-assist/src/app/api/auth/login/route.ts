@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     })
 
     const res = NextResponse.json({ access_token: tokens.access_token, user })
-    res.cookies.set('refresh_token', tokens.refresh_token, refreshCookieOptions(tokens.refresh_token))
+    res.cookies.set('refresh_token', tokens.refresh_token, refreshCookieOptions(tokens.refresh_token, request))
     return res
   } catch (err) {
     if (axios.isAxiosError(err) && err.response) {

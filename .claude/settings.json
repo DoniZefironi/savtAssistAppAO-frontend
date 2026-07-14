@@ -20,7 +20,12 @@
       "Bash(curl -s -X POST http://helper.savt.by/chats/__TRACKED_VAR__/messages/__TRACKED_VAR__/reactions/%F0%9F%91%8D -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -o /tmp/react_msg.json -w 'react status: %{http_code}\\\\n')",
       "Bash(curl -s -X DELETE http://helper.savt.by/chats/__TRACKED_VAR__/messages/__TRACKED_VAR__ -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -o /tmp/delete_msg.json -w 'delete status: %{http_code}\\\\n')",
       "Bash(curl -s -X DELETE http://helper.savt.by/operator/chats/__TRACKED_VAR__/pin/__TRACKED_VAR__ -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -o /tmp/unpin_msg.json -w 'unpin status: %{http_code}\\\\n')",
-      "Bash(taskkill //F //IM curl.exe //T)"
+      "Bash(taskkill //F //IM curl.exe //T)",
+      "Bash(rm -f /tmp/login_fix.json /tmp/cookies_fix.txt)",
+      "Bash(curl -s -c /tmp/cookies_fix.txt -X POST http://localhost:3000/api/auth/login -H \"Content-Type: application/json\" -d '{\"login\":\"admin\",\"password\":\"123qweASDZXC\"}' -o /tmp/login_fix.json -w \"login: %{http_code}\\\\n\")",
+      "Bash(rm -f /tmp/cookies_fix_https.txt)",
+      "Bash(curl -s -c /tmp/cookies_fix_https.txt -X POST http://localhost:3000/api/auth/login -H \"Content-Type: application/json\" -H \"X-Forwarded-Proto: https\" -d '{\"login\":\"admin\",\"password\":\"123qweASDZXC\"}' -o /dev/null -w \"login: %{http_code}\\\\n\")",
+      "Bash(rm -f /tmp/cookies_fix_http.txt)"
     ]
   }
 }
