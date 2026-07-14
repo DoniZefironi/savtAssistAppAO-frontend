@@ -25,7 +25,12 @@
       "Bash(curl -s -c /tmp/cookies_fix.txt -X POST http://localhost:3000/api/auth/login -H \"Content-Type: application/json\" -d '{\"login\":\"admin\",\"password\":\"123qweASDZXC\"}' -o /tmp/login_fix.json -w \"login: %{http_code}\\\\n\")",
       "Bash(rm -f /tmp/cookies_fix_https.txt)",
       "Bash(curl -s -c /tmp/cookies_fix_https.txt -X POST http://localhost:3000/api/auth/login -H \"Content-Type: application/json\" -H \"X-Forwarded-Proto: https\" -d '{\"login\":\"admin\",\"password\":\"123qweASDZXC\"}' -o /dev/null -w \"login: %{http_code}\\\\n\")",
-      "Bash(rm -f /tmp/cookies_fix_http.txt)"
+      "Bash(rm -f /tmp/cookies_fix_http.txt)",
+      "Bash(curl -s -X POST http://helper.savt.by/upload/transcribe -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -H 'Content-Type: application/json' -d '{\"file_url\":\"/static/voices/adbdf5a3b3654c809d6c19de23e2c244.m4a\"}' -w '\\\\nstatus: %{http_code}\\\\n')",
+      "Bash(rm -f /tmp/voice_login2.json /tmp/voice_cookies2.txt)",
+      "Bash(curl -s -c /tmp/voice_cookies2.txt -X POST http://localhost:3000/api/auth/login -H \"Content-Type: application/json\" -d '{\"login\":\"admin\",\"password\":\"123qweASDZXC\"}' -o /tmp/voice_login2.json -w \"login: %{http_code}\\\\n\")",
+      "Bash(sed -n 's/.*\"access_token\":\"\\\\\\([^\"]*\\\\\\)\".*/\\\\1/p' /tmp/voice_login2.json)",
+      "Bash(time curl -s -X POST http://localhost:3000/backend/upload/transcribe -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' -d '{\"file_url\":\"/static/voices/d50a0a678fd74e7f992c7701f5d39973.m4a\"}' -w '\\\\nstatus: %{http_code}\\\\n')"
     ]
   }
 }
