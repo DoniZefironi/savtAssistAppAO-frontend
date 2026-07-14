@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { X, CheckCircle2, XCircle, Smartphone, PhoneOff, Users, SlidersHorizontal } from 'lucide-react'
 import { cn, isSuperadminRole } from '@/lib/utils'
@@ -11,10 +11,10 @@ import { useAuthStore } from '@/lib/store/auth'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Skeleton } from '@/components/ui/skeleton'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import { RequestCard, StatusPill, TypePill } from '@/components/requests/request-card'
-import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
+import { UserDialog } from './user-dialog'
+import { roleLabel, fmtDate, UserIcon } from './user-shared'
 
 // Сетка карточек: 1 колонка на самых узких, до 4 на широких мониторах
 const GRID_CLASSES = 'grid grid-cols-1 min-[640px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3'
@@ -41,12 +41,6 @@ const USER_TYPE_FILTERS = [
 type SortValue = (typeof SORT_OPTIONS)[number]['value']
 type RoleTab = 'user' | 'operator' | 'admin'
 
-function roleLabel(r: string) {
-  if (isSuperadminRole(r)) return 'Суперадмин'
-  if (r === 'admin') return 'Администратор'
-  if (r === 'operator') return 'Оператор'
-  return 'Пользователь'
-}
 function roleCls(r: string) {
   if (isSuperadminRole(r)) return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
   if (r === 'admin') return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
@@ -57,14 +51,6 @@ function activeCls(a: boolean) {
   return a
     ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
     : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-}
-function userTypeLabel(t: string | null) {
-  if (t === 'organization') return 'Организация'
-  if (t === 'individual') return 'Физ. лицо'
-  return t ?? '—'
-}
-function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 function userName(u: AdminUser) {
   return u.full_name ?? u.login ?? u.phone ?? `#${u.id}`
@@ -421,274 +407,6 @@ export function UsersView() {
   )
 }
 
-export function UserDialog({ userId, role, onClose }: { userId: number; role: string; onClose: () => void }) {
-  const qc = useQueryClient()
-  const currentUser = useAuthStore(s => s.user)
-  const isReadOnly = currentUser?.role === 'operator'
-  const [banStep, setBanStep] = useState(false)
-  const [banReason, setBanReason] = useState('')
-  const [deleteStep, setDeleteStep] = useState(false)
-  const [selectedCabinetId, setSelectedCabinetId] = useState<number | null>(null)
-
-  // Админ/суперадмин в списке — это staff-карточка: только просмотр, без действий
-  // (на управление админами серверных эндпоинтов нет, есть лишь GET /admin/admins/{id}).
-  const isStaffAdmin = role === 'admin' || isSuperadminRole(role)
-  const canFetchDetail = role === 'user' || role === 'operator' || isStaffAdmin
-
-  const { data: user, isLoading } = useQuery({
-    queryKey: ['admin-user', userId],
-    queryFn: () => isStaffAdmin ? usersApi.getAdminOne(userId) : usersApi.getOne(userId),
-    enabled: canFetchDetail,
-  })
-
-  const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ['admin-users'] })
-    qc.invalidateQueries({ queryKey: ['admin-user', userId] })
-    qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
-  }
-
-  const verifyMut = useMutation({
-    mutationFn: () => usersApi.verify(userId),
-    onSuccess: () => { invalidate(); toast.success('Верификация выдана') },
-    onError: () => toast.error('Ошибка при верификации'),
-  })
-  const unverifyMut = useMutation({
-    mutationFn: () => usersApi.unverify(userId),
-    onSuccess: () => { invalidate(); toast.success('Верификация снята') },
-    onError: () => toast.error('Ошибка'),
-  })
-  const banMut = useMutation({
-    mutationFn: () => usersApi.ban(userId, banReason),
-    onSuccess: () => { invalidate(); toast.success('Пользователь заблокирован'); setBanStep(false); setBanReason(''); onClose() },
-    onError: () => toast.error('Ошибка при блокировке'),
-  })
-  const unbanMut = useMutation({
-    mutationFn: () => usersApi.unban(userId),
-    onSuccess: () => { invalidate(); toast.success('Пользователь разблокирован') },
-    onError: () => toast.error('Ошибка при разблокировке'),
-  })
-  const deleteOperatorMut = useMutation({
-    mutationFn: () => usersApi.deleteOperator(userId),
-    onSuccess: () => { invalidate(); toast.success('Оператор удалён'); onClose() },
-    onError: () => toast.error('Ошибка при удалении'),
-  })
-
-  const isMutating = verifyMut.isPending || unverifyMut.isPending || banMut.isPending || unbanMut.isPending || deleteOperatorMut.isPending
-
-  return (
-    <AppModal open onClose={onClose}>
-      {isLoading && canFetchDetail ? (
-        <UserSkeleton />
-      ) : !canFetchDetail ? (
-        <div className="flex flex-col">
-          <div className="bg-linear-to-r from-[#7C3AED] to-[#4C1D95] px-4 sm:px-6 py-4 sm:py-5 shrink-0">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0">
-                <UserIcon />
-              </div>
-              <div>
-                <p className="font-bold text-lg text-white">{roleLabel(role)}</p>
-                <p className="text-sm text-white/60 mt-0.5">ID #{userId}</p>
-              </div>
-            </div>
-          </div>
-          <div className="px-4 sm:px-6 py-8 text-center text-slate-400 text-sm">
-            Детальная информация об администраторах недоступна.
-          </div>
-        </div>
-      ) : !user ? null : (
-        <div className="flex flex-col max-h-[85vh]">
-          <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-4 sm:px-6 py-4 sm:py-5 shrink-0">
-            <div className="flex items-start gap-3 sm:gap-4 pr-2">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
-                <UserIcon />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-lg text-white leading-tight truncate">
-                  {user.full_name ?? user.login ?? user.phone ?? `#${user.id}`}
-                </p>
-                <p className="text-sm text-white/60 mt-0.5">{user.phone ?? user.login ?? '—'}</p>
-                <div className="flex gap-1.5 mt-2 flex-wrap">
-                  <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white">
-                    {roleLabel(user.role)}
-                  </span>
-                  {user.user_type && (
-                    <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white">
-                      {userTypeLabel(user.user_type)}
-                    </span>
-                  )}
-                  {!user.is_active && (
-                    <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/80 text-white">
-                      Заблокирован
-                    </span>
-                  )}
-                  {user.is_verified && (
-                    <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-green-400/80 text-white">
-                      Верифицирован
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="overflow-y-auto flex-1">
-            <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
-              {user.phone && <DRow label="Телефон" value={user.phone} />}
-              {user.login && <DRow label="Логин" value={user.login} />}
-              {user.email && <DRow label="Email" value={user.email} />}
-              {user.organization_name && <DRow label="Организация" value={user.organization_name} />}
-              <DRow label="Телефон подтверждён" value={
-                user.is_phone_verified
-                  ? <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="w-4 h-4" />Да</span>
-                  : <span className="flex items-center gap-1 text-rose-500 dark:text-rose-400"><XCircle className="w-4 h-4" />Нет</span>
-              } />
-              <DRow label="Зарегистрирован" value={fmtDate(user.created_at)} />
-            </div>
-
-            {(user.cabinets?.length ?? 0) > 0 && (
-              <div className="px-4 sm:px-6 py-3 border-t border-slate-100 dark:border-slate-700">
-                <p className="text-xs text-slate-400 mb-2">Шкафы управления ({user.cabinets.length})</p>
-                <div className="space-y-1.5">
-                  {user.cabinets.map(c => (
-                    <button
-                      key={c.cabinet_id}
-                      onClick={() => setSelectedCabinetId(c.cabinet_id)}
-                      className="w-full flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700/70 rounded-lg px-3 py-2 transition-colors cursor-pointer text-left group"
-                    >
-                      <span className="text-sm font-medium text-slate-700 dark:text-slate-200 flex-1 group-hover:text-[#1B3A72] dark:group-hover:text-blue-400 transition-colors">
-                        {c.custom_name ?? `ШУ ${c.object_number}`}
-                      </span>
-                      {c.type && <span className="text-xs text-slate-400">{c.type}</span>}
-                      {c.is_primary && (
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                          Основной
-                        </span>
-                      )}
-                      <svg className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 group-hover:text-[#1B3A72] dark:group-hover:text-blue-400 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                      </svg>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {!isReadOnly && !isStaffAdmin && <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700 shrink-0">
-            {deleteStep ? (
-              <div className="space-y-2">
-                <p className="text-sm text-slate-600 dark:text-slate-300 wrap-break-word">
-                  Удалить оператора <strong>{user.full_name ?? user.login}</strong>? Все сессии будут отозваны. Переписка сохранится.
-                </p>
-                <div className="flex justify-end gap-2">
-                  <Button variant="ghost" onClick={() => setDeleteStep(false)} disabled={deleteOperatorMut.isPending} className="cursor-pointer">Отмена</Button>
-                  <Button onClick={() => deleteOperatorMut.mutate()} disabled={deleteOperatorMut.isPending} className="bg-red-600 hover:bg-red-700 cursor-pointer">
-                    {deleteOperatorMut.isPending ? 'Удаление...' : 'Удалить'}
-                  </Button>
-                </div>
-              </div>
-            ) : banStep ? (
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-slate-500 block">
-                  Причина блокировки <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  value={banReason}
-                  onChange={e => setBanReason(e.target.value)}
-                  placeholder="Укажите причину блокировки"
-                  rows={2}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 resize-none focus:outline-none focus:border-[#4A8FE7]"
-                />
-                <div className="flex justify-end gap-2">
-                  <Button variant="ghost" onClick={() => { setBanStep(false); setBanReason('') }} disabled={banMut.isPending} className="cursor-pointer">Отмена</Button>
-                  <Button onClick={() => banMut.mutate()} disabled={!banReason.trim() || banMut.isPending} className="bg-red-500 hover:bg-red-600 cursor-pointer">
-                    {banMut.isPending ? 'Блокировка...' : 'Подтвердить'}
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex justify-end gap-2 flex-wrap">
-                {user.role === 'operator' && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setDeleteStep(true)}
-                    disabled={isMutating}
-                    className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/20 cursor-pointer mr-auto"
-                  >
-                    Удалить оператора
-                  </Button>
-                )}
-                {user.is_verified ? (
-                  <Button variant="outline" onClick={() => unverifyMut.mutate()} disabled={isMutating}
-                    className="text-amber-600 border-amber-200 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-800 cursor-pointer">
-                    Снять верификацию
-                  </Button>
-                ) : (
-                  <Button onClick={() => verifyMut.mutate()} disabled={isMutating} className="bg-green-600 hover:bg-green-700 cursor-pointer">
-                    Верифицировать
-                  </Button>
-                )}
-                {user.is_active ? (
-                  <Button onClick={() => setBanStep(true)} disabled={isMutating} className="bg-red-500 hover:bg-red-600 cursor-pointer">
-                    Заблокировать
-                  </Button>
-                ) : (
-                  <Button onClick={() => unbanMut.mutate()} disabled={isMutating} className="bg-green-600 hover:bg-green-700 cursor-pointer">
-                    Разблокировать
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>}
-        </div>
-      )}
-      {selectedCabinetId !== null && (
-        <CabinetDetailDialog
-          cabinetId={selectedCabinetId}
-          isAdmin
-          onClose={() => setSelectedCabinetId(null)}
-        />
-      )}
-    </AppModal>
-  )
-}
-
-function DRow({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    // На мобильном лейбл над значением (не колонка фикс. ширины) — длинные слова вроде
-    // «Зарегистрирован» иначе переносились посреди слова, налезая на значение
-    <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4 px-4 sm:px-6 py-3">
-      <span className="text-xs text-slate-400 sm:w-32 shrink-0 sm:pt-0.5">{label}</span>
-      <div className="flex-1 text-sm font-medium text-slate-700 dark:text-slate-200">{value}</div>
-    </div>
-  )
-}
-
-function UserSkeleton() {
-  return (
-    <div>
-      <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-4 sm:px-6 py-4 sm:py-5">
-        <div className="flex items-center gap-3 sm:gap-4">
-          <Skeleton className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-white/20" />
-          <div className="space-y-2 flex-1">
-            <Skeleton className="h-5 w-40 bg-white/20" />
-            <Skeleton className="h-3 w-24 bg-white/20" />
-          </div>
-        </div>
-      </div>
-      <div className="px-4 sm:px-6 py-4 space-y-4">
-        {[1, 2, 3, 4].map(i => (
-          <div key={i} className="flex gap-4">
-            <Skeleton className="h-3 w-24 shrink-0" />
-            <Skeleton className="h-3 flex-1" />
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 function CreateOperatorModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient()
   const [login, setLogin] = useState('')
@@ -832,9 +550,6 @@ function ListIcon() {
 }
 function GridIcon() {
   return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" /></svg>
-}
-function UserIcon() {
-  return <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
 }
 function SearchIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>

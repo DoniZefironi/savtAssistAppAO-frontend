@@ -55,7 +55,10 @@ interface Props {
   botTextColor?: string
 }
 
-export function MessageBubble({
+// memo — в открытом чате сообщения рефетчатся раз в 1.5с (см. refetchInterval в
+// chat-conversation.tsx); без memo каждый poll перерисовывал все видимые пузыри
+// целиком, даже если их данные не изменились.
+export const MessageBubble = React.memo(function MessageBubble({
   message, isOwn, isBot, showAvatar, showName, isLastInGroup,
   messagesById, currentUserId, pinnedMessageIds,
   onReply, onEdit, onDelete, onForward, onReact, onScrollToMessage,
@@ -383,7 +386,7 @@ export function MessageBubble({
     {ctxMenu}
   </>
   )
-}
+})
 
 function renderLinks(text: string, isOwn: boolean): React.ReactNode[] {
   const URL_RE = /https?:\/\/[^\s]+/g

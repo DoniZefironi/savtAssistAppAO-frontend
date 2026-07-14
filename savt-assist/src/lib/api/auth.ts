@@ -1,9 +1,12 @@
+import axios from 'axios'
 import { apiClient } from './client'
-import type { AuthTokens, User } from '@/types'
+import type { User } from '@/types'
 
 export const authApi = {
-  login: async (login: string, password: string): Promise<AuthTokens> => {
-    const { data } = await apiClient.post<AuthTokens>('/auth/admin-login', { login, password })
+  // Идёт через Next.js route handler (/api/auth/login), а не напрямую на бэкенд:
+  // refresh_token оседает там в HttpOnly cookie и никогда не попадает в браузерный JS.
+  login: async (login: string, password: string): Promise<{ access_token: string; user: User }> => {
+    const { data } = await axios.post<{ access_token: string; user: User }>('/api/auth/login', { login, password })
     return data
   },
 
@@ -12,7 +15,7 @@ export const authApi = {
     return data
   },
 
-  logout: async (refreshToken: string): Promise<void> => {
-    await apiClient.post('/auth/logout', { refresh_token: refreshToken })
+  logout: async (): Promise<void> => {
+    await axios.post('/api/auth/logout')
   },
 }

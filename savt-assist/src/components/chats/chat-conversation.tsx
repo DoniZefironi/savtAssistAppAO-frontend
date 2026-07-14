@@ -5,38 +5,36 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
-  X, Paperclip, Image as ImageIcon, Pin, PinOff, Trash2, Ban,
-  Package, FileText, MessageCircle, Bot, User, Video, FileSpreadsheet, Archive, Mic as MicIconLucide, Inbox,
+  Package, FileText, MessageCircle, Bot,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MessageBubble, DateSeparator } from './message-bubble'
 import { chatDisplayName } from './chat-list-panel'
-import { toFullUrl, downloadBlob, ImageLightbox } from './attachment-view'
+import { ImageLightbox } from './attachment-view'
 import { chatsApi } from '@/lib/api/chats'
-import type { ChatSettingsPatch } from '@/lib/api/chats'
 import { authApi } from '@/lib/api/auth'
 import { useAuthStore } from '@/lib/store/auth'
 import { useChatNavStore } from '@/lib/store/chat-nav'
 import { useVoiceRecorder } from '@/lib/hooks/use-voice-recorder'
 import type { Chat, ChatMessage, MessageAttachment } from '@/types'
 import type { InfiniteData } from '@tanstack/react-query'
+import { ForwardDialog } from './forward-dialog'
+import { buildRenderItems } from './build-render-items'
+import { ForwardIcon, TrashIcon } from './chat-icons'
+import { usePinnedMessages } from './hooks/use-pinned-messages'
+import { useChatSettings } from './hooks/use-chat-settings'
+import { WALLPAPERS } from './wallpapers'
+import { ChatAttachmentsPanel } from './chat-attachments-panel'
+import { ChatHeader } from './chat-header'
+import { PinnedBanner } from './pinned-banner'
+import { ChatComposer, STICKERS } from './chat-composer'
+import { ChatConfirmDialog } from './chat-confirm-dialog'
+import { useRealtimeEvents, type RealtimeEnvelope } from '@/lib/hooks/use-realtime-events'
 
-const GROUP_GAP_MS = 5 * 60 * 1000
-
-const WALLPAPERS = [
-  { id: 'default',  label: 'Обычный', light: 'linear-gradient(160deg,#f5f7fa 0%,#eaeff8 100%)', dark: 'linear-gradient(160deg,#1a2236 0%,#1e2744 100%)' },
-  { id: 'blue',     label: 'Синий',   light: 'linear-gradient(135deg,#dfe9f3 0%,#b8cce4 100%)', dark: 'linear-gradient(135deg,#1a2d42 0%,#1e3a5c 100%)' },
-  { id: 'mint',     label: 'Мята',    light: 'linear-gradient(135deg,#d4f1e4 0%,#b2dfe8 100%)', dark: 'linear-gradient(135deg,#102d22 0%,#14323a 100%)' },
-  { id: 'sand',     label: 'Песок',   light: 'linear-gradient(135deg,#fdf6e3 0%,#f0e4d0 100%)', dark: 'linear-gradient(135deg,#2d2518 0%,#2a1e0e 100%)' },
-  { id: 'lavender', label: 'Лаванда', light: 'linear-gradient(135deg,#e8d5f5 0%,#d4b8f0 100%)', dark: 'linear-gradient(135deg,#1e1230 0%,#231540 100%)' },
-  { id: 'dark',     label: 'Тёмный',  light: '#1e293b', dark: '#0f172a' },
+const MESSAGE_EVENT_TYPES = [
+  'message.created', 'message.updated', 'message.deleted',
+  'message.reaction_changed', 'message.pinned', 'message.unpinned',
 ]
-
-const STICKERS: Record<string, string[]> = {
-  '😊': ['😀','😂','🥹','😍','🥰','😎','😢','😡','🤔','😴','🤗','🤩','😇','🥳','🙄','😬','🤐','😤'],
-  '👍': ['👍','👎','❤️','💯','🙏','🤝','✌️','👏','🫡','💪','🤞','🫶','🎉','🔥','⭐','✨','💥','🎊'],
-  '🐾': ['🐶','🐱','🐰','🦊','🐻','🐼','🐯','🦁','🐸','🐙','🦋','🌸','🌈','🍀','🌊','🔮','🎭','🎸'],
-}
 
 interface Props {
   chat: Chat
@@ -47,8 +45,6 @@ interface Props {
 
 type MsgPages = InfiniteData<ChatMessage[]>
 type PageParam = { before_id?: number; after_id?: number } | undefined
-
-type ChatColors = { ownBubble?: string; otherBubble?: string; botBubble?: string; nickColor?: string; fontSize?: number; ownText?: string; otherText?: string; botText?: string }
 
 function patchPages(old: MsgPages | undefined, fn: (m: ChatMessage) => ChatMessage): MsgPages | undefined {
   if (!old) return old
@@ -92,12 +88,8 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-  // Обои/цвета/шрифт — персональные настройки вида чата, хранятся на сервере
-  // (per-user) и синхронизируются между устройствами. См. settings-query ниже.
-  const [uploadingWallpaper, setUploadingWallpaper] = useState(false)
   const [attachmentsOpen, setAttachmentsOpen] = useState(false)
   const [attachTab, setAttachTab] = useState<'media' | 'files' | 'voice' | 'colors' | 'wallpaper'>('media')
-  const [colorScope, setColorScope] = useState<'chat' | 'global'>('chat')
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
   const [confirmModal, setConfirmModal] = useState<null | 'clear' | 'delete' | 'delete-message' | 'delete-selected'>(null)
   const [deleteMessageId, setDeleteMessageId] = useState<number | null>(null)
@@ -112,6 +104,39 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const [isDarkMode, setIsDarkMode] = useState(() =>
     typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
   )
+
+  // Объявлены здесь (а не рядом с остальными handleXxx ниже), потому что на них
+  // ссылаются эффекты выше по файлу — иначе JS TDZ ловит "used before declaration".
+  const highlightMessage = useCallback((messageId: number) => {
+    const el = document.getElementById(`msg-${messageId}`)
+    const container = listRef.current
+    if (!el || !container) return false
+    const elRect = el.getBoundingClientRect()
+    const cRect = container.getBoundingClientRect()
+    container.scrollTop += elRect.top - cRect.top - cRect.height / 2 + elRect.height / 2
+    el.style.transition = 'background-color 0.3s ease'
+    el.style.backgroundColor = 'rgba(74,143,231,0.2)'
+    setTimeout(() => { el.style.backgroundColor = '' }, 1500)
+    return true
+  }, [])
+
+  const handleScrollToMessage = useCallback(async (messageId: number) => {
+    if (highlightMessage(messageId)) return
+    try {
+      const msgs = await chatsApi.getMessagesAround(chat.id, messageId)
+      // newest-first page format (same as what the query returns)
+      const page = [...msgs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      jumpTargetRef.current = messageId
+      setJumpMode(true)
+      qc.setQueryData<MsgPages>(['messages', chat.id], {
+        pages: [page],
+        pageParams: [undefined],
+      })
+    } catch {
+      toast.error('Не удалось перейти к сообщению')
+    }
+  }, [highlightMessage, chat.id, qc])
+
   useEffect(() => {
     const obs = new MutationObserver(() =>
       setIsDarkMode(document.documentElement.classList.contains('dark'))
@@ -154,9 +179,58 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     queryFn: ({ pageParam }) => chatsApi.getMessages(chat.id, pageParam?.before_id, pageParam?.after_id),
     getNextPageParam: (lastPage) => lastPage.length < 30 ? undefined : { before_id: lastPage[lastPage.length - 1]?.id },
     getPreviousPageParam: (firstPage) => firstPage.length < 30 ? undefined : { after_id: firstPage[0]?.id },
-    refetchInterval: jumpMode ? false : 1500,
-    refetchIntervalInBackground: false,
   })
+
+  // Realtime вместо поллинга сообщений — см. README-backend.md, "Realtime (SSE)
+  // для операторской панели". message.created дедуплицируется по id (своё же
+  // отправленное сообщение уже добавлено локально в sendMutation.onSuccess) и
+  // намеренно игнорируется в jumpMode — там pages[0] держит "окрестность"
+  // сообщения, к которому прыгнули, а не настоящий хвост переписки.
+  //
+  // Проверено вживую (curl -N по реальному каналу): data у message.created/updated —
+  // полный MessageOut, а у message.deleted/reaction_changed/pinned/unpinned — только
+  // {id}, без reactions/deleted_at. Патчить кэш точечным мёрджем для последних трёх
+  // нечем, поэтому deleted проставляет deleted_at локально (как раньше делала сама
+  // deleteMutation), а reaction_changed/pinned/unpinned просто инвалидируют — ровно
+  // так же, как уже делают собственные handleReact/handlePin этого компонента.
+  const handleRealtimeEvent = useCallback((envelope: RealtimeEnvelope) => {
+    switch (envelope.type) {
+      case 'message.created': {
+        if (jumpMode) return
+        const msg = envelope.data as ChatMessage
+        qc.setQueryData<MsgPages>(['messages', chat.id], (old) => {
+          if (!old) return old
+          if (old.pages.some(page => page.some(m => m.id === msg.id))) return old
+          return { ...old, pages: [[msg, ...(old.pages[0] ?? [])], ...old.pages.slice(1)] }
+        })
+        return
+      }
+      case 'message.updated': {
+        const msg = envelope.data as ChatMessage
+        qc.setQueryData<MsgPages>(['messages', chat.id], (old) => patchPages(old, m => m.id === msg.id ? { ...m, ...msg } : m))
+        return
+      }
+      case 'message.deleted': {
+        const { id } = envelope.data as { id: number }
+        const deleted_at = new Date().toISOString()
+        qc.setQueryData<MsgPages>(['messages', chat.id], (old) => patchPages(old, m => m.id === id ? { ...m, deleted_at } : m))
+        return
+      }
+      case 'message.reaction_changed':
+        qc.invalidateQueries({ queryKey: ['messages', chat.id] })
+        return
+      case 'message.pinned':
+      case 'message.unpinned':
+        qc.invalidateQueries({ queryKey: ['pinned-messages', chat.id] })
+    }
+  }, [qc, chat.id, jumpMode])
+
+  const handleRealtimeReconnect = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ['messages', chat.id] })
+    qc.invalidateQueries({ queryKey: ['pinned-messages', chat.id] })
+  }, [qc, chat.id])
+
+  useRealtimeEvents(`/operator/events/chats/${chat.id}`, MESSAGE_EVENT_TYPES, handleRealtimeEvent, handleRealtimeReconnect)
 
   const { data: searchResults = [] } = useQuery({
     queryKey: ['messages-search', chat.id, searchQuery],
@@ -255,68 +329,15 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         jumpScrolledRef.current = true
       }
     })
-  }, [messages])
+  }, [messages, highlightMessage])
 
   const messagesById = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages])
 
-  // Источник правды по закрепам — отдельный эндпоинт /operator/chats/{id}/pinned (массив,
-  // новые→старые). Список /operator/chats закрепы не возвращает, поэтому полагаться на chat нельзя.
-  const { data: pinnedMessages = [] } = useQuery({
-    queryKey: ['pinned-messages', chat.id],
-    queryFn: () => chatsApi.getPinnedMessages(chat.id),
-    staleTime: 30_000,
-  })
-  const pinnedIds = useMemo(() => new Set(pinnedMessages.map(m => m.id)), [pinnedMessages])
-  // активный закреп в плашке — циклически перебираемый кликом
-  const [activePinIdx, setActivePinIdx] = useState(0)
-  const activePin = pinnedMessages.length ? pinnedMessages[activePinIdx % pinnedMessages.length] : null
-  useEffect(() => { setActivePinIdx(0) }, [chat.id])
-
-  // Эффективные персональные настройки вида чата (per-chat override, иначе глобальные).
-  const { data: settings } = useQuery({
-    queryKey: ['chat-settings', chat.id],
-    queryFn: () => chatsApi.getChatSettings(chat.id),
-    staleTime: 60_000,
-  })
-  const chatColors = useMemo<ChatColors>(() => settings ? {
-    ownBubble: settings.own_bubble_color ?? undefined,
-    otherBubble: settings.other_bubble_color ?? undefined,
-    botBubble: settings.bot_bubble_color ?? undefined,
-    ownText: settings.own_text_color ?? undefined,
-    otherText: settings.other_text_color ?? undefined,
-    botText: settings.bot_text_color ?? undefined,
-    nickColor: settings.nick_color ?? undefined,
-    fontSize: settings.font_size ?? undefined,
-  } : {}, [settings])
-  const wallpaper = settings?.wallpaper_id ?? 'default'
-  const customWallpaperUrl = settings?.wallpaper_id === 'custom' && settings.wallpaper_url
-    ? toFullUrl(settings.wallpaper_url)
-    : null
-
-  // Применить патч настроек к выбранному scope (этот чат / все чаты).
-  const applySettings = useCallback(async (patch: ChatSettingsPatch) => {
-    try {
-      if (colorScope === 'global') {
-        await chatsApi.updateGlobalSettings(patch)
-        qc.invalidateQueries({ queryKey: ['chat-settings'] })
-      } else {
-        const updated = await chatsApi.updateChatSettings(chat.id, patch)
-        qc.setQueryData(['chat-settings', chat.id], updated)
-      }
-    } catch {
-      toast.error('Не удалось сохранить настройки')
-    }
-  }, [colorScope, chat.id, qc])
-
-  // Обои — всегда per-chat override (вкладка обоев без переключателя scope).
-  const saveWallpaper = useCallback(async (patch: ChatSettingsPatch) => {
-    try {
-      const updated = await chatsApi.updateChatSettings(chat.id, patch)
-      qc.setQueryData(['chat-settings', chat.id], updated)
-    } catch {
-      toast.error('Не удалось сохранить обои')
-    }
-  }, [chat.id, qc])
+  const { pinnedMessages, pinnedIds, activePin, activePinIdx, setActivePinIdx, handlePin, unpinOne, unpinAll } = usePinnedMessages(chat.id)
+  const {
+    chatColors, wallpaper, customWallpaperUrl, colorScope, setColorScope,
+    saveColor, saveWallpaper, uploadWallpaper, uploadingWallpaper,
+  } = useChatSettings(chat.id)
 
   const { data: rawAttachments = [] } = useQuery({
     queryKey: ['chat-attachments', chat.id],
@@ -374,34 +395,6 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const botMutation = useMutation({
     mutationFn: () => chatsApi.returnToBot(chat.id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['operator-chats'] }); toast.success('Чат передан боту') },
-  })
-
-  const pinMutation = useMutation({
-    mutationFn: (messageId: number) => chatsApi.pinMessage(chat.id, messageId),
-    onSuccess: (list) => {
-      qc.setQueryData<ChatMessage[]>(['pinned-messages', chat.id], list)
-      setActivePinIdx(0)
-      toast.success('Сообщение закреплено')
-    },
-    onError: (e) => toast.error(isAxiosError(e) && e.response?.status === 400 ? 'Достигнут лимит закреплённых (10)' : 'Не удалось закрепить'),
-  })
-
-  const unpinMutation = useMutation({
-    mutationFn: (messageId: number) => chatsApi.unpinMessage(chat.id, messageId),
-    onSuccess: (list) => {
-      qc.setQueryData<ChatMessage[]>(['pinned-messages', chat.id], list)
-      setActivePinIdx(0)
-    },
-    onError: () => toast.error('Не удалось открепить'),
-  })
-
-  const unpinAllMutation = useMutation({
-    mutationFn: () => chatsApi.unpinAll(chat.id),
-    onSuccess: (list) => {
-      qc.setQueryData<ChatMessage[]>(['pinned-messages', chat.id], list)
-      setActivePinIdx(0)
-    },
-    onError: () => toast.error('Не удалось открепить'),
   })
 
   const clearMutation = useMutation({
@@ -493,60 +486,15 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     if (e.key === 'Escape') cancelContext()
   }
 
-  // ключ UI-цвета → поле бэкенда (value=undefined => null = сброс)
-  const COLOR_FIELD: Record<keyof ChatColors, keyof ChatSettingsPatch> = {
-    ownBubble: 'own_bubble_color',
-    otherBubble: 'other_bubble_color',
-    botBubble: 'bot_bubble_color',
-    ownText: 'own_text_color',
-    otherText: 'other_text_color',
-    botText: 'bot_text_color',
-    nickColor: 'nick_color',
-    fontSize: 'font_size',
-  }
-  const saveColor = (key: keyof ChatColors, value: string | number | undefined) => {
-    applySettings({ [COLOR_FIELD[key]]: value ?? null } as ChatSettingsPatch)
-  }
-
-  const handleReply = (msg: ChatMessage) => { setReplyTo(msg); setEditingMessage(null); textareaRef.current?.focus() }
-  const handleEdit = (msg: ChatMessage) => {
+  const handleReply = useCallback((msg: ChatMessage) => { setReplyTo(msg); setEditingMessage(null); textareaRef.current?.focus() }, [])
+  const handleEdit = useCallback((msg: ChatMessage) => {
     setEditingMessage(msg); setReplyTo(null); setText(msg.text ?? '')
     setTimeout(() => {
       const ta = textareaRef.current
       if (!ta) return
       ta.focus(); ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 128) + 'px'
     }, 0)
-  }
-
-  const highlightMessage = (messageId: number) => {
-    const el = document.getElementById(`msg-${messageId}`)
-    const container = listRef.current
-    if (!el || !container) return false
-    const elRect = el.getBoundingClientRect()
-    const cRect = container.getBoundingClientRect()
-    container.scrollTop += elRect.top - cRect.top - cRect.height / 2 + elRect.height / 2
-    el.style.transition = 'background-color 0.3s ease'
-    el.style.backgroundColor = 'rgba(74,143,231,0.2)'
-    setTimeout(() => { el.style.backgroundColor = '' }, 1500)
-    return true
-  }
-
-  const handleScrollToMessage = async (messageId: number) => {
-    if (highlightMessage(messageId)) return
-    try {
-      const msgs = await chatsApi.getMessagesAround(chat.id, messageId)
-      // newest-first page format (same as what the query returns)
-      const page = [...msgs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      jumpTargetRef.current = messageId
-      setJumpMode(true)
-      qc.setQueryData<MsgPages>(['messages', chat.id], {
-        pages: [page],
-        pageParams: [undefined],
-      })
-    } catch {
-      toast.error('Не удалось перейти к сообщению')
-    }
-  }
+  }, [])
 
   const exitJumpMode = async () => {
     setJumpMode(false)
@@ -576,20 +524,15 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   const toggleSearch = () => { setSearchOpen(v => !v); setSearchInput(''); setSearchQuery('') }
 
-  const handlePin = useCallback((msg: ChatMessage) => {
-    if (pinnedIds.has(msg.id)) unpinMutation.mutate(msg.id)
-    else pinMutation.mutate(msg.id)
-  }, [pinnedIds, pinMutation, unpinMutation])
-
-  const handleSelectMessage = (msg: ChatMessage) => {
-    if (!selectMode) setSelectMode(true)
+  const handleSelectMessage = useCallback((msg: ChatMessage) => {
+    setSelectMode(true)
     setSelectedIds(prev => {
       const next = new Set(prev)
       if (next.has(msg.id)) next.delete(msg.id)
       else next.add(msg.id)
       return next
     })
-  }
+  }, [])
 
   const handleCancelSelect = () => { setSelectMode(false); setSelectedIds(new Set()) }
 
@@ -614,7 +557,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     handleCancelSelect()
   }
 
-  const handleTranscribe = async (msg: ChatMessage, audioUrl: string) => {
+  const handleTranscribe = useCallback(async (msg: ChatMessage, audioUrl: string) => {
     setTranscriptions(prev => new Map(prev).set(msg.id, { text: '', loading: true }))
     try {
       // file_url — относительный путь /static/voices/...; файл уже загружен через /upload/voice
@@ -630,7 +573,16 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         : 'Не удалось распознать голосовое'
       )
     }
-  }
+  }, [])
+
+  const handleDeleteMessage = useCallback((msg: ChatMessage) => {
+    setDeleteMessageId(msg.id)
+    setConfirmModal('delete-message')
+  }, [])
+
+  const handleForwardMessage = useCallback((msg: ChatMessage) => {
+    setForwardMessages([msg])
+  }, [])
 
   const canSend = !sendMutation.isPending && !editMutation.isPending && !voice.recording && !uploadingFile
   const inputDisabled = voice.recording || uploadingFile
@@ -659,125 +611,42 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-3 px-3 py-2 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700/60 shrink-0 shadow-sm">
-        {onBack && (
-          <button onClick={onBack} className="md:hidden text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mr-1 cursor-pointer">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
-          </button>
-        )}
-        <div
-          className={cn('flex items-center gap-3 flex-1 min-w-0', !searchOpen && 'cursor-pointer hover:opacity-80 transition-opacity')}
-          onClick={!searchOpen ? () => { setAttachmentsOpen(true); setAttachTab('media') } : undefined}
-        >
-          <div className={cn('w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0', avatarBg)}>
-            <AvatarIcon className="w-5 h-5 text-white" />
-          </div>
-          <div className="flex-1 min-w-0">
-            {searchOpen ? (
-              <input autoFocus value={searchInput} onChange={e => setSearchInput(e.target.value)}
-                placeholder="Поиск по сообщениям..."
-                className="w-full text-sm bg-slate-100 dark:bg-slate-800 dark:text-slate-200 rounded-xl px-3 py-1.5 focus:outline-none focus:bg-slate-200 dark:focus:bg-slate-700 transition-colors" />
-            ) : (
-              <>
-                <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm truncate">{name}</p>
-                {/* overflow-hidden — без него длинный статус не обрезался, а вылезал поверх кнопок справа */}
-                <div className="flex items-center gap-2 mt-0.5 min-w-0 overflow-hidden">
-                  {botActive
-                    ? <span className="text-xs text-slate-400 flex items-center gap-1 min-w-0 shrink"><span className="inline-block w-1.5 h-1.5 bg-green-400 rounded-full shrink-0" /><span className="truncate">Бот отвечает</span></span>
-                    : <span className="text-xs text-blue-500 flex items-center gap-1 min-w-0 shrink"><span className="inline-block w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0" /><span className="truncate">Оператор отвечает</span></span>
-                  }
-                  {chat.operator_requested && (
-                    <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium shrink-0">Ожидает оператора</span>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          {/* На мобильном поиск и взять/вернуть чат скрыты в меню «⋮» — в шапке остаётся только
-              иконка поиска, если он уже открыт (нужна, чтобы его закрыть) */}
-          <button onClick={toggleSearch} title={searchOpen ? 'Закрыть поиск' : 'Поиск'}
-            className={cn('w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer',
-              searchOpen ? 'flex bg-[#1B3A72] text-white' : 'hidden sm:flex text-slate-400 hover:text-[#1B3A72] hover:bg-slate-100 dark:hover:bg-slate-800')}>
-            <SearchIcon />
-          </button>
-          {!searchOpen && botActive && (
-            <button onClick={() => takeMutation.mutate()} disabled={takeMutation.isPending}
-              className="hidden sm:block text-xs bg-[#1B3A72] text-white px-3 py-1.5 rounded-lg hover:bg-[#1B3A72]/90 transition-colors font-medium cursor-pointer">
-              {takeMutation.isPending ? '...' : 'Взять чат'}
-            </button>
-          )}
-          {!searchOpen && !botActive && (
-            <button onClick={() => botMutation.mutate()} disabled={botMutation.isPending}
-              className="hidden sm:block text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-3 py-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer">
-              Вернуть боту
-            </button>
-          )}
-          <div className="relative" ref={headerMenuRef}>
-            <button onClick={() => setHeaderMenuOpen(v => !v)}
-              className={cn('w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer',
-                headerMenuOpen ? 'bg-slate-100 dark:bg-slate-800 text-[#1B3A72]' : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800')}>
-              <DotsVerticalIcon />
-            </button>
-            {headerMenuOpen && (
-              <div className="absolute top-full right-0 mt-1 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 min-w-52 z-50">
-                {!searchOpen && (
-                  <div className="sm:hidden">
-                    <HeaderMenuItem icon={<SearchIcon />} onClick={() => { toggleSearch(); setHeaderMenuOpen(false) }}>Поиск</HeaderMenuItem>
-                    {botActive ? (
-                      <HeaderMenuItem icon={<Bot className="w-4 h-4" />} onClick={() => { takeMutation.mutate(); setHeaderMenuOpen(false) }}>Взять чат</HeaderMenuItem>
-                    ) : (
-                      <HeaderMenuItem icon={<User className="w-4 h-4" />} onClick={() => { botMutation.mutate(); setHeaderMenuOpen(false) }}>Вернуть боту</HeaderMenuItem>
-                    )}
-                    <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
-                  </div>
-                )}
-                {pinnedMessages.length > 0 && (
-                  <HeaderMenuItem icon={<Pin className="w-4 h-4" />} onClick={() => { if (activePin) handleScrollToMessage(activePin.id); setHeaderMenuOpen(false) }}>Перейти к закреплённому</HeaderMenuItem>
-                )}
-                {pinnedMessages.length > 1 && (
-                  <HeaderMenuItem icon={<PinOff className="w-4 h-4" />} onClick={() => { unpinAllMutation.mutate(); setHeaderMenuOpen(false) }} danger>Открепить все ({pinnedMessages.length})</HeaderMenuItem>
-                )}
-                <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
-                <HeaderMenuItem icon={<Trash2 className="w-4 h-4" />} onClick={() => { setConfirmModal('clear'); setHeaderMenuOpen(false) }} danger>Очистить историю</HeaderMenuItem>
-                <HeaderMenuItem icon={<Ban className="w-4 h-4" />} onClick={() => { setConfirmModal('delete'); setHeaderMenuOpen(false) }} danger>Удалить чат</HeaderMenuItem>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      <ChatHeader
+        onBack={onBack}
+        searchOpen={searchOpen}
+        searchInput={searchInput}
+        onSearchInputChange={setSearchInput}
+        onToggleSearch={() => { toggleSearch(); setHeaderMenuOpen(false) }}
+        name={name}
+        avatarBg={avatarBg}
+        AvatarIcon={AvatarIcon}
+        botActive={botActive}
+        operatorRequested={chat.operator_requested}
+        onAvatarClick={() => { setAttachmentsOpen(true); setAttachTab('media') }}
+        onTake={() => { takeMutation.mutate(); setHeaderMenuOpen(false) }}
+        takePending={takeMutation.isPending}
+        onReturnToBot={() => { botMutation.mutate(); setHeaderMenuOpen(false) }}
+        returnToBotPending={botMutation.isPending}
+        headerMenuOpen={headerMenuOpen}
+        onToggleHeaderMenu={() => setHeaderMenuOpen(v => !v)}
+        headerMenuRef={headerMenuRef}
+        pinnedCount={pinnedMessages.length}
+        onJumpToPinned={() => { if (activePin) handleScrollToMessage(activePin.id); setHeaderMenuOpen(false) }}
+        onUnpinAll={() => { unpinAll(); setHeaderMenuOpen(false) }}
+        onClearHistory={() => { setConfirmModal('clear'); setHeaderMenuOpen(false) }}
+        onDeleteChat={() => { setConfirmModal('delete'); setHeaderMenuOpen(false) }}
+      />
 
       {!!activePin && !searchOpen && (
-        <div className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-          onClick={() => { handleScrollToMessage(activePin.id); if (pinnedMessages.length > 1) setActivePinIdx(i => (i + 1) % pinnedMessages.length) }}>
-          {/* индикатор позиции среди нескольких закрепов */}
-          {pinnedMessages.length > 1 ? (
-            <div className="flex flex-col gap-0.5 shrink-0 self-stretch py-0.5">
-              {pinnedMessages.map((m, i) => (
-                <div key={m.id} className={cn('flex-1 w-0.5 rounded-full', i === activePinIdx % pinnedMessages.length ? 'bg-[#1B3A72] dark:bg-blue-400' : 'bg-slate-300 dark:bg-slate-600')} />
-              ))}
-            </div>
-          ) : (
-            <div className="w-0.5 h-7 bg-[#1B3A72] dark:bg-blue-400 rounded-full shrink-0" />
-          )}
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-semibold text-[#1B3A72] dark:text-blue-400">
-              {pinnedMessages.length > 1 ? `Закреплённое сообщение ${activePinIdx % pinnedMessages.length + 1}/${pinnedMessages.length}` : 'Закреплённое сообщение'}
-            </p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 truncate flex items-center gap-1">
-              {!activePin.text && <Paperclip className="w-3 h-3 shrink-0" />}
-              {activePin.text || 'Вложение'}
-            </p>
-          </div>
-          <button onClick={(e) => { e.stopPropagation(); unpinMutation.mutate(activePin.id) }}
-            title="Открепить"
-            className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer">
-            <X className="w-3 h-3" />
-          </button>
-        </div>
+        <PinnedBanner
+          activePin={activePin}
+          pinnedMessages={pinnedMessages}
+          activePinIdx={activePinIdx}
+          onAdvance={() => setActivePinIdx(i => (i + 1) % pinnedMessages.length)}
+          onJumpToMessage={handleScrollToMessage}
+          onUnpin={unpinOne}
+        />
       )}
-
 
       {searchOpen && searchQuery && (
         <div className="px-4 py-1.5 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-900/40 shrink-0">
@@ -846,8 +715,8 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
               pinnedMessageIds={pinnedIds}
               onReply={handleReply}
               onEdit={item.isOwn ? handleEdit : undefined}
-              onDelete={item.isOwn ? (msg) => { setDeleteMessageId(msg.id); setConfirmModal('delete-message') } : undefined}
-              onForward={(msg) => setForwardMessages([msg])}
+              onDelete={item.isOwn ? handleDeleteMessage : undefined}
+              onForward={handleForwardMessage}
               onReact={handleReact}
               onScrollToMessage={handleScrollToMessage}
               onPin={handlePin}
@@ -927,125 +796,29 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
       )}
 
       {!botActive && !searchOpen && !selectMode && (
-        <>
-          {stickerPickerOpen && (
-            <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700/60 px-3 pt-2 pb-1 shrink-0">
-              <div className="max-w-[100rem] mx-auto">
-              <div className="flex gap-1 mb-2">
-                {Object.keys(STICKERS).map(cat => (
-                  <button key={cat} onClick={() => setStickerCat(cat)}
-                    className={cn('text-xl p-1.5 rounded-lg transition-colors cursor-pointer', stickerCat === cat ? 'bg-slate-100 dark:bg-slate-800' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50')}>
-                    {cat}
-                  </button>
-                ))}
-              </div>
-              <div className="grid grid-cols-9 gap-0.5 pb-1">
-                {STICKERS[stickerCat].map(sticker => (
-                  <button key={sticker}
-                    onClick={() => { sendMutation.mutate({ t: sticker }); setStickerPickerOpen(false) }}
-                    className="text-2xl p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors aspect-square flex items-center justify-center">
-                    {sticker}
-                  </button>
-                ))}
-              </div>
-              </div>
-            </div>
-          )}
-
-          {pendingAttachments.length > 0 && (
-            <div className="px-4 py-2 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-700/60">
-              <div className="max-w-[100rem] mx-auto flex flex-wrap gap-2">
-              {pendingAttachments.map((a, i) => (
-                <div key={i} className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-700 dark:text-slate-300">
-                  {a.mime_type.startsWith('image/') ? <ImageIcon className="w-3.5 h-3.5 shrink-0" /> : <Paperclip className="w-3.5 h-3.5 shrink-0" />}
-                  <span className="max-w-32 truncate">{a.name}</span>
-                  <button onClick={() => setPendingAttachments((p) => p.filter((_, j) => j !== i))} className="text-slate-400 hover:text-red-500 ml-1 cursor-pointer">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-              </div>
-            </div>
-          )}
-
-          {(replyTo || editingMessage) && (
-            <div className="px-4 py-2 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-700/60">
-              <div className="max-w-[100rem] mx-auto flex items-center gap-2">
-              <div className={cn('w-0.5 h-8 rounded-full shrink-0', editingMessage ? 'bg-amber-400' : 'bg-[#4A8FE7]')} />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                  {editingMessage ? 'Редактирование' : `Ответ: ${replyTo!.sender_name}`}
-                </p>
-                <p className="text-xs text-slate-400 dark:text-slate-500 truncate flex items-center gap-1">
-                  {editingMessage
-                    ? (editingMessage.text ?? '')
-                    : replyTo!.text
-                    ? replyTo!.text
-                    : replyTo!.attachments?.length
-                    ? <><Paperclip className="w-3 h-3 shrink-0" />Вложение</>
-                    : ''}
-                </p>
-              </div>
-              <button onClick={cancelContext} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 shrink-0 p-1 cursor-pointer">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-              </div>
-            </div>
-          )}
-
-          <div className="px-3 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700/60 shrink-0">
-          <div className="max-w-[100rem] mx-auto flex items-end gap-2">
-            <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} multiple
-              accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.mp4,.mov" />
-
-            {voice.recording ? (
-              <>
-                <div className="flex-1 flex items-center gap-3 bg-red-50 dark:bg-red-900/20 rounded-2xl px-4 py-2.5 text-sm text-red-600 dark:text-red-400">
-                  <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                  Запись... {voice.seconds}с
-                  <button onClick={voice.cancel} className="ml-auto text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">Отмена</button>
-                </div>
-                <button onClick={voice.stop} className="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center text-white hover:bg-red-600 shrink-0 cursor-pointer"><SendIcon /></button>
-              </>
-            ) : (
-              <>
-                <button onClick={() => fileInputRef.current?.click()} disabled={!canSend || uploadingFile}
-                  className="w-9 h-9 rounded-full text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors shrink-0 disabled:opacity-40 cursor-pointer">
-                  {uploadingFile ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <PaperclipIcon />}
-                </button>
-                <button
-                  onClick={() => setStickerPickerOpen(v => !v)}
-                  className={cn('w-9 h-9 rounded-full flex items-center justify-center transition-colors shrink-0 cursor-pointer',
-                    stickerPickerOpen ? 'bg-[#1B3A72] text-white' : 'text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800')}>
-                  <StickerIcon />
-                </button>
-                <textarea
-                  ref={textareaRef}
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  disabled={inputDisabled}
-                  placeholder={editingMessage ? 'Редактировать сообщение...' : 'Сообщение'}
-                  rows={1}
-                  className="flex-1 resize-none bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:placeholder:text-slate-500 rounded-2xl px-4 py-2.5 text-sm focus:outline-none focus:bg-slate-200 dark:focus:bg-slate-700 transition-colors max-h-32 overflow-y-auto leading-relaxed disabled:opacity-50"
-                  onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 128) + 'px' }}
-                />
-                {text.trim() || pendingAttachments.length > 0 || editingMessage ? (
-                  <button onClick={handleSend} disabled={!canSend}
-                    className="w-10 h-10 rounded-full bg-[#1B3A72] flex items-center justify-center text-white hover:bg-[#1B3A72]/90 disabled:opacity-40 transition-all shrink-0 cursor-pointer">
-                    <SendIcon />
-                  </button>
-                ) : (
-                  <button onClick={voice.start}
-                    className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-[#1B3A72] hover:text-white transition-all shrink-0 cursor-pointer">
-                    <MicIcon />
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-          </div>
-        </>
+        <ChatComposer
+          stickerPickerOpen={stickerPickerOpen}
+          onToggleStickerPicker={() => setStickerPickerOpen(v => !v)}
+          stickerCat={stickerCat}
+          onStickerCatChange={setStickerCat}
+          onPickSticker={(sticker) => { sendMutation.mutate({ t: sticker }); setStickerPickerOpen(false) }}
+          pendingAttachments={pendingAttachments}
+          onRemoveAttachment={(i) => setPendingAttachments((p) => p.filter((_, j) => j !== i))}
+          replyTo={replyTo}
+          editingMessage={editingMessage}
+          onCancelContext={cancelContext}
+          fileInputRef={fileInputRef}
+          onFileChange={handleFileChange}
+          voice={voice}
+          canSend={canSend}
+          uploadingFile={uploadingFile}
+          text={text}
+          onTextChange={setText}
+          onKeyDown={handleKeyDown}
+          inputDisabled={inputDisabled}
+          textareaRef={textareaRef}
+          onSend={handleSend}
+        />
       )}
 
       {forwardMessages.length > 0 && (
@@ -1053,256 +826,30 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
       )}
 
       {attachmentsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setAttachmentsOpen(false)}>
-          <div className="absolute inset-0 bg-black/50" />
-          <div className="relative w-full max-w-lg mx-4 max-h-[85vh] bg-white dark:bg-slate-900 rounded-2xl flex flex-col shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 shrink-0">
-              <h3 className="font-semibold text-slate-800 dark:text-slate-100">Информация о чате</h3>
-              <button onClick={() => setAttachmentsOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="flex items-center gap-4 px-5 py-4 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
-              <div className={cn('w-14 h-14 rounded-full flex items-center justify-center text-2xl shrink-0', avatarBg)}>
-                <AvatarIcon className="w-7 h-7 text-white" />
-              </div>
-              <div className="min-w-0">
-                <p className="font-semibold text-slate-800 dark:text-slate-100 text-base truncate">{name}</p>
-                <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
-                  {botActive ? <><Bot className="w-3.5 h-3.5" />Бот отвечает</> : <><User className="w-3.5 h-3.5" />Оператор отвечает</>}
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-1 px-4 py-2 border-b border-slate-100 dark:border-slate-700/60 shrink-0 flex-wrap">
-              {(['media', 'files', 'voice', 'colors', 'wallpaper'] as const).map(tab => {
-                const labels: Record<string, string> = {
-                  media: `Медиа (${allAttachments.media.length})`,
-                  files: `Файлы (${allAttachments.files.length})`,
-                  voice: `Голосовые (${allAttachments.voices.length})`,
-                  colors: 'Цвета',
-                  wallpaper: 'Обои',
-                }
-                return (
-                  <button key={tab} onClick={() => setAttachTab(tab)}
-                    className={cn('px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer', attachTab === tab ? 'bg-[#1B3A72] text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800')}>
-                    {labels[tab]}
-                  </button>
-                )
-              })}
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {attachTab === 'media' && (
-                allAttachments.media.length === 0
-                  ? <EmptyAttach label="Нет медиафайлов" />
-                  : <div className="grid grid-cols-3 gap-0.5 p-0.5">
-                    {allAttachments.media.map((item, i) => {
-                      const fullUrl = toFullUrl(item.url)
-                      return (
-                        <div key={i} className="aspect-square bg-slate-100 dark:bg-slate-800 overflow-hidden relative group cursor-pointer"
-                          onClick={() => {
-                            if (item.mime.startsWith('image/')) setLightbox({ url: fullUrl, name: '' })
-                            else { setAttachmentsOpen(false); setTimeout(() => handleScrollToMessage(item.message_id), 100) }
-                          }}
-                          onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, messageId: item.message_id }) }}>
-                          {item.mime.startsWith('image/')
-                            ? <img src={fullUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
-                            : <div className="w-full h-full flex items-center justify-center text-slate-400"><Video className="w-6 h-6" /></div>
-                          }
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors" />
-                        </div>
-                      )
-                    })}
-                  </div>
-              )}
-              {attachTab === 'files' && (
-                allAttachments.files.length === 0
-                  ? <EmptyAttach label="Нет файлов" />
-                  : <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
-                    {allAttachments.files.map((item, i) => {
-                      const fullUrl = toFullUrl(item.url)
-                      return (
-                        <div key={i} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-                          onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, messageId: item.message_id }) }}>
-                          <FileTypeIcon mime={item.mime} className="w-6 h-6 shrink-0 text-slate-400" />
-                          <div className="flex-1 min-w-0 cursor-pointer"
-                            onClick={() => window.open(fullUrl, '_blank')}>
-                            <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{item.name}</p>
-                            <p className="text-xs text-slate-400 mt-0.5">
-                              {item.size > 0 ? `${(item.size / 1024).toFixed(0)} КБ` : ''}
-                            </p>
-                          </div>
-                          <div className="flex gap-1 shrink-0">
-                            <a href={fullUrl} target="_blank" rel="noopener noreferrer"
-                              onClick={e => e.stopPropagation()}
-                              className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-[#1B3A72] hover:text-white transition-colors"
-                              title="Открыть">
-                              <OpenExtIcon />
-                            </a>
-                            <button onClick={e => { e.stopPropagation(); downloadBlob(fullUrl, item.name) }}
-                              className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-[#1B3A72] hover:text-white transition-colors cursor-pointer"
-                              title="Скачать">
-                              <DownloadSmIcon />
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-              )}
-              {attachTab === 'voice' && (
-                allAttachments.voices.length === 0
-                  ? <EmptyAttach label="Нет голосовых сообщений" />
-                  : <div className="divide-y divide-slate-100 dark:divide-slate-700/60 px-4 py-1">
-                    {allAttachments.voices.map((item, i) => (
-                      <div key={i} className="py-2.5"
-                        onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, messageId: item.message_id }) }}>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <p className="text-xs text-slate-400 flex items-center gap-1">
-                            <MicIconLucide className="w-3.5 h-3.5" />
-                            {item.duration != null ? `${Math.floor(item.duration / 60)}:${String(item.duration % 60).padStart(2, '0')}` : 'Голосовое'}
-                          </p>
-                          <button
-                            onClick={() => { setAttachmentsOpen(false); setTimeout(() => handleScrollToMessage(item.message_id), 100) }}
-                            className="text-[10px] font-medium text-[#1B3A72] dark:text-blue-400 hover:underline cursor-pointer">
-                            В чат ↗
-                          </button>
-                        </div>
-                        <audio controls src={toFullUrl(item.url)} className="w-full h-8" />
-                      </div>
-                    ))}
-                  </div>
-              )}
-              {attachTab === 'colors' && (
-                <div className="p-4 space-y-5">
-                  <div className="flex gap-2">
-                    <button onClick={() => setColorScope('chat')}
-                      className={cn('flex-1 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer', colorScope === 'chat' ? 'bg-[#1B3A72] text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700')}>
-                      Этот чат
-                    </button>
-                    <button onClick={() => setColorScope('global')}
-                      className={cn('flex-1 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer', colorScope === 'global' ? 'bg-[#1B3A72] text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700')}>
-                      Все чаты
-                    </button>
-                  </div>
-                  <ColorSection
-                    title="Мои сообщения"
-                    value={chatColors.ownBubble}
-                    onChange={(v) => saveColor('ownBubble', v)}
-                    colors={['#1B3A72', '#1d4ed8', '#7c3aed', '#db2777', '#059669', '#0891b2', '#374151', '#dc2626']}
-                  />
-                  <ColorSection
-                    title="Сообщения собеседника"
-                    value={chatColors.otherBubble}
-                    onChange={(v) => saveColor('otherBubble', v)}
-                    colors={['#f1f5f9', '#fef3c7', '#d1fae5', '#e0e7ff', '#fce7f3', '#f0fdf4', '#fff7ed', '#fdf2f8']}
-                  />
-                  <ColorSection
-                    title="Сообщения бота"
-                    value={chatColors.botBubble}
-                    onChange={(v) => saveColor('botBubble', v)}
-                    colors={['#eef2ff', '#e0e7ff', '#ede9fe', '#fce7f3', '#dcfce7', '#cffafe', '#fef9c3', '#fee2e2']}
-                  />
-                  <ColorSection
-                    title="Текст моих сообщений"
-                    value={chatColors.ownText}
-                    onChange={(v) => saveColor('ownText', v)}
-                    colors={['#ffffff', '#f0f9ff', '#fef9c3', '#dcfce7', '#ffe4e6', '#f3e8ff', '#ffedd5', '#e0f2fe']}
-                  />
-                  <ColorSection
-                    title="Текст собеседника"
-                    value={chatColors.otherText}
-                    onChange={(v) => saveColor('otherText', v)}
-                    colors={['#1e293b', '#1e3a5f', '#3b0764', '#831843', '#14532d', '#164e63', '#713f12', '#7f1d1d']}
-                  />
-                  <ColorSection
-                    title="Текст бота"
-                    value={chatColors.botText}
-                    onChange={(v) => saveColor('botText', v)}
-                    colors={['#1e293b', '#3730a3', '#1e40af', '#5b21b6', '#065f46', '#0e7490', '#92400e', '#991b1b']}
-                  />
-                  <ColorSection
-                    title="Цвет никнеймов"
-                    value={chatColors.nickColor}
-                    onChange={(v) => saveColor('nickColor', v)}
-                    colors={['#1B3A72', '#2563eb', '#7c3aed', '#be185d', '#065f46', '#0e7490', '#92400e', '#dc2626']}
-                  />
-                  <div>
-                    <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Размер шрифта</p>
-                    <div className="flex items-center gap-2">
-                      {([12, 13, 14, 15, 16, 18] as const).map(size => (
-                        <button
-                          key={size}
-                          onClick={() => saveColor('fontSize', chatColors.fontSize === size ? undefined : size)}
-                          className={cn(
-                            'px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer border',
-                            chatColors.fontSize === size
-                              ? 'bg-[#1B3A72] text-white border-transparent'
-                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
-                          )}
-                        >
-                          {size}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-              {attachTab === 'wallpaper' && (
-                <div className="p-4 space-y-4">
-                  <div className="grid grid-cols-3 gap-3">
-                    {WALLPAPERS.map(wp => (
-                      <button key={wp.id}
-                        onClick={() => saveWallpaper({ wallpaper_id: wp.id === 'default' ? null : wp.id, wallpaper_url: null })}
-                        className={cn('h-20 rounded-xl border-2 flex items-end justify-center pb-2 transition-all cursor-pointer overflow-hidden', wallpaper === wp.id && !customWallpaperUrl ? 'border-[#1B3A72] scale-95 shadow-md' : 'border-transparent hover:scale-95')}
-                        style={{ background: isDarkMode ? wp.dark : wp.light }}>
-                        <span className="text-[10px] font-semibold text-white drop-shadow px-1.5 py-0.5 rounded-full bg-black/25">{wp.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="pt-3 border-t border-slate-100 dark:border-slate-700">
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Своё изображение</p>
-                    <div className="flex items-center gap-2">
-                      <label className={cn('flex-1 flex items-center justify-center gap-1.5 px-2 py-1 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 text-sm text-slate-500 dark:text-slate-400 hover:border-[#1B3A72] hover:text-[#1B3A72] dark:hover:border-blue-400 dark:hover:text-blue-400 cursor-pointer transition-colors', uploadingWallpaper && 'opacity-50 pointer-events-none')}>
-                        {uploadingWallpaper ? (
-                          <div className="w-4 h-4 border-2 border-[#1B3A72] border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
-                        )}
-                        {uploadingWallpaper ? 'Загрузка...' : 'Загрузить'}
-                        <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
-                          const file = e.target.files?.[0]
-                          if (!file) return
-                          e.target.value = ''
-                          setUploadingWallpaper(true)
-                          try {
-                            const { url } = await chatsApi.uploadAttachment(file)
-                            await saveWallpaper({ wallpaper_id: 'custom', wallpaper_url: url })
-                          } catch {
-                            toast.error('Не удалось загрузить изображение')
-                          } finally {
-                            setUploadingWallpaper(false)
-                          }
-                        }} />
-                      </label>
-                      {customWallpaperUrl && (
-                        <>
-                          <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border-2 border-[#1B3A72]">
-                            <img src={customWallpaperUrl} alt="Custom" className="w-full h-full object-cover" />
-                          </div>
-                          <button
-                            onClick={() => saveWallpaper({ wallpaper_id: null, wallpaper_url: null })}
-                            className="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer">
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <ChatAttachmentsPanel
+          onClose={() => setAttachmentsOpen(false)}
+          name={name}
+          avatarBg={avatarBg}
+          AvatarIcon={AvatarIcon}
+          botActive={botActive}
+          attachTab={attachTab}
+          onTabChange={setAttachTab}
+          allAttachments={allAttachments}
+          onOpenImage={(fullUrl) => setLightbox({ url: fullUrl, name: '' })}
+          onJumpToMessage={(id) => { setAttachmentsOpen(false); setTimeout(() => handleScrollToMessage(id), 100) }}
+          onContextMenu={(e, messageId) => setCtxMenu({ x: e.clientX, y: e.clientY, messageId })}
+          chatColors={chatColors}
+          saveColor={saveColor}
+          colorScope={colorScope}
+          onColorScopeChange={setColorScope}
+          wallpaper={wallpaper}
+          customWallpaperUrl={customWallpaperUrl}
+          onSelectWallpaper={(id) => saveWallpaper({ wallpaper_id: id === 'default' ? null : id, wallpaper_url: null })}
+          onResetWallpaper={() => saveWallpaper({ wallpaper_id: null, wallpaper_url: null })}
+          onUploadWallpaper={uploadWallpaper}
+          uploadingWallpaper={uploadingWallpaper}
+          isDarkMode={isDarkMode}
+        />
       )}
 
       {lightbox && <ImageLightbox url={lightbox.url} name={lightbox.name} onClose={() => setLightbox(null)} />}
@@ -1359,293 +906,16 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
           },
         }[confirmModal]
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setConfirmModal(null)}>
-            <div className="absolute inset-0 bg-black/50" />
-            <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 max-w-xs w-full mx-4" onClick={e => e.stopPropagation()}>
-              <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-100 mb-2">{cfg.title}</h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">{cfg.body}</p>
-              <div className="flex gap-3">
-                <button onClick={() => setConfirmModal(null)}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer">
-                  Отмена
-                </button>
-                <button
-                  onClick={cfg.onConfirm}
-                  disabled={cfg.pending}
-                  className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-sm font-medium hover:bg-red-600 disabled:opacity-50 transition-colors cursor-pointer">
-                  {cfg.pending ? '...' : cfg.label}
-                </button>
-              </div>
-            </div>
-          </div>
+          <ChatConfirmDialog
+            title={cfg.title}
+            body={cfg.body}
+            label={cfg.label}
+            pending={cfg.pending}
+            onConfirm={cfg.onConfirm}
+            onCancel={() => setConfirmModal(null)}
+          />
         )
       })()}
     </div>
   )
-}
-
-function ForwardDialog({ messages, currentChatId, onClose }: { messages: ChatMessage[]; currentChatId: number; onClose: () => void }) {
-  const qc = useQueryClient()
-  const [sending, setSending] = useState(false)
-  const [showSender, setShowSender] = useState(true)
-  // Ключ запроса — ['operator-chats', chatSearch] (с параметром поиска), поэтому берём
-  // данные из всех совпадающих запросов через getQueriesData, а не точечным getQueryData.
-  const chats = (() => {
-    const seen = new Set<number>()
-    const list: Chat[] = []
-    for (const [, data] of qc.getQueriesData<Chat[]>({ queryKey: ['operator-chats'] })) {
-      for (const c of data ?? []) {
-        if (c.id === currentChatId || seen.has(c.id)) continue
-        seen.add(c.id)
-        list.push(c)
-      }
-    }
-    return list
-  })()
-
-  const forward = async (chatId: number) => {
-    setSending(true)
-    try {
-      let lastMsg: ChatMessage | null = null
-      let prevSender: string | null = null
-      // последовательно, чтобы сохранить порядок сообщений на бэке
-      for (const m of messages) {
-        // подпись отправителя показываем только когда он меняется (как в Telegram)
-        const header = showSender && m.sender_name !== prevSender ? `↪ ${m.sender_name}` : ''
-        const body = m.text ?? ''
-        const text = header && body ? `${header}\n${body}` : (header || body)
-        lastMsg = await chatsApi.sendMessage(chatId, text, m.attachments?.length ? m.attachments : undefined)
-        prevSender = m.sender_name
-      }
-      if (lastMsg) {
-        const last = lastMsg
-        qc.setQueriesData<Chat[]>({ queryKey: ['operator-chats'] }, (prev) =>
-          prev?.map((c) => c.id === chatId ? { ...c, last_message_text: last.text || last.attachments?.[0]?.file_name || c.last_message_text, last_message_at: last.created_at } : c) ?? prev
-        )
-      }
-      toast.success(messages.length > 1 ? `Переслано сообщений: ${messages.length}` : 'Сообщение переслано')
-      onClose()
-    } catch {
-      toast.error('Не удалось переслать')
-    } finally {
-      setSending(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/40 dark:bg-black/60" />
-      <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 mb-4 sm:mb-0 max-h-[60vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
-          <p className="font-semibold text-slate-800 dark:text-slate-100">
-            {messages.length > 1 ? `Переслать (${messages.length})` : 'Переслать в чат'}
-          </p>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowSender(v => !v)}
-          className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-slate-100 dark:border-slate-700 text-left hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer"
-        >
-          <span className="text-sm text-slate-700 dark:text-slate-200">Показывать отправителя</span>
-          <span className={cn('relative w-9 h-5 rounded-full transition-colors shrink-0', showSender ? 'bg-[#1B3A72]' : 'bg-slate-300 dark:bg-slate-600')}>
-            <span className={cn('absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform', showSender && 'translate-x-4')} />
-          </span>
-        </button>
-        <div className="overflow-y-auto flex-1 py-1">
-          {chats.length === 0 && <p className="text-sm text-slate-400 text-center py-8">Нет других чатов</p>}
-          {chats.map((c) => {
-            const ItemIcon = c.chat_type === 'cabinet' ? Package : c.chat_type === 'notes' ? FileText : MessageCircle
-            return (
-            <button key={c.id} disabled={sending} onClick={() => forward(c.id)}
-              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors text-left disabled:opacity-50 cursor-pointer">
-              <div className={cn('w-9 h-9 rounded-full flex items-center justify-center text-sm shrink-0', c.chat_type === 'cabinet' ? 'bg-[#1B3A72] text-white' : 'bg-slate-400 text-white')}>
-                <ItemIcon className="w-4 h-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{chatDisplayName(c)}</p>
-                {c.last_message_text && <p className="text-xs text-slate-400 truncate">{c.last_message_text}</p>}
-              </div>
-            </button>
-            )
-          })}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function EmptyAttach({ label }: { label: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center h-40 text-slate-400 text-sm gap-2">
-      <Inbox className="w-8 h-8 opacity-50" />
-      {label}
-    </div>
-  )
-}
-
-function ColorSection({ title, value, onChange, colors }: {
-  title: string
-  value: string | undefined
-  onChange: (v: string | undefined) => void
-  colors: string[]
-}) {
-  const isCustom = value !== undefined && !colors.includes(value)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  return (
-    <div>
-      <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">{title}</p>
-      
-      <div className="flex flex-wrap gap-2 items-center">
-        {/* По умолчанию */}
-        <button
-          onClick={() => onChange(undefined)}
-          title="По умолчанию"
-          className={cn(
-            'w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer shrink-0',
-            !value ? 'border-[#1B3A72] text-[#1B3A72] dark:text-blue-400 ring-2 ring-[#1B3A72]/20' : 'border-slate-300 dark:border-slate-600 text-slate-400 hover:border-slate-400'
-          )}
-        ><X className="w-3.5 h-3.5" /></button>
-
-        {/* Пресеты */}
-        {colors.map(c => (
-          <button
-            key={c}
-            onClick={() => onChange(c)}
-            title={c}
-            className={cn(
-              'w-8 h-8 rounded-lg border-2 transition-all cursor-pointer shrink-0',
-              value === c ? 'border-[#1B3A72] scale-110 shadow-md ring-2 ring-[#1B3A72]/20' : 'border-transparent hover:scale-105 hover:shadow-sm'
-            )}
-            style={{ backgroundColor: c }}
-          />
-        ))}
-
-        {/* Активный кастомный цвет (если не в списке) */}
-        {isCustom && (
-          <button
-            onClick={() => inputRef.current?.click()}
-            title={value}
-            className="w-8 h-8 rounded-lg border-2 border-[#1B3A72] scale-110 shadow-md ring-2 ring-[#1B3A72]/20 transition-all shrink-0 cursor-pointer"
-            style={{ backgroundColor: value }}
-          />
-        )}
-
-        {/* Кнопка «+» с нативным color picker */}
-        <label
-          className={cn(
-            'w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer shrink-0 relative overflow-hidden',
-            isCustom
-              ? 'border-slate-300 dark:border-slate-600 hover:border-slate-400'
-              : 'border-dashed border-slate-400 dark:border-slate-500 hover:border-[#1B3A72] dark:hover:border-blue-400'
-          )}
-        >
-          <input
-            ref={inputRef}
-            type="color"
-            value={value || '#000000'}
-            onChange={(e) => onChange(e.target.value)}
-            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full p-0 border-0"
-          />
-          <span className="text-xs font-bold text-slate-500 dark:text-slate-400 select-none">+</span>
-        </label>
-      </div>
-
-      {/* Текстовый ввод HEX для кастомного цвета */}
-      {isCustom && (
-        <div className="mt-2 flex items-center gap-2">
-          <input
-            type="text"
-            value={value}
-            onChange={(e) => {
-              const hex = e.target.value
-              if (/^#[0-9A-Fa-f]{6}$/.test(hex)) onChange(hex)
-            }}
-            className="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 w-24 font-mono uppercase focus:outline-none focus:ring-2 focus:ring-[#1B3A72]/20"
-            maxLength={7}
-            placeholder="#000000"
-          />
-          <span className="text-[10px] text-slate-400 font-medium">HEX</span>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function HeaderMenuItem({ icon, onClick, danger, children }: { icon: React.ReactNode; onClick: () => void; danger?: boolean; children: React.ReactNode }) {
-  return (
-    <button onClick={onClick}
-      className={cn('w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors cursor-pointer',
-        danger ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50')}>
-      <span className="w-4 h-4 flex items-center justify-center shrink-0">{icon}</span>
-      {children}
-    </button>
-  )
-}
-
-const BOT_NAMES = new Set(['Ася', 'Bot', 'bot', 'Asya'])
-
-type RenderItem =
-  | { type: 'date'; date: Date }
-  | { type: 'unread-divider' }
-  | { type: 'message'; message: ChatMessage; isOwn: boolean; isBot: boolean; showAvatar: boolean; showName: boolean; isLastInGroup: boolean }
-
-function buildRenderItems(messages: ChatMessage[], myId: number, firstUnreadId?: number): RenderItem[] {
-  const items: RenderItem[] = []
-  let lastDate: string | null = null
-  for (let i = 0; i < messages.length; i++) {
-    const msg = messages[i]
-    const prev = messages[i - 1] ?? null
-    const next = messages[i + 1] ?? null
-    const msgDate = new Date(msg.created_at).toDateString()
-    if (firstUnreadId && msg.id === firstUnreadId) items.push({ type: 'unread-divider' })
-    if (msgDate !== lastDate) { items.push({ type: 'date', date: new Date(msg.created_at) }); lastDate = msgDate }
-    const isOwn = msg.sender_id === myId
-    const isBot = !isOwn && BOT_NAMES.has(msg.sender_name ?? '')
-    const sameAsPrev = !!(prev && prev.sender_id === msg.sender_id && new Date(msg.created_at).getTime() - new Date(prev.created_at).getTime() < GROUP_GAP_MS)
-    const sameAsNext = !!(next && next.sender_id === msg.sender_id && new Date(next.created_at).getTime() - new Date(msg.created_at).getTime() < GROUP_GAP_MS)
-    items.push({ type: 'message', message: msg, isOwn, isBot, showAvatar: !isOwn && !isBot && !sameAsNext, showName: !isOwn && !isBot && !sameAsPrev, isLastInGroup: !sameAsNext })
-  }
-  return items
-}
-
-function SearchIcon() {
-  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
-}
-function SendIcon() {
-  return <svg className="w-5 h-5 translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
-}
-function PaperclipIcon() {
-  return <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" /></svg>
-}
-function MicIcon() {
-  return <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" /></svg>
-}
-function DotsVerticalIcon() {
-  return <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></svg>
-}
-function ForwardIcon() {
-  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3" /></svg>
-}
-function TrashIcon() {
-  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
-}
-function StickerIcon() {
-  return <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.182 15.182a4.5 4.5 0 01-6.364 0M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm5.25 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75z" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 3c4.97 0 9 4.03 9 9 0 1.657-.448 3.207-1.232 4.539L12 21l-7.768-4.461A8.96 8.96 0 013 12c0-4.97 4.03-9 9-9z" /></svg>
-}
-function OpenExtIcon() {
-  return <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" /></svg>
-}
-function DownloadSmIcon() {
-  return <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
-}
-function FileTypeIcon({ mime, className }: { mime: string; className?: string }) {
-  if (mime.includes('pdf') || mime.includes('word') || mime.includes('doc')) return <FileText className={className} />
-  if (mime.includes('excel') || mime.includes('sheet') || mime.includes('xls')) return <FileSpreadsheet className={className} />
-  if (mime.includes('video')) return <Video className={className} />
-  if (mime.includes('zip') || mime.includes('archive')) return <Archive className={className} />
-  return <Paperclip className={className} />
 }

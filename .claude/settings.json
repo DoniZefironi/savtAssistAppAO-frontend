@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(taskkill //F //PID 13568)",
+      "Bash(taskkill //F //PID 16828)",
+      "Bash(curl -s -X POST http://helper.savt.by/operator/events/ticket -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -w '\\\\nstatus: %{http_code}\\\\n')",
+      "Bash(curl -s http://helper.savt.by/openapi.json -o /tmp/openapi.json -w \"openapi status: %{http_code}\\\\n\")",
+      "Bash(rm -f /tmp/login_sse2.json /tmp/cookies_sse2.txt)",
+      "Bash(curl -s -c /tmp/cookies_sse2.txt -X POST http://localhost:3000/api/auth/login -H \"Content-Type: application/json\" -d '{\"login\":\"admin\",\"password\":\"123qweASDZXC\"}' -o /tmp/login_sse2.json -w \"login: %{http_code}\\\\n\")",
+      "Bash(curl -s -b /tmp/cookies_sse2.txt -o /tmp/chats_page2.html -w \"status: %{http_code}\\\\n\" http://localhost:3000/admin/chats)",
+      "Bash(curl -s http://helper.savt.by/openapi.json -o /tmp/openapi2.json -w \"openapi status: %{http_code}\\\\n\")",
+      "Bash(curl -s http://helper.savt.by/openapi.json -o /tmp/openapi3.json -w \"openapi status: %{http_code}\\\\n\")",
+      "Bash(curl -s http://helper.savt.by/openapi.json -o /tmp/openapi4.json -w \"openapi status: %{http_code}\\\\n\")",
+      "Bash(curl -s http://helper.savt.by/health -w \"\\\\nstatus: %{http_code}\\\\n\")",
+      "Bash(curl -s -X POST http://helper.savt.by/operator/chats/__TRACKED_VAR__/messages -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -H 'Content-Type: application/json' -d '{\"text\":\"SSE contract test message\"}' -o /tmp/sent_msg.json -w 'send status: %{http_code}\\\\n')",
+      "Bash(curl -s -X PATCH http://helper.savt.by/operator/chats/__TRACKED_VAR__/messages/__TRACKED_VAR__ -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -H 'Content-Type: application/json' -d '{\"text\":\"SSE contract test message \\(edited\\)\"}' -o /tmp/edit_msg.json -w 'edit status: %{http_code}\\\\n')",
+      "Bash(curl -s -X POST http://helper.savt.by/operator/chats/__TRACKED_VAR__/messages/__TRACKED_VAR__/reactions/%F0%9F%91%8D -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -o /tmp/react_msg.json -w 'react status: %{http_code}\\\\n')",
+      "Bash(curl -s -X PUT http://helper.savt.by/operator/chats/__TRACKED_VAR__/pin/__TRACKED_VAR__ -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -o /tmp/pin_msg.json -w 'pin status: %{http_code}\\\\n')",
+      "Bash(curl -s -X PATCH http://helper.savt.by/chats/__TRACKED_VAR__/messages/__TRACKED_VAR__ -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -H 'Content-Type: application/json' -d '{\"text\":\"SSE contract test message \\(edited\\)\"}' -o /tmp/edit_msg.json -w 'edit status: %{http_code}\\\\n')",
+      "Bash(curl -s -X POST http://helper.savt.by/chats/__TRACKED_VAR__/messages/__TRACKED_VAR__/reactions/%F0%9F%91%8D -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -o /tmp/react_msg.json -w 'react status: %{http_code}\\\\n')",
+      "Bash(curl -s -X DELETE http://helper.savt.by/chats/__TRACKED_VAR__/messages/__TRACKED_VAR__ -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -o /tmp/delete_msg.json -w 'delete status: %{http_code}\\\\n')",
+      "Bash(curl -s -X DELETE http://helper.savt.by/operator/chats/__TRACKED_VAR__/pin/__TRACKED_VAR__ -H 'Authorization: Bearer __CMDSUB_OUTPUT__' -o /tmp/unpin_msg.json -w 'unpin status: %{http_code}\\\\n')",
+      "Bash(taskkill //F //IM curl.exe //T)"
+    ]
+  }
+}

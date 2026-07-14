@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { authApi } from '@/lib/api/auth'
-import { setAuthCookies } from '@/lib/api/client'
+import { setAccessToken } from '@/lib/api/client'
 import { useAuthStore } from '@/lib/store/auth'
 import { isEndUserRole } from '@/lib/utils'
 
@@ -29,10 +29,8 @@ export function LoginForm() {
 
     setLoading(true)
     try {
-      const tokens = await authApi.login(loginVal, passVal)
-      setAuthCookies(tokens)
-
-      const user = await authApi.me()
+      const { access_token, user } = await authApi.login(loginVal, passVal)
+      setAccessToken(access_token)
 
       // Эндпоинт /auth/admin-login сам пропускает только персонал, поэтому роль
       // обычного пользователя сюда дойти не должна. Отсекаем её на всякий случай,

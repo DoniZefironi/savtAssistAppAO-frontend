@@ -9,7 +9,10 @@ import { chatsApi } from '@/lib/api/chats'
 import { cabinetsApi } from '@/lib/api/cabinets'
 import { useChatNavStore } from '@/lib/store/chat-nav'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
+import { useRealtimeEvents } from '@/lib/hooks/use-realtime-events'
 import type { Chat, ChatMessage } from '@/types'
+
+const CHAT_LIST_EVENT_TYPES = ['chat.created', 'chat.updated']
 
 const DEFAULT_WIDTH = 288
 const MIN_WIDTH = 56       
@@ -88,9 +91,17 @@ export function ChatsPage() {
   const { data: rawChats = [], isLoading } = useQuery({
     queryKey: ['operator-chats', chatSearch],
     queryFn: () => chatsApi.getChats(chatSearch || undefined),
-    refetchInterval: 2000,
-    refetchIntervalInBackground: false,
   })
+
+  // Realtime вместо поллинга — см. README-backend.md, "Realtime (SSE) для
+  // операторской панели". Доставка at-most-once, поэтому по факту реконнекта
+  // (после разрыва соединения) дополнительно перезапрашиваем список целиком.
+  useRealtimeEvents(
+    '/operator/events/chats',
+    CHAT_LIST_EVENT_TYPES,
+    () => qc.invalidateQueries({ queryKey: ['operator-chats'] }),
+    () => qc.invalidateQueries({ queryKey: ['operator-chats'] })
+  )
 
   const { data: cabinetsData } = useQuery({
     queryKey: ['cabinets-for-chat'],

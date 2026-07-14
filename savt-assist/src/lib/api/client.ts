@@ -1,16 +1,17 @@
 import axios from 'axios'
-import Cookies from 'js-cookie'
-import { getJwtExpiry } from '@/lib/jwt'
-import type { AuthTokens } from '@/types'
 
-export function setAuthCookies(tokens: AuthTokens) {
-  Cookies.set('access_token', tokens.access_token, { sameSite: 'strict', expires: getJwtExpiry(tokens.access_token) })
-  Cookies.set('refresh_token', tokens.refresh_token, { sameSite: 'strict', expires: getJwtExpiry(tokens.refresh_token) })
+// access_token живёт только в памяти вкладки (не в cookie/localStorage) — при
+// перезагрузке страницы он теряется и восстанавливается через silent-refresh
+// по HttpOnly refresh_token cookie (см. AuthBootstrap). Так access_token не
+// достаётся XSS-инъекции через document.cookie/localStorage.
+let accessToken: string | null = null
+
+export function setAccessToken(token: string | null) {
+  accessToken = token
 }
 
-function clearAuthCookies() {
-  Cookies.remove('access_token')
-  Cookies.remove('refresh_token')
+export function getAccessToken() {
+  return accessToken
 }
 
 export const apiClient = axios.create({
@@ -31,35 +32,28 @@ export const apiClient = axios.create({
 })
 
 apiClient.interceptors.request.use((config) => {
-  const token = Cookies.get('access_token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
+  if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`
   return config
 })
 
-// Shared promise to prevent concurrent refresh races: all 401s (from axios or authorizedFetch) wait for a single refresh
-let refreshPromise: Promise<AuthTokens> | null = null
+// Shared promise to prevent concurrent refresh races: all 401s (from axios or authorizedFetch) wait for a single refresh.
+// Обращается к /api/auth/refresh — Next.js route handler, который читает HttpOnly
+// refresh_token cookie на сервере (недоступную из браузерного JS) и обновляет её.
+let refreshPromise: Promise<string> | null = null
 
 async function refreshTokens(): Promise<string> {
-  const refreshToken = Cookies.get('refresh_token')
-  if (!refreshToken) {
-    clearAuthCookies()
-    window.location.href = '/login'
-    throw new Error('No refresh token')
-  }
-
   try {
     if (!refreshPromise) {
       refreshPromise = axios
-        .post('/backend/auth/refresh', { refresh_token: refreshToken })
-        .then((r) => r.data)
+        .post<{ access_token: string }>('/api/auth/refresh')
+        .then((r) => r.data.access_token)
         .finally(() => { refreshPromise = null })
     }
-    const data = await refreshPromise
-    setAuthCookies(data)
-    return data.access_token
+    const newAccessToken = await refreshPromise
+    accessToken = newAccessToken
+    return newAccessToken
   } catch (err) {
-    refreshPromise = null
-    clearAuthCookies()
+    accessToken = null
     window.location.href = '/login'
     throw err
   }
@@ -73,8 +67,8 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true
       try {
-        const accessToken = await refreshTokens()
-        original.headers.Authorization = `Bearer ${accessToken}`
+        const newAccessToken = await refreshTokens()
+        original.headers.Authorization = `Bearer ${newAccessToken}`
         return apiClient(original)
       } catch {
         return Promise.reject(error)
@@ -89,10 +83,9 @@ apiClient.interceptors.response.use(
 // логика refresh-and-retry на 401, с тем же общим refreshPromise, что и у axios.
 export async function authorizedFetch(path: string, options: RequestInit = {}): Promise<Response> {
   const doFetch = () => {
-    const token = Cookies.get('access_token')
     return fetch(`/backend${path}`, {
       ...options,
-      headers: { ...(options.headers ?? {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: { ...(options.headers ?? {}), ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
     })
   }
 

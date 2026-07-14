@@ -3,10 +3,8 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import Cookies from 'js-cookie'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/lib/store/auth'
-import { authApi } from '@/lib/api/auth'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import Image from 'next/image'
 
@@ -34,11 +32,7 @@ export function AdminSidebar({ mobileOpen, onMobileClose }: { mobileOpen: boolea
   ]
 
   const handleLogout = async () => {
-    try {
-      const refreshToken = Cookies.get('refresh_token')
-      if (refreshToken) await authApi.logout(refreshToken)
-    } catch {}
-    logout()
+    await logout()
     router.push('/login')
     toast.success('Вы вышли из системы')
   }

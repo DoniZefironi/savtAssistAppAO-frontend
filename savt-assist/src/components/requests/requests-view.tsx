@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef, Fragment } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { toast } from 'sonner'
-import { X, ClipboardList, CheckCircle2, SlidersHorizontal } from 'lucide-react'
+import { X, ClipboardList, SlidersHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toFullUrl } from '@/lib/api/base-url'
 import { requestsApi } from '@/lib/api/requests'
@@ -16,8 +16,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import { RequestCard, ServiceCardIcon, AdditionCardIcon, ShareCardIcon, StatusPill, TypePill } from './request-card'
-import { UserDialog } from '@/components/users/users-view'
+import { UserDialog } from '@/components/users/user-dialog'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
+import { ServiceDialog } from './service-dialog'
+import {
+  DRow, DRowLink, ModalTextarea, DialogHeader, VerifiedBadge,
+  svcStatusCls, svcStatusLabel, reqStatusCls, reqStatusLabel, reqTypeCls, reqTypeLabel,
+  userTypeLabel, fmtDate,
+} from './request-shared'
 
 type Tab = 'service' | 'additions' | 'shares' | 'docs'
 
@@ -81,44 +87,6 @@ const REQUEST_TYPE_FILTERS = [
   { value: 'other', label: 'Другое' },
 ]
 
-function svcStatusCls(s: string) {
-  return s === 'open'
-    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-    : s === 'in_progress'
-    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-    : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
-}
-function svcStatusLabel(s: string) {
-  return s === 'open' ? 'Открыта' : s === 'in_progress' ? 'В работе' : 'Закрыта'
-}
-function reqStatusCls(s: string) {
-  return s === 'pending'
-    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-    : s === 'approved'
-    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-    : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-}
-function reqStatusLabel(s: string) {
-  return s === 'pending' ? 'Ожидает' : s === 'approved' ? 'Одобрена' : 'Отклонена'
-}
-function reqTypeCls(t: string) {
-  if (t === 'maintenance') return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-  if (t === 'inspection') return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-  if (t === 'other') return 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
-  return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
-}
-function reqTypeLabel(t: string) {
-  if (t === 'maintenance') return 'Обслуживание'
-  if (t === 'inspection') return 'Осмотр'
-  if (t === 'other') return 'Другое'
-  return 'Ремонт'
-}
-function userTypeLabel(t: string | null) {
-  return t === 'organization' ? 'Организация' : 'Физ. лицо'
-}
-function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
-}
 type ViewMode = 'list' | 'grid'
 
 export function RequestsView() {
@@ -510,134 +478,6 @@ function DocumentRequestList({ items, onSelect, view }: { items: DocumentRequest
   )
 }
 
-function DRow({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    // На мобильном лейбл над значением — длинные слова («Зарегистрирован») иначе
-    // переносились посреди слова при фикс. ширине колонки
-    <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4 px-4 sm:px-6 py-3">
-      <span className="text-xs text-slate-400 sm:w-32 shrink-0 sm:pt-0.5">{label}</span>
-      <div className="flex-1 text-sm font-medium text-slate-700 dark:text-slate-200">{value}</div>
-    </div>
-  )
-}
-
-function DRowLink({ label, value, onClick }: { label: string; value: string; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="w-full flex flex-col gap-0.5 sm:flex-row sm:gap-4 px-4 sm:px-6 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group text-left cursor-pointer"
-    >
-      <span className="text-xs text-slate-400 sm:w-32 shrink-0 sm:pt-0.5">{label}</span>
-      <div className="flex-1 flex items-center gap-1 min-w-0">
-        <span className="text-sm font-medium text-[#1B3A72] dark:text-blue-400 group-hover:underline underline-offset-2 truncate">{value}</span>
-        <svg className="w-3 h-3 text-[#1B3A72]/40 dark:text-blue-400/40 shrink-0 group-hover:text-[#1B3A72] dark:group-hover:text-blue-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-        </svg>
-      </div>
-    </button>
-  )
-}
-
-function ModalTextarea({ value, onChange, placeholder, rows = 2 }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; rows?: number
-}) {
-  return (
-    <textarea
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      placeholder={placeholder}
-      rows={rows}
-      className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800/50 text-sm text-slate-700 dark:text-slate-200 resize-none focus:outline-none focus:border-[#4A8FE7] dark:placeholder:text-slate-500"
-    />
-  )
-}
-
-function DialogHeader({ icon, title, subtitle, badge }: {
-  icon: React.ReactNode; title: string; subtitle: string; badge?: React.ReactNode
-}) {
-  return (
-    <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-4 sm:px-6 py-4 sm:py-5">
-      <div className="flex items-start gap-3 sm:gap-4">
-        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
-          {icon}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-bold text-lg text-white leading-tight">{title}</p>
-          <p className="text-sm text-white/60 mt-0.5">{subtitle}</p>
-          {badge && <div className="mt-2">{badge}</div>}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function VerifiedBadge({ verified }: { verified: boolean }) {
-  return (
-    <span className={cn(
-      'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
-      verified
-        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-        : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
-    )}>
-      {verified ? <><CheckCircle2 className="w-3 h-3" />Подтверждён</> : 'Не подтверждён'}
-    </span>
-  )
-}
-
-const SVC_STEPS = [
-  { value: 'open' as const, label: 'Открыта' },
-  { value: 'in_progress' as const, label: 'В работе' },
-  { value: 'closed' as const, label: 'Закрыта' },
-]
-
-function StatusStepper({ status, onChange }: {
-  status: 'open' | 'in_progress' | 'closed'
-  onChange: (s: 'open' | 'in_progress' | 'closed') => void
-}) {
-  const currentIndex = SVC_STEPS.findIndex(s => s.value === status)
-  return (
-    <div className="flex items-start w-full">
-      {SVC_STEPS.map((step, i) => {
-        const isActive = step.value === status
-        const isDone = i < currentIndex
-        return (
-          <Fragment key={step.value}>
-            <button
-              onClick={() => onChange(step.value)}
-              className="flex flex-col items-center gap-1.5 flex-1 cursor-pointer group"
-            >
-              <div className={cn(
-                'w-9 h-9 rounded-full flex items-center justify-center border-2 text-sm font-bold transition-all',
-                isActive
-                  ? 'bg-[#1B3A72] border-[#1B3A72] text-white scale-110 shadow-md shadow-[#1B3A72]/25'
-                  : isDone
-                  ? 'bg-green-500 border-green-500 text-white'
-                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-400 group-hover:border-[#4A8FE7] group-hover:text-[#4A8FE7]'
-              )}>
-                {isDone ? <CheckIcon className="w-4 h-4" /> : i + 1}
-              </div>
-              <span className={cn(
-                'text-xs font-medium text-center leading-tight',
-                isActive ? 'text-[#1B3A72] dark:text-blue-400' :
-                isDone ? 'text-green-600 dark:text-green-400' :
-                'text-slate-400 dark:text-slate-500'
-              )}>
-                {step.label}
-              </span>
-            </button>
-            {i < SVC_STEPS.length - 1 && (
-              <div className={cn(
-                'flex-1 h-0.5 mt-4.5 mx-1 transition-colors',
-                i < currentIndex ? 'bg-green-400' : 'bg-slate-200 dark:bg-slate-700'
-              )} />
-            )}
-          </Fragment>
-        )
-      })}
-    </div>
-  )
-}
-
 // Резолв ID администратора в имя/логин. GET /admin/admins доступен только
 // суперадмину, поэтому: своё имя видно всегда, для остальных — резолв по
 // списку админов (только суперадмин), иначе fallback на "Администратор #ID".
@@ -654,87 +494,6 @@ function useAdminDisplayName(adminId: number | null): string {
   if (adminId === currentUser?.id) return currentUser?.full_name ?? currentUser?.login ?? `Администратор #${adminId}`
   const found = adminsQ.data?.items.find(a => a.id === adminId)
   return found ? (found.full_name ?? found.login ?? `Администратор #${adminId}`) : `Администратор #${adminId}`
-}
-
-export function ServiceDialog({ request, onClose }: { request: ServiceRequest; onClose: () => void }) {
-  const qc = useQueryClient()
-  const [status, setStatus] = useState(request.status)
-  const [subUserId, setSubUserId] = useState<number | null>(null)
-  const [subCabinetId, setSubCabinetId] = useState<number | null>(null)
-
-  const mutation = useMutation({
-    mutationFn: () => requestsApi.updateServiceRequestStatus(request.id, status),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['service-requests'] })
-      qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
-      toast.success('Статус обновлён')
-      onClose()
-    },
-    onError: () => toast.error('Не удалось обновить статус'),
-  })
-
-  return (
-    <AppModal open onClose={onClose}>
-      {/* max-h + внутренний скролл — на низких экранах (320×480) длинный список полей
-          не вылезает за пределы вьюпорта, шапка и кнопка сохранения остаются на месте */}
-      <div className="flex flex-col max-h-[85vh]">
-      <DialogHeader
-        icon={<WrenchModalIcon />}
-        title={`Заявка #${request.id}`}
-        subtitle={`ШУ ${request.cabinet_object_number}`}
-        badge={
-          <div className="flex gap-1.5 flex-wrap">
-            <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white">
-              {svcStatusLabel(request.status)}
-            </span>
-            <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white">
-              {reqTypeLabel(request.request_type)}
-            </span>
-          </div>
-        }
-      />
-      <div className="flex-1 overflow-y-auto">
-      <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
-        <DRowLink label="Пользователь" value={request.user_full_name ?? `#${request.user_id}`} onClick={() => setSubUserId(request.user_id)} />
-        <DRow label="Телефон" value={request.user_phone ?? '—'} />
-        <DRow label="Тип" value={userTypeLabel(request.user_type)} />
-        {request.organization_name && <DRow label="Организация" value={request.organization_name} />}
-        <DRow label="Статус аккаунта" value={<VerifiedBadge verified={request.user_is_verified} />} />
-        {request.user_registered_at && <DRow label="Зарегистрирован" value={fmtDate(request.user_registered_at)} />}
-        <DRowLink label="Шкаф управления" value={`ШУ ${request.cabinet_object_number}`} onClick={() => setSubCabinetId(request.cabinet_id)} />
-        <DRow label="Создана" value={fmtDate(request.created_at)} />
-        <DRow label="Закрыта" value={request.closed_at ? fmtDate(request.closed_at) : '—'} />
-        <DRow label="Bitrix-задача" value={request.bitrix_task_id ?? '—'} />
-        <div className="flex gap-3 sm:gap-4 px-4 sm:px-6 py-3">
-          <span className="text-xs text-slate-400 w-20 sm:w-32 shrink-0 pt-0.5">Описание</span>
-          <p className="flex-1 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
-            {request.description}
-          </p>
-        </div>
-      </div>
-      </div>
-      <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700">
-        <p className="text-xs text-slate-400 mb-4">Изменить статус <b className='font-extrabold animate-pulse bg-gradient-to-r bg-clip-text  text-transparent from-indigo-500 via-purple-500 to-indigo-500 animate-text'>(кликабельно!)</b></p>
-        <div className="mb-4">
-          <StatusStepper status={status} onChange={setStatus} />
-        </div>
-        {status !== request.status && (
-          <div className="flex justify-end">
-            <Button
-              onClick={() => mutation.mutate()}
-              disabled={mutation.isPending}
-              className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white"
-            >
-              {mutation.isPending ? 'Сохранение...' : 'Сохранить'}
-            </Button>
-          </div>
-        )}
-      </div>
-      </div>
-      {subUserId !== null && <UserDialog userId={subUserId} role="user" onClose={() => setSubUserId(null)} />}
-      {subCabinetId !== null && <CabinetDetailDialog cabinetId={subCabinetId} isAdmin onClose={() => setSubCabinetId(null)} />}
-    </AppModal>
-  )
 }
 
 function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClose: () => void }) {
@@ -1129,9 +888,6 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
   )
 }
 
-function CheckIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
-}
 function ListIcon() {
   return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
 }
@@ -1144,9 +900,6 @@ function SearchIcon({ className }: { className?: string }) {
       <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
     </svg>
   )
-}
-function WrenchModalIcon() {
-  return <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" /></svg>
 }
 function AddModalIcon() {
   return <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>

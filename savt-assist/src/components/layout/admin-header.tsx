@@ -4,10 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import Cookies from 'js-cookie'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/lib/store/auth'
-import { authApi } from '@/lib/api/auth'
 import { NotificationBell } from './notification-bell'
 
 export function AdminHeader({ onMenuClick }: { onMenuClick?: () => void }) {
@@ -45,11 +43,7 @@ export function AdminHeader({ onMenuClick }: { onMenuClick?: () => void }) {
 
   const handleLogout = async () => {
     setProfileOpen(false)
-    try {
-      const refreshToken = Cookies.get('refresh_token')
-      if (refreshToken) await authApi.logout(refreshToken)
-    } catch {}
-    logout()
+    await logout()
     router.push('/login')
     toast.success('Вы вышли из системы')
   }

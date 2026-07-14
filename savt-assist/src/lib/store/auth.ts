@@ -2,13 +2,14 @@
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import Cookies from 'js-cookie'
 import type { User } from '@/types'
+import { authApi } from '@/lib/api/auth'
+import { setAccessToken } from '@/lib/api/client'
 
 interface AuthState {
   user: User | null
   setUser: (user: User | null) => void
-  logout: () => void
+  logout: () => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -16,9 +17,11 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       setUser: (user) => set({ user }),
-      logout: () => {
-        Cookies.remove('access_token')
-        Cookies.remove('refresh_token')
+      logout: async () => {
+        try {
+          await authApi.logout()
+        } catch {}
+        setAccessToken(null)
         set({ user: null })
       },
     }),
