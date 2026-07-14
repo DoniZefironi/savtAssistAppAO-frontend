@@ -99,7 +99,9 @@ export function CreateCabinetDialog({ open, onClose }: Props) {
 
   return (
     <AppModal open={open} onClose={handleClose} className="sm:max-w-2xl">
-      <div className="flex flex-col max-h-[85vh]">
+      {/* min-w-0 — без него grid-item (Popup — display:grid) не сжимается ниже
+          ширины контента и вылезает шире модалки, см. cabinet-detail-dialog.tsx */}
+      <div className="flex flex-col max-h-[85vh] min-w-0">
 
         {/* Gradient header */}
         <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-4 sm:px-6 py-4 sm:py-5 shrink-0">
@@ -116,7 +118,10 @@ export function CreateCabinetDialog({ open, onClose }: Props) {
 
         {/* Body */}
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-5">
+          {/* min-h-0 — иначе flex-1 не сжимается ниже контента (в т.ч. карты
+              LocationPicker ниже) и модалка вылезает за max-h-[85vh] вместо
+              внутреннего скролла (см. cabinet-detail-dialog.tsx) */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 space-y-5">
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>

@@ -131,7 +131,9 @@ export function GlobalSearch() {
 
           <div className="border-t border-slate-100 dark:border-slate-700" />
 
-          <div className="flex-1 overflow-y-auto">
+          {/* min-h-0 — иначе flex-1 не сжимается ниже контента и панель вылезает
+              за maxHeight выше вместо внутреннего скролла (см. cabinet-detail-dialog.tsx) */}
+          <div className="flex-1 min-h-0 overflow-y-auto">
             {query.length < 2 ? (
               <div className="py-10 flex flex-col items-center gap-1 text-slate-400">
                 <SearchIcon className="w-8 h-8 opacity-30" />

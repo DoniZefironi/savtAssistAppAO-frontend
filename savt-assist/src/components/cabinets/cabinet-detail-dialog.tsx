@@ -106,10 +106,18 @@ function DetailContent({ cabinetId, initialMode }: {
     { id: 'requests', label: 'Заявки' },
   ]
 
+  // min-w-0 ниже — Popup из @base-ui/react/dialog это display:grid, а у grid-элементов
+  // по умолчанию min-width:auto: без явного min-w-0 этот блок не сжимается уже по
+  // ширине контента (напр. нескроллящиеся whitespace-nowrap табы), из-за чего весь
+  // блок вылезает шире модалки и обрезается overflow-hidden — та же природа бага,
+  // что была с min-h-0 (см. комментарий у overflow-y-auto ниже).
   return (
-    <div className="flex flex-col max-h-[85vh]">
+    <div className="flex flex-col max-h-[85vh] min-w-0">
       <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-4 sm:px-6 py-4 sm:py-5 shrink-0">
-        <div className="flex items-start gap-3 sm:gap-4 pr-2">
+        {/* pr-8 (не pr-2) — иначе на узких экранах длинное название ШУ в режиме
+            редактирования (input на всю ширину, без truncate) налезает на крестик
+            закрытия (absolute right-3, w-7 ≈ 40px). Тот же паттерн уже в create-cabinet-dialog.tsx */}
+        <div className="flex items-start gap-3 sm:gap-4 pr-8">
           <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
             <BoardIcon className="w-6 h-6 text-white" />
           </div>
@@ -162,7 +170,12 @@ function DetailContent({ cabinetId, initialMode }: {
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      {/* min-h-0 обязателен — без него flex-1 не сжимается ниже своего контента
+          (дефолтный min-height: auto у flex-элементов), и вместо внутреннего скролла
+          вся модалка вылезала за max-h-[85vh] и обрезалась overflow-hidden в AppModal.
+          Особенно заметно в режиме редактирования: LocationRow добавляет на вкладке
+          ~250px карты, которые раньше в узких/невысоких окнах некуда было скроллить. */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {tab === 'info' && (
           <div className="divide-y divide-slate-50 dark:divide-slate-700/30">
             <DetailRow label="Тип" value={fields.type} editing={editing} onChange={set('type')} placeholder="Добавить тип" />

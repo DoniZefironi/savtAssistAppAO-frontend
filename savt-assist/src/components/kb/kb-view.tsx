@@ -805,7 +805,9 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose, isReadO
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto">
+        {/* min-h-0 — иначе flex-1 не сжимается ниже контента и модалка вылезает
+            за max-h-[85vh] вместо внутреннего скролла (см. cabinet-detail-dialog.tsx) */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {tab === 'content' && (
             <div className="px-4 sm:px-6 py-4 space-y-4">
               <div>

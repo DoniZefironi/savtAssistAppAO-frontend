@@ -89,9 +89,13 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
           </div>
         </div>
       ) : !user ? null : (
-        <div className="flex flex-col max-h-[85vh]">
+        // min-w-0 на диве ниже — без него grid-item (Popup — display:grid) не
+        // сжимается ниже ширины контента и вылезает шире модалки, см. cabinet-detail-dialog.tsx
+        <div className="flex flex-col max-h-[85vh] min-w-0">
           <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-4 sm:px-6 py-4 sm:py-5 shrink-0">
-            <div className="flex items-start gap-3 sm:gap-4 pr-2">
+            {/* pr-8 (не pr-2) — иначе на узких экранах длинное имя пользователя
+                налезает на крестик закрытия (absolute right-3, w-7 ≈ 40px) */}
+            <div className="flex items-start gap-3 sm:gap-4 pr-8">
               <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
                 <UserIcon />
               </div>

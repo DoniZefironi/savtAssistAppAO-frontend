@@ -531,7 +531,9 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
 
   return (
     <AppModal open onClose={onClose}>
-      <div className="flex flex-col max-h-[85vh]">
+      {/* min-w-0 — без него grid-item (Popup — display:grid) не сжимается ниже
+          ширины контента и вылезает шире модалки, см. cabinet-detail-dialog.tsx */}
+      <div className="flex flex-col max-h-[85vh] min-w-0">
       <DialogHeader
         icon={<AddModalIcon />}
         title={`Заявка на добавление #${request.id}`}
@@ -542,7 +544,9 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
           </span>
         }
       />
-      <div className="flex-1 overflow-y-auto">
+      {/* min-h-0 — иначе flex-1 не сжимается ниже контента и модалка вылезает
+          за max-h-[85vh] вместо внутреннего скролла (см. cabinet-detail-dialog.tsx) */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
       <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
         <DRowLink label="Пользователь" value={request.user_full_name ?? `#${request.user_id}`} onClick={() => setSubUserId(request.user_id)} />
         <DRow label="Телефон" value={request.user_phone ?? '—'} />
@@ -676,7 +680,9 @@ function ShareDialog({ request, onClose }: { request: ShareRequest; onClose: () 
 
   return (
     <AppModal open onClose={onClose}>
-      <div className="flex flex-col max-h-[85vh]">
+      {/* min-w-0 — без него grid-item (Popup — display:grid) не сжимается ниже
+          ширины контента и вылезает шире модалки, см. cabinet-detail-dialog.tsx */}
+      <div className="flex flex-col max-h-[85vh] min-w-0">
       <DialogHeader
         icon={<ShareModalIcon />}
         title={`Заявка на доступ #${request.id}`}
@@ -687,7 +693,9 @@ function ShareDialog({ request, onClose }: { request: ShareRequest; onClose: () 
           </span>
         }
       />
-      <div className="flex-1 overflow-y-auto">
+      {/* min-h-0 — иначе flex-1 не сжимается ниже контента и модалка вылезает
+          за max-h-[85vh] вместо внутреннего скролла (см. cabinet-detail-dialog.tsx) */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
       <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
         <DRowLink label="Пользователь" value={request.user_full_name ?? `#${request.user_id}`} onClick={() => setSubUserId(request.user_id)} />
         <DRow label="Телефон" value={request.user_phone ?? '—'} />
@@ -789,7 +797,9 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
 
   return (
     <AppModal open onClose={onClose}>
-      <div className="flex flex-col max-h-[85vh]">
+      {/* min-w-0 — без него grid-item (Popup — display:grid) не сжимается ниже
+          ширины контента и вылезает шире модалки, см. cabinet-detail-dialog.tsx */}
+      <div className="flex flex-col max-h-[85vh] min-w-0">
       <DialogHeader
         icon={<DocRequestModalIcon />}
         title={`Заявка на документ #${request.id}`}
@@ -800,7 +810,9 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
           </span>
         }
       />
-      <div className="flex-1 overflow-y-auto">
+      {/* min-h-0 — иначе flex-1 не сжимается ниже контента и модалка вылезает
+          за max-h-[85vh] вместо внутреннего скролла (см. cabinet-detail-dialog.tsx) */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
       <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
         <DRowLink label="Пользователь" value={request.user_full_name ?? `#${request.user_id}`} onClick={() => setSubUserId(request.user_id)} />
         <DRow label="Телефон" value={request.user_phone ?? '—'} />
