@@ -1,14 +1,30 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { botApi } from '@/lib/api/bot'
 import type { ReindexResult } from '@/lib/api/bot'
 import { Button } from '@/components/ui/button'
+import { useAuthStore } from '@/lib/store/auth'
 
 export default function AdminSettingsPage() {
+  const user = useAuthStore((s) => s.user)
+  const router = useRouter()
+  const isOperator = user?.role === 'operator'
+
+  // Рассылка и переиндексация бота — только для администратора (см. README-backend.md:
+  // POST /admin/notifications/broadcast и /admin/bot/reindex оба вернут 403 оператору).
+  // Ссылка на страницу скрыта в навигации (admin-sidebar.tsx, admin-header.tsx), но при
+  // прямом переходе по URL без этой проверки оператор увидел бы всю форму до клика.
+  useEffect(() => {
+    if (isOperator) router.replace('/operator/dashboard')
+  }, [isOperator, router])
+
+  if (isOperator) return null
+
   return (
     <div className="flex flex-col h-full overflow-y-auto bg-slate-50 dark:bg-slate-900">
       <div className="px-3 sm:px-6 pt-4 sm:pt-6 pb-4 sm:pb-5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
