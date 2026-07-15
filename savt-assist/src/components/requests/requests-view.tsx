@@ -14,6 +14,7 @@ import { useAuthStore } from '@/lib/store/auth'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { CabinetCombobox } from '@/components/ui/cabinet-combobox'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import { RequestCard, ServiceCardIcon, AdditionCardIcon, ShareCardIcon, StatusPill, TypePill } from './request-card'
 import { UserDialog } from '@/components/users/user-dialog'
@@ -499,7 +500,7 @@ function useAdminDisplayName(adminId: number | null): string {
 function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClose: () => void }) {
   const qc = useQueryClient()
   const [action, setAction] = useState<'approve' | 'reject' | null>(null)
-  const [cabinetId, setCabinetId] = useState('')
+  const [cabinetId, setCabinetId] = useState<number | null>(null)
   const [approveNote, setApproveNote] = useState('')
   const [rejectNote, setRejectNote] = useState('')
   const [subUserId, setSubUserId] = useState<number | null>(null)
@@ -512,12 +513,12 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
   }
 
   const approveMut = useMutation({
-    mutationFn: () => requestsApi.approveAddition(request.id, parseInt(cabinetId), approveNote || null),
+    mutationFn: () => requestsApi.approveAddition(request.id, cabinetId!, approveNote || null),
     onSuccess: () => { invalidate(); toast.success('Заявка одобрена'); onClose() },
-    // 404 — указанный ШУ не существует (опечатка в ID или ШУ удалили, пока заявка ждала одобрения)
+    // 404 — выбранный ШУ уже не существует (удалили, пока заявка ждала одобрения)
     onError: (e) => {
       if (isAxiosError(e) && e.response?.status === 404) {
-        toast.error('ШУ с таким ID не найден — проверьте ID или создайте ШУ заново')
+        toast.error('Выбранный ШУ не найден — возможно, его удалили')
       } else toast.error('Ошибка при одобрении')
     },
   })
@@ -592,15 +593,9 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
           <div className="space-y-3">
             <div>
               <label className="text-xs font-medium text-slate-500 block mb-1">
-                ID шкафа управления <span className="text-red-500">*</span>
+                Шкаф управления <span className="text-red-500">*</span>
               </label>
-              <input
-                type="number"
-                value={cabinetId}
-                onChange={e => setCabinetId(e.target.value)}
-                placeholder="Введите ID ШУ"
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800/50 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
-              />
+              <CabinetCombobox value={cabinetId} onChange={setCabinetId} />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-500 block mb-1">Комментарий</label>
@@ -610,7 +605,7 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
               <Button variant="ghost" onClick={() => setAction(null)} className="cursor-pointer">Назад</Button>
               <Button
                 onClick={() => approveMut.mutate()}
-                disabled={!cabinetId || approveMut.isPending}
+                disabled={cabinetId == null || approveMut.isPending}
                 className="bg-green-600 hover:bg-green-700 cursor-pointer"
               >
                 {approveMut.isPending ? 'Обработка...' : 'Подтвердить'}
