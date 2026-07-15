@@ -30,7 +30,8 @@
       "Bash(rm -f /tmp/voice_login2.json /tmp/voice_cookies2.txt)",
       "Bash(curl -s -c /tmp/voice_cookies2.txt -X POST http://localhost:3000/api/auth/login -H \"Content-Type: application/json\" -d '{\"login\":\"admin\",\"password\":\"123qweASDZXC\"}' -o /tmp/voice_login2.json -w \"login: %{http_code}\\\\n\")",
       "Bash(sed -n 's/.*\"access_token\":\"\\\\\\([^\"]*\\\\\\)\".*/\\\\1/p' /tmp/voice_login2.json)",
-      "Bash(time curl -s -X POST http://localhost:3000/backend/upload/transcribe -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' -d '{\"file_url\":\"/static/voices/d50a0a678fd74e7f992c7701f5d39973.m4a\"}' -w '\\\\nstatus: %{http_code}\\\\n')"
+      "Bash(time curl -s -X POST http://localhost:3000/backend/upload/transcribe -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' -d '{\"file_url\":\"/static/voices/d50a0a678fd74e7f992c7701f5d39973.m4a\"}' -w '\\\\nstatus: %{http_code}\\\\n')",
+      "Bash(xargs -I{} echo {})"
     ]
   }
 }

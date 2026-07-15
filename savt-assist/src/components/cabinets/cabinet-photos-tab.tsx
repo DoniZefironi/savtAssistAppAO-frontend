@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { mediaApi } from '@/lib/api/media'
 import type { CabinetPhoto } from '@/lib/api/media'
-import { fmtSize } from './cabinet-dialog-shared'
+import { fmtSize, validatePhotoFile } from './cabinet-dialog-shared'
 import { ImageIcon, PencilIcon, TrashIcon, UploadIcon, XIcon, ChevronLeftIcon, ChevronRightIcon } from './cabinet-dialog-icons'
 
 export function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }) {
@@ -58,6 +58,8 @@ export function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    const error = validatePhotoFile(file)
+    if (error) { toast.error(error); e.target.value = ''; return }
     setPendingFile(file)
     setCaption('')
     e.target.value = ''
@@ -67,7 +69,9 @@ export function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: 
     e.preventDefault()
     if (!isAdmin || pendingFile) return
     const file = e.dataTransfer.files?.[0]
-    if (!file || !file.type.startsWith('image/')) return
+    if (!file) return
+    const error = validatePhotoFile(file)
+    if (error) { toast.error(error); return }
     setPendingFile(file)
     setCaption('')
   }
@@ -193,7 +197,7 @@ function PhotoTile({ photo, onOpen, onDelete, onUpdate, deleting, updating }: {
   const [editOrder, setEditOrder] = useState(String(photo.sort_order))
 
   const handleSave = () => {
-    onUpdate?.(editCaption.trim() || null, parseInt(editOrder) || 0)
+    onUpdate?.(editCaption.trim() || null, Math.max(0, parseInt(editOrder) || 0))
     setEditing(false)
   }
 
@@ -219,6 +223,7 @@ function PhotoTile({ photo, onOpen, onDelete, onUpdate, deleting, updating }: {
             <span className="text-white/70 text-xs shrink-0">Порядок</span>
             <input
               type="number"
+              min={0}
               value={editOrder}
               onChange={e => setEditOrder(e.target.value)}
               className="w-16 text-xs px-2 py-0.5 rounded bg-white/90 text-slate-800 outline-none"

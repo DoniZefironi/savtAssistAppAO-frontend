@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { CheckCircle2, XCircle } from 'lucide-react'
 import { usersApi } from '@/lib/api/users'
 import { useAuthStore } from '@/lib/store/auth'
-import { isSuperadminRole } from '@/lib/utils'
+import { cn, isSuperadminRole } from '@/lib/utils'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -19,6 +19,7 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
   const isReadOnly = currentUser?.role === 'operator'
   const [banStep, setBanStep] = useState(false)
   const [banReason, setBanReason] = useState('')
+  const [banReasonError, setBanReasonError] = useState(false)
   const [deleteStep, setDeleteStep] = useState(false)
   const [selectedCabinetId, setSelectedCabinetId] = useState<number | null>(null)
 
@@ -66,6 +67,11 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
   })
 
   const isMutating = verifyMut.isPending || unverifyMut.isPending || banMut.isPending || unbanMut.isPending || deleteOperatorMut.isPending
+
+  const handleBanClick = () => {
+    if (!banReason.trim()) { setBanReasonError(true); return }
+    banMut.mutate()
+  }
 
   return (
     <AppModal open onClose={onClose}>
@@ -191,14 +197,20 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
                 </label>
                 <textarea
                   value={banReason}
-                  onChange={e => setBanReason(e.target.value)}
+                  onChange={e => { setBanReason(e.target.value); setBanReasonError(false) }}
                   placeholder="Укажите причину блокировки"
                   rows={2}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 resize-none focus:outline-none focus:border-[#4A8FE7]"
+                  className={cn(
+                    'w-full px-3 py-2 rounded-lg border bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 resize-none focus:outline-none',
+                    banReasonError
+                      ? 'border-red-400 focus:border-red-500 dark:border-red-500'
+                      : 'border-slate-200 dark:border-slate-600 focus:border-[#4A8FE7]'
+                  )}
                 />
+                {banReasonError && <p className="text-xs text-red-500">Обязательное поле</p>}
                 <div className="flex justify-end gap-2">
-                  <Button variant="ghost" onClick={() => { setBanStep(false); setBanReason('') }} disabled={banMut.isPending} className="cursor-pointer">Отмена</Button>
-                  <Button onClick={() => banMut.mutate()} disabled={!banReason.trim() || banMut.isPending} className="bg-red-500 hover:bg-red-600 cursor-pointer">
+                  <Button variant="ghost" onClick={() => { setBanStep(false); setBanReason(''); setBanReasonError(false) }} disabled={banMut.isPending} className="cursor-pointer">Отмена</Button>
+                  <Button onClick={handleBanClick} disabled={banMut.isPending} className="bg-red-500 hover:bg-red-600 cursor-pointer">
                     {banMut.isPending ? 'Блокировка...' : 'Подтвердить'}
                   </Button>
                 </div>

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cabinetsApi } from '@/lib/api/cabinets'
@@ -78,6 +79,15 @@ function UserRow({ user, isAdmin, onView, onRemove, removing }: {
 }) {
   const [showForm, setShowForm] = useState(false)
   const [reason, setReason] = useState('')
+  const [reasonError, setReasonError] = useState(false)
+
+  const handleRemoveClick = () => {
+    if (!reason.trim()) { setReasonError(true); return }
+    onRemove(reason)
+    setShowForm(false)
+    setReason('')
+    setReasonError(false)
+  }
 
   function fmtDate(d: string) {
     return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -131,23 +141,29 @@ function UserRow({ user, isAdmin, onView, onRemove, removing }: {
           </label>
           <textarea
             value={reason}
-            onChange={e => setReason(e.target.value)}
+            onChange={e => { setReason(e.target.value); setReasonError(false) }}
             placeholder="Укажите причину"
             rows={2}
-            className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 resize-none focus:outline-none focus:border-[#4A8FE7]"
+            className={cn(
+              'w-full px-3 py-2 rounded-lg border bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 resize-none focus:outline-none',
+              reasonError
+                ? 'border-red-400 focus:border-red-500 dark:border-red-500'
+                : 'border-slate-200 dark:border-slate-600 focus:border-[#4A8FE7]'
+            )}
           />
+          {reasonError && <p className="text-xs text-red-500">Обязательное поле</p>}
           <div className="flex justify-end gap-2">
             <Button
               variant="ghost"
-              onClick={() => { setShowForm(false); setReason('') }}
+              onClick={() => { setShowForm(false); setReason(''); setReasonError(false) }}
               disabled={removing}
               className="h-7 text-xs px-2 cursor-pointer"
             >
               Отмена
             </Button>
             <Button
-              onClick={() => { onRemove(reason); setShowForm(false); setReason('') }}
-              disabled={!reason.trim() || removing}
+              onClick={handleRemoveClick}
+              disabled={removing}
               className="h-7 text-xs px-3 bg-red-500 hover:bg-red-600 cursor-pointer"
             >
               {removing ? 'Откреп...' : 'Открепить'}

@@ -10,7 +10,7 @@ import { mediaApi } from '@/lib/api/media'
 import type { CabinetDocument } from '@/lib/api/media'
 import { kbApi } from '@/lib/api/kb'
 import type { Tag } from '@/lib/api/tags'
-import { fmtSize } from './cabinet-dialog-shared'
+import { fmtSize, validateDocFile, DOC_ACCEPT } from './cabinet-dialog-shared'
 import { FileIcon, PdfIcon, ImageIcon, TrashIcon, UploadIcon, DownloadIcon, TagIcon } from './cabinet-dialog-icons'
 
 export function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }) {
@@ -50,6 +50,8 @@ export function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: bo
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    const error = validateDocFile(file)
+    if (error) { toast.error(error); e.target.value = ''; return }
     setPending({ file, title: file.name.replace(/\.[^.]+$/, ''), requiresApproval: false })
     e.target.value = ''
   }
@@ -59,6 +61,8 @@ export function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: bo
     if (!isAdmin || pending) return
     const file = e.dataTransfer.files?.[0]
     if (!file) return
+    const error = validateDocFile(file)
+    if (error) { toast.error(error); return }
     setPending({ file, title: file.name.replace(/\.[^.]+$/, ''), requiresApproval: false })
   }
 
@@ -68,7 +72,7 @@ export function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: bo
     <div onDragOver={e => e.preventDefault()} onDrop={handleDrop}>
       {isAdmin && (
         <div className="px-6 py-3 border-b border-slate-50 dark:border-slate-700/30">
-          <input ref={fileRef} type="file" className="hidden" onChange={handleFileSelect} />
+          <input ref={fileRef} type="file" accept={DOC_ACCEPT} className="hidden" onChange={handleFileSelect} />
           {pending ? (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
@@ -80,8 +84,11 @@ export function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: bo
                 value={pending.title}
                 onChange={e => setPending(p => p ? { ...p, title: e.target.value } : p)}
                 placeholder="Название документа"
-                className="w-full px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+                className={`w-full px-3 py-1.5 text-sm border rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none ${
+                  pending.title.trim() ? 'border-slate-200 dark:border-slate-600 focus:border-[#4A8FE7]' : 'border-red-400 dark:border-red-500 focus:border-red-500'
+                }`}
               />
+              {!pending.title.trim() && <p className="text-xs text-red-500">Обязательное поле</p>}
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 text-xs text-slate-500 cursor-pointer select-none">
                   <input
@@ -96,7 +103,7 @@ export function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: bo
                   <Button variant="ghost" onClick={() => setPending(null)} className="h-7 text-xs px-2 cursor-pointer">Отмена</Button>
                   <Button
                     onClick={() => uploadMut.mutate()}
-                    disabled={uploadMut.isPending}
+                    disabled={uploadMut.isPending || !pending.title.trim()}
                     className="h-7 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
                   >
                     {uploadMut.isPending ? 'Загрузка...' : 'Загрузить'}

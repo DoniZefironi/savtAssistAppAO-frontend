@@ -53,6 +53,7 @@ function DetailContent({ cabinetId, initialMode }: {
   const [tab, setTab] = useState<Tab>('info')
   const [editing, setEditing] = useState(initialMode === 'edit')
   const [fields, setFields] = useState<FormFields | null>(null)
+  const [errors, setErrors] = useState<FormErrors>({})
 
   const { data: cabinet, isLoading } = useQuery({
     queryKey: ['cabinet', cabinetId],
@@ -77,11 +78,15 @@ function DetailContent({ cabinetId, initialMode }: {
 
   const handleSave = () => {
     if (!fields) return
+    const errs = validate(fields)
+    if (Object.keys(errs).length > 0) { setErrors(errs); return }
+    setErrors({})
     updateMutation.mutate(fieldsToDto(fields))
   }
 
   const handleCancel = () => {
     if (cabinet) setFields(cabinetToFields(cabinet))
+    setErrors({})
     setEditing(false)
   }
 
@@ -95,8 +100,10 @@ function DetailContent({ cabinetId, initialMode }: {
   }
 
   const set = (key: keyof FormFields) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       setFields((p) => p ? { ...p, [key]: e.target.value } : p)
+      setErrors((prev) => ({ ...prev, [key]: undefined }))
+    }
 
   const TABS: { id: Tab; label: string }[] = [
     { id: 'info', label: 'Информация' },
@@ -134,8 +141,12 @@ function DetailContent({ cabinetId, initialMode }: {
                   value={fields.object_number}
                   onChange={set('object_number')}
                   placeholder="Номер объекта"
-                  className="w-full text-sm text-white/60 bg-transparent border-b border-white/20 focus:border-white/50 outline-none placeholder:text-white/20 mt-1.5"
+                  className={cn(
+                    'w-full text-sm text-white/60 bg-transparent border-b outline-none placeholder:text-white/20 mt-1.5',
+                    errors.object_number ? 'border-red-300 focus:border-red-300' : 'border-white/20 focus:border-white/50'
+                  )}
                 />
+                {errors.object_number && <p className="text-xs text-red-200 mt-0.5">{errors.object_number}</p>}
               </>
             ) : (
               <>
@@ -178,12 +189,12 @@ function DetailContent({ cabinetId, initialMode }: {
       <div className="flex-1 min-h-0 overflow-y-auto">
         {tab === 'info' && (
           <div className="divide-y divide-slate-50 dark:divide-slate-700/30">
-            <DetailRow label="Тип" value={fields.type} editing={editing} onChange={set('type')} placeholder="Добавить тип" />
+            <DetailRow label="Тип" value={fields.type} editing={editing} onChange={set('type')} placeholder="Добавить тип" error={errors.type} />
             <DetailRow label="Описание" value={fields.description} editing={editing} onChange={set('description')} placeholder="Добавить описание" multiline />
             <DetailRow label="Назначение" value={fields.purpose} editing={editing} onChange={set('purpose')} placeholder="Добавить назначение" />
             <DetailRow label="Комментарий" value={fields.admin_comment} editing={editing} onChange={set('admin_comment')} placeholder="Добавить комментарий" multiline />
-            <DateRow label="Гарантия с" value={fields.warranty_start} editing={editing} onChange={(v) => setFields((p) => p ? { ...p, warranty_start: v } : p)} />
-            <DateRow label="Гарантия до" value={fields.warranty_end} editing={editing} onChange={(v) => setFields((p) => p ? { ...p, warranty_end: v } : p)} />
+            <DateRow label="Гарантия с" value={fields.warranty_start} editing={editing} onChange={(v) => { setFields((p) => p ? { ...p, warranty_start: v } : p); setErrors((prev) => ({ ...prev, warranty_start: undefined })) }} />
+            <DateRow label="Гарантия до" value={fields.warranty_end} editing={editing} onChange={(v) => { setFields((p) => p ? { ...p, warranty_end: v } : p); setErrors((prev) => ({ ...prev, warranty_end: undefined })) }} error={errors.warranty_end} />
             <LocationRow
               lat={fields.latitude}
               lng={fields.longitude}
@@ -229,37 +240,34 @@ function DetailContent({ cabinetId, initialMode }: {
   )
 }
 
-function DetailRow({ label, value, editing, onChange, placeholder, multiline }: {
+function DetailRow({ label, value, editing, onChange, placeholder, multiline, error }: {
   label: string
   value: string
   editing: boolean
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void
   placeholder: string
   multiline?: boolean
+  error?: string
 }) {
   const isEmpty = !value.trim()
+  const fieldClass = cn(
+    'w-full text-sm text-slate-700 dark:text-slate-400 bg-transparent border-b outline-none placeholder:text-slate-300 placeholder:italic',
+    error ? 'border-red-400 focus:border-red-500 dark:border-red-500' : 'border-slate-200 focus:border-[#4A8FE7]'
+  )
   return (
     // На мобильном лейбл над значением — «Местоположение»/длинные лейблы иначе переносились
     // посреди слова при фикс. ширине колонки
     <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4 px-4 sm:px-6 py-3">
       <span className="text-xs text-slate-400 sm:w-28 shrink-0 sm:pt-0.5">{label}</span>
       {editing ? (
-        multiline ? (
-          <textarea
-            value={value}
-            onChange={onChange}
-            placeholder={placeholder}
-            rows={2}
-            className="flex-1 text-sm text-slate-700 dark:text-slate-400 bg-transparent border-b border-slate-200 focus:border-[#4A8FE7] outline-none placeholder:text-slate-300 placeholder:italic resize-none py-0"
-          />
-        ) : (
-          <input
-            value={value}
-            onChange={onChange}
-            placeholder={placeholder}
-            className="flex-1 text-sm text-slate-700 dark:text-slate-400 bg-transparent border-b border-slate-200 focus:border-[#4A8FE7] outline-none placeholder:text-slate-300 placeholder:italic"
-          />
-        )
+        <div className="flex-1 min-w-0">
+          {multiline ? (
+            <textarea value={value} onChange={onChange} placeholder={placeholder} rows={2} className={cn(fieldClass, 'resize-none py-0')} />
+          ) : (
+            <input value={value} onChange={onChange} placeholder={placeholder} className={fieldClass} />
+          )}
+          {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+        </div>
       ) : (
         <span className={`flex-1 text-sm ${isEmpty ? 'text-slate-300 italic' : 'text-slate-700 dark:text-slate-200 font-medium'}`}>
           {isEmpty ? placeholder : value}
@@ -269,23 +277,30 @@ function DetailRow({ label, value, editing, onChange, placeholder, multiline }: 
   )
 }
 
-function DateRow({ label, value, editing, onChange }: {
+function DateRow({ label, value, editing, onChange, error }: {
   label: string
   value: string
   editing: boolean
   onChange: (v: string) => void
+  error?: string
 }) {
   const display = value ? formatDate(new Date(value).toISOString()) : ''
   return (
     <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4 px-4 sm:px-6 py-3">
       <span className="text-xs text-slate-400 sm:w-28 shrink-0 sm:pt-0.5">{label}</span>
       {editing ? (
-        <input
-          type="date"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="text-sm text-slate-700 dark:text-slate-400 border border-slate-200 rounded-lg px-2 py-0.5 focus:outline-none focus:border-[#4A8FE7]"
-        />
+        <div>
+          <input
+            type="date"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className={cn(
+              'text-sm text-slate-700 dark:text-slate-400 border rounded-lg px-2 py-0.5 focus:outline-none',
+              error ? 'border-red-400 focus:border-red-500 dark:border-red-500' : 'border-slate-200 focus:border-[#4A8FE7]'
+            )}
+          />
+          {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+        </div>
       ) : (
         <span className={`text-sm ${display ? 'text-slate-700 dark:text-slate-200 font-medium' : 'text-slate-300 italic'}`}>
           {display || 'Не указана'}
@@ -306,6 +321,18 @@ interface FormFields {
   warranty_end: string
   latitude: number | null
   longitude: number | null
+}
+
+type FormErrors = Partial<Record<keyof FormFields, string>>
+
+function validate(f: FormFields): FormErrors {
+  const e: FormErrors = {}
+  if (!f.object_number.trim()) e.object_number = 'Обязательное поле'
+  if (!f.type.trim()) e.type = 'Обязательное поле'
+  if (f.warranty_start && f.warranty_end && new Date(f.warranty_end) < new Date(f.warranty_start)) {
+    e.warranty_end = 'Не может быть раньше даты начала'
+  }
+  return e
 }
 
 function cabinetToFields(c: Cabinet): FormFields {

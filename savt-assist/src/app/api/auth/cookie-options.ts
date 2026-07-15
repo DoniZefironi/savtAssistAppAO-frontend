@@ -12,16 +12,19 @@ function getJwtExpirySeconds(token: string): number | undefined {
 }
 
 // Secure-cookie браузер молча не сохранит, если реальное соединение идёт по http
-// (напр. переходный режим без TLS, см. README-backend.md). NODE_ENV=production
-// сам по себе ничего не говорит о схеме — в Docker он захардкожен в образе и
-// остаётся 'production', даже когда nginx перед приложением ещё отдаёт голый
-// http. Поэтому смотрим на X-Forwarded-Proto от прокси (стандартный заголовок
-// nginx/трафика), и только если его нет вовсе (нет прокси, голый `next start`)
-// — откатываемся на NODE_ENV как раньше.
+// (напр. переходный режим без TLS, см. README-backend.md). Поэтому смотрим на
+// X-Forwarded-Proto от прокси (стандартный заголовок nginx/трафика), а если
+// прокси нет (голый `next start`, в т.ч. локально на http://localhost) — берём
+// схему из самого request.url, а не из NODE_ENV: NODE_ENV=production ничего не
+// говорит о реальной схеме соединения (в Docker он захардкожен в образе).
 function isRequestSecure(request: Request): boolean {
   const proto = request.headers.get('x-forwarded-proto')
   if (proto) return proto === 'https'
-  return process.env.NODE_ENV === 'production'
+  try {
+    return new URL(request.url).protocol === 'https:'
+  } catch {
+    return process.env.NODE_ENV === 'production'
+  }
 }
 
 export function refreshCookieOptions(refreshToken: string, request: Request) {

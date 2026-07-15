@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import axios from 'axios'
-import { setAccessToken } from '@/lib/api/client'
+import { refreshTokens } from '@/lib/api/client'
 import { authApi } from '@/lib/api/auth'
 import { useAuthStore } from '@/lib/store/auth'
 
@@ -11,6 +10,10 @@ import { useAuthStore } from '@/lib/store/auth'
 // перезагрузке страницы его нужно восстановить: молча обмениваем HttpOnly
 // refresh_token cookie на новый access_token и синхронизируем профиль,
 // прежде чем показывать защищённый контент (иначе запросы уйдут без токена).
+// refreshTokens() (а не прямой axios.post) — чтобы использовать общий с
+// client.ts дедуп: в дев-режиме React Strict Mode монтирует эффект дважды,
+// и два параллельных вызова /api/auth/refresh с одним refresh_token cookie
+// гоняются за одноразовой ротацией токена на бэкенде — второй всегда 401.
 export function AuthBootstrap({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false)
   const setUser = useAuthStore((s) => s.setUser)
@@ -21,8 +24,7 @@ export function AuthBootstrap({ children }: { children: React.ReactNode }) {
 
     async function bootstrap() {
       try {
-        const { data } = await axios.post<{ access_token: string }>('/api/auth/refresh')
-        setAccessToken(data.access_token)
+        await refreshTokens()
         const user = await authApi.me()
         if (cancelled) return
         setUser(user)

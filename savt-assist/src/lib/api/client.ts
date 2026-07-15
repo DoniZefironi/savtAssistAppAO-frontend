@@ -41,7 +41,7 @@ apiClient.interceptors.request.use((config) => {
 // refresh_token cookie на сервере (недоступную из браузерного JS) и обновляет её.
 let refreshPromise: Promise<string> | null = null
 
-async function refreshTokens(): Promise<string> {
+export async function refreshTokens(): Promise<string> {
   try {
     if (!refreshPromise) {
       refreshPromise = axios

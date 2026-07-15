@@ -34,6 +34,11 @@ function validate(form: CreateCabinetDto): FormErrors {
   const e: FormErrors = {}
   if (!form.type.trim()) e.type = 'Обязательное поле'
   if (!form.object_number.trim()) e.object_number = 'Обязательное поле'
+  // Бэкенд требует обе даты гарантии при создании ШУ (POST /admin/cabinets
+  // отклоняет null 422-й ошибкой datetime_type) — в отличие от PATCH при
+  // редактировании, где они необязательны.
+  if (!form.warranty_starts_at) e.warranty_starts_at = 'Обязательное поле'
+  if (!form.warranty_ends_at) e.warranty_ends_at = 'Обязательное поле'
   if (form.warranty_starts_at && form.warranty_ends_at) {
     if (new Date(form.warranty_ends_at) < new Date(form.warranty_starts_at)) {
       e.warranty_ends_at = 'Не может быть раньше даты начала'
@@ -176,13 +181,14 @@ export function CreateCabinetDialog({ open, onClose }: Props) {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field
-                label="Гарантия с"
+                label="Гарантия с *"
                 value={form.warranty_starts_at ?? ''}
                 onChange={set('warranty_starts_at')}
                 type="date"
+                error={errors.warranty_starts_at}
               />
               <Field
-                label="Гарантия до"
+                label="Гарантия до *"
                 value={form.warranty_ends_at ?? ''}
                 onChange={set('warranty_ends_at')}
                 type="date"
