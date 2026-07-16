@@ -99,6 +99,9 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const [jumpMode, setJumpMode] = useState(false)
   const jumpTargetRef = useRef<number | null>(null)
   const jumpScrolledRef = useRef(false)
+  const [newMessageCount, setNewMessageCount] = useState(0)
+  const [firstNewMessageId, setFirstNewMessageId] = useState<number | null>(null)
+  const [isAwayFromBottom, setIsAwayFromBottom] = useState(false)
   const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; messageId: number } | null>(null)
   const [isDarkMode, setIsDarkMode] = useState(() =>
@@ -107,6 +110,12 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   // Объявлены здесь (а не рядом с остальными handleXxx ниже), потому что на них
   // ссылаются эффекты выше по файлу — иначе JS TDZ ловит "used before declaration".
+  const isNearBottom = useCallback(() => {
+    const el = listRef.current
+    if (!el) return true
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 120
+  }, [])
+
   const highlightMessage = useCallback((messageId: number) => {
     const el = document.getElementById(`msg-${messageId}`)
     const container = listRef.current
@@ -198,11 +207,19 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
       case 'message.created': {
         if (jumpMode) return
         const msg = envelope.data as ChatMessage
+        const wasAtBottom = isNearBottom()
+        let appended = false
         qc.setQueryData<MsgPages>(['messages', chat.id], (old) => {
           if (!old) return old
           if (old.pages.some(page => page.some(m => m.id === msg.id))) return old
+          appended = true
           return { ...old, pages: [[msg, ...(old.pages[0] ?? [])], ...old.pages.slice(1)] }
         })
+        if (appended && !wasAtBottom) {
+          setNewMessageCount(c => c + 1)
+          setFirstNewMessageId(id => id ?? msg.id)
+          setIsAwayFromBottom(true)
+        }
         return
       }
       case 'message.updated': {
@@ -223,7 +240,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
       case 'message.unpinned':
         qc.invalidateQueries({ queryKey: ['pinned-messages', chat.id] })
     }
-  }, [qc, chat.id, jumpMode])
+  }, [qc, chat.id, jumpMode, isNearBottom])
 
   const handleRealtimeReconnect = useCallback(() => {
     qc.invalidateQueries({ queryKey: ['messages', chat.id] })
@@ -256,6 +273,9 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     setFirstUnreadId(undefined)
     setJumpMode(false)
     jumpTargetRef.current = null
+    setNewMessageCount(0)
+    setFirstNewMessageId(null)
+    setIsAwayFromBottom(false)
   }, [chat.id])
   useEffect(() => { if (messages.length > 0) onMessagesLoaded?.() }, [messages.length])
 
@@ -281,11 +301,8 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     }
     if (jumpTargetRef.current !== null) return
     if (jumpScrolledRef.current) return
-    const el = listRef.current
-    if (!el) return
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120
-    if (atBottom) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length])
+    if (isNearBottom()) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages.length, isNearBottom])
   useEffect(() => {
     if (!firstUnreadId || scrolledToUnreadRef.current) return
     scrolledToUnreadRef.current = true
@@ -361,6 +378,8 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
       )
       setText(''); setPendingAttachments([]); setReplyTo(null)
       if (textareaRef.current) textareaRef.current.style.height = 'auto'
+      setNewMessageCount(0)
+      setFirstNewMessageId(null)
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
     },
     onError: () => toast.error('Не удалось отправить'),
@@ -486,6 +505,34 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     if (e.key === 'Escape') cancelContext()
   }
 
+  const handleListScroll = useCallback(() => {
+    const atBottom = isNearBottom()
+    setIsAwayFromBottom(!atBottom)
+    if (atBottom && newMessageCount > 0) {
+      setNewMessageCount(0)
+      setFirstNewMessageId(null)
+    }
+  }, [newMessageCount, isNearBottom])
+
+  const scrollToBottom = useCallback(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    setNewMessageCount(0)
+    setFirstNewMessageId(null)
+  }, [])
+
+  // Стрелка «вниз»: если пока сидели выше низа пришли новые сообщения — ведёт
+  // к первому из них (highlightMessage — оно уже в DOM, т.к. добавлено в кэш
+  // напрямую в handleRealtimeEvent, а не отдельной подгрузкой), иначе — в самый низ.
+  const handleJumpButtonClick = useCallback(() => {
+    if (newMessageCount > 0 && firstNewMessageId != null) {
+      highlightMessage(firstNewMessageId)
+      setNewMessageCount(0)
+      setFirstNewMessageId(null)
+      return
+    }
+    scrollToBottom()
+  }, [newMessageCount, firstNewMessageId, highlightMessage, scrollToBottom])
+
   const handleReply = useCallback((msg: ChatMessage) => { setReplyTo(msg); setEditingMessage(null); textareaRef.current?.focus() }, [])
   const handleEdit = useCallback((msg: ChatMessage) => {
     setEditingMessage(msg); setReplyTo(null); setText(msg.text ?? '')
@@ -500,6 +547,8 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     setJumpMode(false)
     jumpTargetRef.current = null
     jumpScrolledRef.current = false
+    setNewMessageCount(0)
+    setFirstNewMessageId(null)
     await qc.resetQueries({ queryKey: ['messages', chat.id] })
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
@@ -610,7 +659,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   }, [rawAttachments])
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
       <ChatHeader
         onBack={onBack}
         searchOpen={searchOpen}
@@ -664,6 +713,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         }
         className={cn('flex-1 overflow-y-auto px-2 py-1 relative', isDragOver && 'ring-2 ring-inset ring-[#4A8FE7]')}
         onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
+        onScroll={handleListScroll}
       >
         {isDragOver && (
           <div className="absolute inset-0 bg-[#4A8FE7]/10 flex flex-col items-center justify-center z-20 pointer-events-none">
@@ -745,15 +795,37 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         )}
         <div ref={bottomRef} />
         </div>
-        {jumpMode && (
-          <button
-            onClick={exitJumpMode}
-            className="absolute bottom-4 right-4 z-20 flex items-center gap-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-lg rounded-full px-3 py-1.5 text-xs font-medium text-[#1B3A72] dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-          >
-            Последние ↓
-          </button>
-        )}
       </div>
+
+      {/* Вынесены из listRef (там координаты absolute считались бы от нижнего края
+          самого списка сообщений, который "плавает" при росте композера — реплай,
+          вложения, многострочный текст сокращают flex-1 списка и сдвигают кнопку
+          вместе с ним). Здесь bottom считается от стабильного по высоте (h-full)
+          корня компонента, поэтому кнопка всегда в одном и том же месте. */}
+      {jumpMode && (
+        <button
+          onClick={exitJumpMode}
+          className="absolute bottom-20 right-4 z-30 flex items-center gap-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-lg rounded-full px-3 py-1.5 text-xs font-medium text-[#1B3A72] dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+        >
+          Последние ↓
+        </button>
+      )}
+      {!jumpMode && isAwayFromBottom && (
+        <button
+          onClick={handleJumpButtonClick}
+          title={newMessageCount > 0 ? 'К первому новому сообщению' : 'В конец'}
+          className="absolute bottom-20 right-4 z-30 w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-lg rounded-full text-[#1B3A72] dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+          </svg>
+          {newMessageCount > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 bg-[#1B3A72] text-white text-[10px] rounded-full flex items-center justify-center px-1 font-bold leading-none">
+              {newMessageCount > 99 ? '99+' : newMessageCount}
+            </span>
+          )}
+        </button>
+      )}
 
       {botActive && !searchOpen && !selectMode && (
         <div className="border-t border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 shrink-0">
