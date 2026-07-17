@@ -37,7 +37,8 @@
       "Bash(timeout 8 curl -sN -D - http://localhost:3000/backend/operator/events/chats?ticket=bogus -o /tmp/static_sse.out)",
       "Bash(echo \"exit=$?\")",
       "Bash(timeout 8 curl -sN -D - http://localhost:3000/backend/operator/events/chats/49?ticket=bogus -o /tmp/dynamic_sse.out)",
-      "Bash(curl -sN -D - \"http://10.1.0.208:8080/backend/operator/events/chats/49?ticket=k6Qu7V5HSnMZhTsEFDWwpNovhamoEjHt\" -m 40)"
+      "Bash(curl -sN -D - \"http://10.1.0.208:8080/backend/operator/events/chats/49?ticket=k6Qu7V5HSnMZhTsEFDWwpNovhamoEjHt\" -m 40)",
+      "Bash(curl -sN --compressed -D - \"http://10.1.0.208:8080/backend/operator/events/chats/49?ticket=L8wtO6OOKWerB3ex4GrhSG3I7ORJ3J8Q\" -m 30)"
     ]
   }
 }
