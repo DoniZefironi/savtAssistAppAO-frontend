@@ -13,6 +13,9 @@ export interface CabinetsParams {
   has_service_requests?: boolean
   warranty_status?: 'active' | 'expired' | 'none'
   tag_ids?: number[]
+  // false — только ШУ без привязанного проекта (см. обсуждение расширения
+  // GET /admin/cabinets в контексте раздела "Проекты ШУ")
+  has_project?: boolean
 }
 
 export interface CreateCabinetDto {
@@ -78,6 +81,9 @@ export const cabinetsApi = {
 
   updateCabinetTags: (cabinetId: number, tagIds: number[]): Promise<void> =>
     apiClient.put(`/admin/cabinets/${cabinetId}/tags`, { tag_ids: tagIds }).then(() => undefined),
+
+  setProject: (cabinetId: number, projectId: number | null): Promise<void> =>
+    apiClient.patch(`/admin/cabinets/${cabinetId}/project`, { project_id: projectId }).then(() => undefined),
 
   getCabinetUsers: async (cabinetId: number): Promise<CabinetUser[]> => {
     const { data } = await apiClient.get(`/admin/cabinets/${cabinetId}/users`)

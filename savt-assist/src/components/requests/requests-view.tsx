@@ -8,7 +8,7 @@ import { X, ClipboardList, SlidersHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toFullUrl } from '@/lib/api/base-url'
 import { requestsApi } from '@/lib/api/requests'
-import type { ServiceRequest, AdditionRequest, ShareRequest, DocumentRequest } from '@/lib/api/requests'
+import type { ServiceRequest, AdditionRequest, ShareRequest, DocumentRequest, ProjectRequest } from '@/lib/api/requests'
 import { usersApi } from '@/lib/api/users'
 import { useAuthStore } from '@/lib/store/auth'
 import { AppModal } from '@/components/ui/app-modal'
@@ -19,6 +19,7 @@ import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import { RequestCard, ServiceCardIcon, AdditionCardIcon, ShareCardIcon, StatusPill, TypePill } from './request-card'
 import { UserDialog } from '@/components/users/user-dialog'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
+import { ProjectDetailDialog } from '@/components/projects/project-detail-dialog'
 import { ServiceDialog } from './service-dialog'
 import {
   DRow, DRowLink, ModalTextarea, DialogHeader, VerifiedBadge,
@@ -26,7 +27,7 @@ import {
   userTypeLabel, fmtDate,
 } from './request-shared'
 
-type Tab = 'service' | 'additions' | 'shares' | 'docs'
+type Tab = 'service' | 'additions' | 'shares' | 'projects' | 'docs'
 
 // Сетка карточек заявок: 1 колонка на самых узких, до 4 на широких мониторах
 const GRID_CLASSES = 'grid grid-cols-1 min-[640px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3'
@@ -35,6 +36,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'service', label: 'Сервисные' },
   { id: 'additions', label: 'Добавление ШУ' },
   { id: 'shares', label: 'Доступ к ШУ' },
+  { id: 'projects', label: 'Проекты' },
   { id: 'docs', label: 'Документы' },
 ]
 
@@ -71,6 +73,13 @@ const SHARES_SORT = [
   { value: 'status', label: 'По статусу' },
   { value: 'user_full_name', label: 'По имени' },
   { value: 'cabinet_object_number', label: 'По ШУ' },
+]
+const PROJECTS_SORT = [
+  { value: 'created_at', label: 'По дате' },
+  { value: 'resolved_at', label: 'По рассмотрению' },
+  { value: 'status', label: 'По статусу' },
+  { value: 'user_full_name', label: 'По имени' },
+  { value: 'project_name', label: 'По проекту' },
 ]
 const DOC_SORT = [
   { value: 'created_at', label: 'По дате' },
@@ -112,6 +121,7 @@ export function RequestsView() {
   const [selectedService, setSelectedService] = useState<ServiceRequest | null>(null)
   const [selectedAddition, setSelectedAddition] = useState<AdditionRequest | null>(null)
   const [selectedShare, setSelectedShare] = useState<ShareRequest | null>(null)
+  const [selectedProjectRequest, setSelectedProjectRequest] = useState<ProjectRequest | null>(null)
   const [selectedDocRequest, setSelectedDocRequest] = useState<DocumentRequest | null>(null)
 
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -165,6 +175,14 @@ export function RequestsView() {
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
     enabled: tab === 'shares',
   })
+  const prjQ = useInfiniteQuery({
+    queryKey: ['project-requests', sp, sq, sortBy, sortOrder, resolvedByAdminId],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }: { pageParam: number }) =>
+      requestsApi.getProjectRequests({ status: sp, search: sq, resolved_by_admin_id: resolvedByAdminId ?? undefined, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
+    getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
+    enabled: tab === 'projects',
+  })
   const docQ = useInfiniteQuery({
     queryKey: ['document-requests', sp, sq, sortBy, sortOrder, resolvedByAdminId],
     initialPageParam: 1,
@@ -174,7 +192,7 @@ export function RequestsView() {
     enabled: tab === 'docs',
   })
 
-  const curQ = tab === 'service' ? svcQ : tab === 'additions' ? addQ : tab === 'shares' ? shrQ : docQ
+  const curQ = tab === 'service' ? svcQ : tab === 'additions' ? addQ : tab === 'shares' ? shrQ : tab === 'projects' ? prjQ : docQ
   const total = curQ.data?.pages[0]?.total
 
   useEffect(() => {
@@ -195,6 +213,7 @@ export function RequestsView() {
   const svcItems = svcQ.data?.pages.flatMap(p => p.items) ?? []
   const addItems = addQ.data?.pages.flatMap(p => p.items) ?? []
   const shrItems = shrQ.data?.pages.flatMap(p => p.items) ?? []
+  const prjItems = prjQ.data?.pages.flatMap(p => p.items) ?? []
   const docItems = docQ.data?.pages.flatMap(p => p.items) ?? []
 
   const filters = tab === 'service' ? SVC_FILTERS : REQ_FILTERS
@@ -202,6 +221,7 @@ export function RequestsView() {
     tab === 'service' ? SVC_SORT :
     tab === 'additions' ? ADDITIONS_SORT :
     tab === 'shares' ? SHARES_SORT :
+    tab === 'projects' ? PROJECTS_SORT :
     DOC_SORT
 
   return (
@@ -344,6 +364,9 @@ export function RequestsView() {
         {tab === 'shares' && !shrQ.isLoading && !shrQ.isError && (
           <SharesList items={shrItems} onSelect={setSelectedShare} view={view} />
         )}
+        {tab === 'projects' && !prjQ.isLoading && !prjQ.isError && (
+          <ProjectRequestsList items={prjItems} onSelect={setSelectedProjectRequest} view={view} />
+        )}
         {tab === 'docs' && !docQ.isLoading && !docQ.isError && (
           <DocumentRequestList items={docItems} onSelect={setSelectedDocRequest} view={view} />
         )}
@@ -368,6 +391,7 @@ export function RequestsView() {
       {selectedService && <ServiceDialog request={selectedService} onClose={() => setSelectedService(null)} />}
       {selectedAddition && <AdditionDialog request={selectedAddition} onClose={() => setSelectedAddition(null)} />}
       {selectedShare && <ShareDialog request={selectedShare} onClose={() => setSelectedShare(null)} />}
+      {selectedProjectRequest && <ProjectRequestDialog request={selectedProjectRequest} onClose={() => setSelectedProjectRequest(null)} />}
       {selectedDocRequest && <DocumentRequestDialog request={selectedDocRequest} onClose={() => setSelectedDocRequest(null)} />}
     </div>
   )
@@ -441,6 +465,29 @@ function SharesList({ items, onSelect, view }: { items: ShareRequest[]; onSelect
           icon={<ShareCardIcon />}
           title={item.user_full_name ?? '—'}
           subtitle={`ШУ ${item.cabinet_object_number}`}
+          meta={item.organization_name
+            ? <TypePill label={item.organization_name} cls="bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400" />
+            : undefined}
+          statusBadge={<StatusPill label={reqStatusLabel(item.status)} cls={reqStatusCls(item.status)} />}
+          date={fmtDate(item.created_at)}
+          onClick={() => onSelect(item)}
+        />
+      ))}
+    </div>
+  )
+}
+
+function ProjectRequestsList({ items, onSelect, view }: { items: ProjectRequest[]; onSelect: (r: ProjectRequest) => void; view: ViewMode }) {
+  if (!items.length) return <Empty text="Нет заявок на проекты" />
+  return (
+    <div className={gridCls(view)}>
+      {items.map(item => (
+        <RequestCard
+          key={item.id}
+          view={view}
+          icon={<ProjectRequestCardIcon />}
+          title={item.user_full_name ?? '—'}
+          subtitle={item.project_name}
           meta={item.organization_name
             ? <TypePill label={item.organization_name} cls="bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400" />
             : undefined}
@@ -767,6 +814,134 @@ function ShareDialog({ request, onClose }: { request: ShareRequest; onClose: () 
   )
 }
 
+function ProjectRequestDialog({ request, onClose }: { request: ProjectRequest; onClose: () => void }) {
+  const qc = useQueryClient()
+  const currentUser = useAuthStore(s => s.user)
+  const isAdmin = currentUser?.role !== 'operator'
+  const [action, setAction] = useState<'approve' | 'reject' | null>(null)
+  const [approveNote, setApproveNote] = useState('')
+  const [rejectNote, setRejectNote] = useState('')
+  const [subUserId, setSubUserId] = useState<number | null>(null)
+  const [subProjectId, setSubProjectId] = useState<number | null>(null)
+  const resolvedByName = useAdminDisplayName(request.resolved_by_admin_id)
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['project-requests'] })
+    qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
+  }
+
+  const approveMut = useMutation({
+    mutationFn: () => requestsApi.approveProjectRequest(request.id, approveNote || null),
+    onSuccess: () => { invalidate(); toast.success('Заявка одобрена'); onClose() },
+    // 404 — проект удалили после подачи заявки; одобрить такую заявку уже нельзя, только отклонить
+    onError: (e) => {
+      if (isAxiosError(e) && e.response?.status === 404) {
+        invalidate()
+        toast.error('Проект этой заявки уже удалён — одобрение невозможно, заявку можно отклонить')
+      } else toast.error('Ошибка при одобрении')
+    },
+  })
+  const rejectMut = useMutation({
+    mutationFn: () => requestsApi.rejectProjectRequest(request.id, rejectNote),
+    onSuccess: () => { invalidate(); toast.success('Заявка отклонена'); onClose() },
+    onError: () => toast.error('Ошибка при отклонении'),
+  })
+
+  const isPending = request.status === 'pending'
+
+  return (
+    <AppModal open onClose={onClose}>
+      {/* min-w-0 — без него grid-item (Popup — display:grid) не сжимается ниже
+          ширины контента и вылезает шире модалки, см. cabinet-detail-dialog.tsx */}
+      <div className="flex flex-col max-h-[85vh] min-w-0">
+      <DialogHeader
+        icon={<ProjectRequestModalIcon />}
+        title={`Заявка на проект #${request.id}`}
+        subtitle={request.user_full_name ?? '—'}
+        badge={
+          <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white">
+            {reqStatusLabel(request.status)}
+          </span>
+        }
+      />
+      {/* min-h-0 — иначе flex-1 не сжимается ниже контента и модалка вылезает
+          за max-h-[85vh] вместо внутреннего скролла (см. cabinet-detail-dialog.tsx) */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
+        <DRowLink label="Пользователь" value={request.user_full_name ?? `#${request.user_id}`} onClick={() => setSubUserId(request.user_id)} />
+        <DRow label="Телефон" value={request.user_phone ?? '—'} />
+        <DRow label="Тип" value={userTypeLabel(request.user_type)} />
+        {request.organization_name && <DRow label="Организация" value={request.organization_name} />}
+        <DRow label="Статус аккаунта" value={<VerifiedBadge verified={request.user_is_verified} />} />
+        {request.user_registered_at && <DRow label="Зарегистрирован" value={fmtDate(request.user_registered_at)} />}
+        <DRowLink label="Проект" value={request.project_name} onClick={() => setSubProjectId(request.project_id)} />
+        <DRow label="Заявка создана" value={fmtDate(request.created_at)} />
+        {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
+        {request.resolved_by_admin_id != null && <DRow label="Обработал" value={resolvedByName} />}
+        {request.user_comment && (
+          <DRow label="Комментарий" value={
+            <span className="font-normal text-slate-600 dark:text-slate-300">{request.user_comment}</span>
+          } />
+        )}
+        {request.admin_response && (
+          <DRow label="Ответ" value={
+            <span className="font-normal text-slate-600 dark:text-slate-300">{request.admin_response}</span>
+          } />
+        )}
+      </div>
+      </div>
+
+      <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700">
+        {!isPending ? null : action === null ? (
+          <div className="flex gap-2 justify-end">
+            <Button onClick={() => setAction('reject')} className="bg-red-500 hover:bg-red-600 cursor-pointer">Отклонить</Button>
+            <Button onClick={() => setAction('approve')} className="bg-green-600 hover:bg-green-700 cursor-pointer">Одобрить</Button>
+          </div>
+        ) : action === 'approve' ? (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium text-slate-500 block mb-1">Комментарий</label>
+              <ModalTextarea value={approveNote} onChange={setApproveNote} placeholder="Необязательно" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setAction(null)} className="cursor-pointer">Назад</Button>
+              <Button
+                onClick={() => approveMut.mutate()}
+                disabled={approveMut.isPending}
+                className="bg-green-600 hover:bg-green-700 cursor-pointer"
+              >
+                {approveMut.isPending ? 'Обработка...' : 'Подтвердить'}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium text-slate-500 block mb-1">
+                Причина отклонения <span className="text-red-500">*</span>
+              </label>
+              <ModalTextarea value={rejectNote} onChange={setRejectNote} placeholder="Обязательно укажите причину" rows={3} />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setAction(null)} className="cursor-pointer">Назад</Button>
+              <Button
+                onClick={() => rejectMut.mutate()}
+                disabled={!rejectNote.trim() || rejectMut.isPending}
+                className="bg-red-500 hover:bg-red-600 cursor-pointer"
+              >
+                {rejectMut.isPending ? 'Обработка...' : 'Подтвердить'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+      </div>
+      {subUserId !== null && <UserDialog userId={subUserId} role="user" onClose={() => setSubUserId(null)} />}
+      {subProjectId !== null && <ProjectDetailDialog projectId={subProjectId} isAdmin={isAdmin} onClose={() => setSubProjectId(null)} />}
+    </AppModal>
+  )
+}
+
 function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest; onClose: () => void }) {
   const qc = useQueryClient()
   const [action, setAction] = useState<'approve' | 'reject' | null>(null)
@@ -919,4 +1094,10 @@ function DocRequestModalIcon() {
 }
 function DocRequestCardIcon() {
   return <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
+}
+function ProjectRequestModalIcon() {
+  return <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 00-1.883 2.542l.857 6a2.25 2.25 0 002.227 1.932H19.05a2.25 2.25 0 002.227-1.932l.857-6a2.25 2.25 0 00-1.883-2.542m-16.5 0V6A2.25 2.25 0 015.25 3.75h5.379a1.5 1.5 0 011.06.44l2.122 2.12a1.5 1.5 0 001.06.44H18.75A2.25 2.25 0 0121 9v.776" /></svg>
+}
+function ProjectRequestCardIcon() {
+  return <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 00-1.883 2.542l.857 6a2.25 2.25 0 002.227 1.932H19.05a2.25 2.25 0 002.227-1.932l.857-6a2.25 2.25 0 00-1.883-2.542m-16.5 0V6A2.25 2.25 0 015.25 3.75h5.379a1.5 1.5 0 011.06.44l2.122 2.12a1.5 1.5 0 001.06.44H18.75A2.25 2.25 0 0121 9v.776" /></svg>
 }

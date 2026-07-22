@@ -32,7 +32,27 @@ export interface Cabinet {
   latitude: number | null
   longitude: number | null
   tags?: { id: number; name: string; scope: string }[]
+  project_id?: number | null
+  project_name?: string | null
   created_at: string
+}
+
+export interface Project {
+  id: number
+  name: string
+  unique_code: string
+  cabinet_count: number
+  created_at: string
+}
+
+export interface ProjectDetail {
+  id: number
+  name: string
+  unique_code: string
+  parent_project_id: number | null
+  cabinets: { id: number; type: string | null; object_number: string; admin_internal_name: string | null }[]
+  created_at: string
+  updated_at: string
 }
 
 export interface PaginatedResponse<T> {
@@ -172,6 +192,25 @@ export interface ShareRequest {
   cabinet_id: number
   cabinet_type: string
   cabinet_object_number: string
+  user_comment: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  admin_response: string | null
+  resolved_by_admin_id: number | null
+  created_at: string
+  resolved_at: string | null
+}
+
+export interface ProjectRequest {
+  id: number
+  user_id: number
+  user_full_name: string | null
+  user_phone: string | null
+  user_type: 'individual' | 'organization' | null
+  organization_name: string | null
+  user_is_verified: boolean
+  user_registered_at: string | null
+  project_id: number
+  project_name: string
   user_comment: string | null
   status: 'pending' | 'approved' | 'rejected'
   admin_response: string | null

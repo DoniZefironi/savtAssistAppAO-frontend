@@ -21,13 +21,13 @@ export function AdminSidebar({ mobileOpen, onMobileClose }: { mobileOpen: boolea
   const base = isOperator ? '/operator' : '/admin'
 
   const navItems = [
-    { href: `${base}/dashboard`, label: 'Дашборд', icon: SquaresIcon },
-    { href: `${base}/cabinets`, label: 'Шкафы управления', icon: BoardIcon },
+    { href: `${base}/dashboard`, label: 'Главная', icon: SquaresIcon },
+    { href: `${base}/cabinets`, label: 'Проекты ШУ', icon: BoardIcon },
     { href: `${base}/requests`, label: 'Заявки', icon: ClipboardIcon },
     { href: `${base}/chats`, label: 'Чаты', icon: ChatIcon },
     { href: `${base}/users`, label: 'Пользователи', icon: UsersIcon },
     { href: `${base}/kb`, label: 'База знаний', icon: BookIcon },
-    { href: `${base}/faq`, label: 'FAQ', icon: QuestionIcon },
+    { href: `${base}/faq`, label: 'ЧаВо', icon: QuestionIcon },
     ...(!isOperator ? [{ href: `${base}/settings`, label: 'Настройки', icon: SettingsIcon }] : []),
   ]
 

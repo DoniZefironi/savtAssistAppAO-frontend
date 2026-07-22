@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { AlertTriangle } from 'lucide-react'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ProjectCombobox } from '@/components/ui/project-combobox'
 import { WarrantyBadge } from './warranty-badge'
 import { cabinetsApi, UpdateCabinetDto } from '@/lib/api/cabinets'
 import { kbApi } from '@/lib/api/kb'
@@ -201,6 +203,7 @@ function DetailContent({ cabinetId, initialMode }: {
               editing={editing}
               onChange={(lat, lng) => setFields((p) => p ? { ...p, latitude: lat, longitude: lng } : p)}
             />
+            <CabinetProjectRow cabinetId={cabinetId} cabinet={cabinet} isAdmin={isAdmin} />
           </div>
         )}
         {tab === 'docs' && <DocsTab cabinetId={cabinetId} isAdmin={isAdmin} />}
@@ -412,6 +415,70 @@ function DetailSkeleton() {
             <Skeleton className="h-3 flex-1" />
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+function CabinetProjectRow({ cabinetId, cabinet, isAdmin }: {
+  cabinetId: number
+  cabinet: Cabinet
+  isAdmin: boolean
+}) {
+  const qc = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [projectId, setProjectId] = useState<number | null>(cabinet.project_id ?? null)
+
+  const mutation = useMutation({
+    mutationFn: (id: number | null) => cabinetsApi.setProject(cabinetId, id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cabinet', cabinetId] })
+      qc.invalidateQueries({ queryKey: ['cabinets'] })
+      toast.success('Проект обновлён')
+      setEditing(false)
+    },
+    onError: () => toast.error('Не удалось изменить проект'),
+  })
+
+  const cancel = () => {
+    setProjectId(cabinet.project_id ?? null)
+    setEditing(false)
+  }
+
+  return (
+    <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4 px-4 sm:px-6 py-3">
+      <span className="text-xs text-slate-400 sm:w-28 shrink-0 sm:pt-0.5">Проект</span>
+      <div className="flex-1 min-w-0">
+        {!editing ? (
+          <span className={cn('text-sm', cabinet.project_name ? 'text-slate-700 dark:text-slate-200 font-medium' : 'text-slate-300 italic')}>
+            {cabinet.project_name ?? 'Без проекта'}
+          </span>
+        ) : (
+          <div className="space-y-2">
+            <ProjectCombobox value={projectId} valueLabel={cabinet.project_name} onChange={setProjectId} />
+            <p className="text-xs text-amber-600 dark:text-amber-400 flex items-start gap-1">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              Если у проекта уже есть участники, они сразу получат доступ к этому шкафу — без дополнительного подтверждения.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={cancel} disabled={mutation.isPending} className="h-7 text-xs px-2 cursor-pointer">
+                Отмена
+              </Button>
+              <Button
+                onClick={() => mutation.mutate(projectId)}
+                disabled={mutation.isPending}
+                className="h-7 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white"
+              >
+                {mutation.isPending ? 'Сохранение...' : 'Сохранить'}
+              </Button>
+            </div>
+          </div>
+        )}
+        {!editing && isAdmin && (
+          <button onClick={() => setEditing(true)} className="text-xs text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 transition-colors cursor-pointer mt-0.5 block">
+            + изменить проект
+          </button>
+        )}
       </div>
     </div>
   )

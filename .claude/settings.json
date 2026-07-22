@@ -38,7 +38,13 @@
       "Bash(echo \"exit=$?\")",
       "Bash(timeout 8 curl -sN -D - http://localhost:3000/backend/operator/events/chats/49?ticket=bogus -o /tmp/dynamic_sse.out)",
       "Bash(curl -sN -D - \"http://10.1.0.208:8080/backend/operator/events/chats/49?ticket=k6Qu7V5HSnMZhTsEFDWwpNovhamoEjHt\" -m 40)",
-      "Bash(curl -sN --compressed -D - \"http://10.1.0.208:8080/backend/operator/events/chats/49?ticket=L8wtO6OOKWerB3ex4GrhSG3I7ORJ3J8Q\" -m 30)"
+      "Bash(curl -sN --compressed -D - \"http://10.1.0.208:8080/backend/operator/events/chats/49?ticket=L8wtO6OOKWerB3ex4GrhSG3I7ORJ3J8Q\" -m 30)",
+      "PowerShell(cd savt-assist; npx tsc --noEmit -p tsconfig.json; Write-Output \"EXITCODE:$LASTEXITCODE\")",
+      "PowerShell(npx eslint src/components/projects src/components/requests/requests-view.tsx src/components/cabinets/cabinet-detail-dialog.tsx src/components/ui/project-combobox.tsx src/components/layout/admin-sidebar.tsx src/lib/api/projects.ts src/lib/api/requests.ts src/lib/api/cabinets.ts src/types/index.ts src/app/admin/projects src/app/operator/projects --quiet)",
+      "PowerShell(npx eslint src/components/cabinets/qr-dialog.tsx src/components/cabinets/cabinets-view.tsx --quiet)",
+      "PowerShell(npx tsc --noEmit -p tsconfig.json; Write-Output \"EXITCODE:$LASTEXITCODE\")",
+      "PowerShell(Set-Location \"C:\\\\Users\\\\ShaboldaV\\\\Documents\\\\GitHub\\\\savtAssistAppAO-frontend\\\\savt-assist\"; npx tsc --noEmit -p tsconfig.json; Write-Output \"EXITCODE:$LASTEXITCODE\")",
+      "PowerShell(npx eslint src/components/cabinets/cabinets-view.tsx src/components/projects/project-detail-dialog.tsx src/lib/api/projects.ts src/lib/api/cabinets.ts src/components/layout/admin-sidebar.tsx --quiet)"
     ]
   }
 }
