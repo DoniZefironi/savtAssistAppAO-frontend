@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { AlertTriangle, FolderTree, SlidersHorizontal } from 'lucide-react'
+import { AlertTriangle, FolderTree, SlidersHorizontal, FolderUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { kbApi } from '@/lib/api/kb'
 import type { KbArticleDetail, KbArticleList, KbAttachment, KbCategory, Tag } from '@/lib/api/kb'
@@ -13,6 +13,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { toFullUrl as fullUrl } from '@/lib/api/base-url'
 import { useAuthStore } from '@/lib/store/auth'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
+import { useFolderUpload } from '@/lib/hooks/use-folder-upload'
+import { validateDocFile } from '@/components/cabinets/cabinet-dialog-shared'
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -896,6 +898,20 @@ function AttachmentsTab({ article }: { article: KbArticleDetail }) {
     onError: () => toast.error('Ошибка загрузки'),
   })
 
+  // Та же папочная загрузка, что и в документах ШУ — форматы совпадают
+  // (PDF/Word/Excel/изображения/mp4/mov, см. README-backend.md, POST
+  // /admin/kb/articles/{id}/attachments), поэтому валидатор общий.
+  const folderUpload = useFolderUpload({
+    validate: validateDocFile,
+    upload: (file) => kbApi.uploadAttachment(article.id, file),
+    onDone: ({ uploaded, skipped, failed }) => {
+      qc.invalidateQueries({ queryKey: ['kb-article', article.id] })
+      if (uploaded > 0) toast.success(`Загружено файлов: ${uploaded}`)
+      if (skipped > 0) toast.error(`Пропущено (недопустимый формат): ${skipped}`)
+      if (failed > 0) toast.error(`Не удалось загрузить: ${failed}`)
+    },
+  })
+
   const deleteMut = useMutation({
     mutationFn: (attId: number) => kbApi.deleteAttachment(article.id, attId),
     onSuccess: () => {
@@ -936,14 +952,31 @@ function AttachmentsTab({ article }: { article: KbArticleDetail }) {
       {!isReadOnly && (
         <div className="px-4 sm:px-6 py-3 border-b border-slate-50 dark:border-slate-700/30">
           <input ref={fileRef} type="file" className="hidden" onChange={handleFile} />
-          <button
-            onClick={() => fileRef.current?.click()}
-            disabled={uploadMut.isPending}
-            className="flex items-center gap-2 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline disabled:opacity-50 cursor-pointer"
-          >
-            <UploadIcon className="w-4 h-4" />
-            {uploadMut.isPending ? 'Загрузка...' : 'Добавить вложение'}
-          </button>
+          <input {...folderUpload.folderInputProps} />
+          {folderUpload.uploading ? (
+            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+              <div className="w-4 h-4 border-2 border-[#1B3A72] border-t-transparent rounded-full animate-spin shrink-0" />
+              Загрузка файлов из папки: {folderUpload.progress.done} из {folderUpload.progress.total}
+            </div>
+          ) : (
+            <div className="flex items-center gap-4 flex-wrap">
+              <button
+                onClick={() => fileRef.current?.click()}
+                disabled={uploadMut.isPending}
+                className="flex items-center gap-2 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline disabled:opacity-50 cursor-pointer"
+              >
+                <UploadIcon className="w-4 h-4" />
+                {uploadMut.isPending ? 'Загрузка...' : 'Добавить вложение'}
+              </button>
+              <button
+                onClick={folderUpload.trigger}
+                className="flex items-center gap-2 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline cursor-pointer"
+              >
+                <FolderUp className="w-4 h-4" />
+                Загрузить файлы из папки
+              </button>
+            </div>
+          )}
         </div>
       )}
 

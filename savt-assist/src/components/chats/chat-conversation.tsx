@@ -33,7 +33,7 @@ import { useRealtimeEvents, type RealtimeEnvelope } from '@/lib/hooks/use-realti
 
 const MESSAGE_EVENT_TYPES = [
   'message.created', 'message.updated', 'message.deleted',
-  'message.reaction_changed', 'message.pinned', 'message.unpinned',
+  'message.reaction_changed', 'message.pinned', 'message.unpinned', 'message.read',
 ]
 
 interface Props {
@@ -239,6 +239,16 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
       case 'message.pinned':
       case 'message.unpinned':
         qc.invalidateQueries({ queryKey: ['pinned-messages', chat.id] })
+        return
+      case 'message.read': {
+        // Раньше прочтение никак не публиковалось в SSE — собеседник узнавал
+        // о нём только после ручного обновления страницы (см. README-backend.md,
+        // событие message.read). Помечаем свои же отправленные сообщения
+        // прочитанными без релоада — см. ReadReceiptIcon в message-bubble.tsx.
+        const { message_ids } = envelope.data as { message_ids: number[]; reader_id: number }
+        const idSet = new Set(message_ids)
+        qc.setQueryData<MsgPages>(['messages', chat.id], (old) => patchPages(old, m => idSet.has(m.id) ? { ...m, is_read: true } : m))
+      }
     }
   }, [qc, chat.id, jumpMode, isNearBottom])
 

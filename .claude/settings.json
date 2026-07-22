@@ -57,7 +57,8 @@
       "PowerShell(Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | Select-Object -First 5; Get-Process -Id \\(Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess\\) -ErrorAction SilentlyContinue)",
       "Bash(curl -s -o /tmp/resp_after.html -w \"%{http_code}\\\\n\" http://localhost:3000/admin/projects/1)",
       "PowerShell(Get-Process -Id 4744 -ErrorAction SilentlyContinue)",
-      "PowerShell(npx eslint src/components/audit/audit-log-view.tsx src/components/map/cabinets-map-inner.tsx src/components/layout/admin-sidebar.tsx src/lib/api/audit.ts src/lib/api/cabinets.ts src/app/admin/audit-logs --quiet)"
+      "PowerShell(npx eslint src/components/audit/audit-log-view.tsx src/components/map/cabinets-map-inner.tsx src/components/layout/admin-sidebar.tsx src/lib/api/audit.ts src/lib/api/cabinets.ts src/app/admin/audit-logs --quiet)",
+      "PowerShell(npx eslint src/lib/hooks/use-folder-upload.ts src/components/cabinets/cabinet-docs-tab.tsx src/components/kb/kb-view.tsx --quiet)"
     ],
     "additionalDirectories": [
       "c:\\Users\\ShaboldaV\\Documents\\GitHub\\savtAssistAppAO-frontend\\savt-assist\\src\\app\\admin\\projects"

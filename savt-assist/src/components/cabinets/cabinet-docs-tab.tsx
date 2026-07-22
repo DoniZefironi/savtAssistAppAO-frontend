@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { FolderUp } from 'lucide-react'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -10,6 +11,7 @@ import { mediaApi } from '@/lib/api/media'
 import type { CabinetDocument } from '@/lib/api/media'
 import { kbApi } from '@/lib/api/kb'
 import type { Tag } from '@/lib/api/tags'
+import { useFolderUpload } from '@/lib/hooks/use-folder-upload'
 import { fmtSize, validateDocFile, DOC_ACCEPT } from './cabinet-dialog-shared'
 import { FileIcon, PdfIcon, ImageIcon, TrashIcon, UploadIcon, DownloadIcon, TagIcon } from './cabinet-dialog-icons'
 
@@ -45,6 +47,20 @@ export function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: bo
       setDeleteTarget(null)
     },
     onError: () => toast.error('Ошибка при удалении'),
+  })
+
+  // Загрузка всей папки разом — название документа берём из имени файла
+  // (как и в дефолтном title при обычной загрузке одного файла), спрашивать
+  // его для каждого файла в папке по отдельности было бы неюзабельно.
+  const folderUpload = useFolderUpload({
+    validate: validateDocFile,
+    upload: (file) => mediaApi.uploadDocument(cabinetId, file, file.name.replace(/\.[^.]+$/, ''), false),
+    onDone: ({ uploaded, skipped, failed }) => {
+      qc.invalidateQueries({ queryKey: ['cabinet-docs', cabinetId] })
+      if (uploaded > 0) toast.success(`Загружено файлов: ${uploaded}`)
+      if (skipped > 0) toast.error(`Пропущено (недопустимый формат): ${skipped}`)
+      if (failed > 0) toast.error(`Не удалось загрузить: ${failed}`)
+    },
   })
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -111,14 +127,29 @@ export function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: bo
                 </div>
               </div>
             </div>
+          ) : folderUpload.uploading ? (
+            <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+              <div className="w-4 h-4 border-2 border-[#1B3A72] border-t-transparent rounded-full animate-spin shrink-0" />
+              Загрузка файлов из папки: {folderUpload.progress.done} из {folderUpload.progress.total}
+            </div>
           ) : (
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="flex items-center gap-2 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline cursor-pointer"
-            >
-              <UploadIcon className="w-4 h-4" />
-              Загрузить документ
-            </button>
+            <div className="flex items-center gap-4 flex-wrap">
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="flex items-center gap-2 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline cursor-pointer"
+              >
+                <UploadIcon className="w-4 h-4" />
+                Загрузить документ
+              </button>
+              <input {...folderUpload.folderInputProps} />
+              <button
+                onClick={folderUpload.trigger}
+                className="flex items-center gap-2 text-sm text-[#1B3A72] dark:text-blue-400 hover:underline cursor-pointer"
+              >
+                <FolderUp className="w-4 h-4" />
+                Загрузить файлы из папки
+              </button>
+            </div>
           )}
         </div>
       )}

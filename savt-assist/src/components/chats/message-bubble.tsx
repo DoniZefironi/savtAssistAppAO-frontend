@@ -297,9 +297,10 @@ export const MessageBubble = React.memo(function MessageBubble({
                   onTranscribe={a === voiceAttachment && voiceAttachment && onTranscribe ? () => onTranscribe(message, voiceAttachment.file_url) : undefined}
                 />
               ))}
-              <div className="absolute bottom-1 right-2 text-[10px] text-white/80 drop-shadow px-1">
-                {message.edited_at && <span className="mr-1">ред.</span>}
-                {new Date(message.created_at).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}
+              <div className="absolute bottom-1 right-2 flex items-center gap-1 text-[10px] text-white/80 drop-shadow px-1">
+                {message.edited_at && <span>ред.</span>}
+                <span>{new Date(message.created_at).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}</span>
+                {isOwn && <ReadReceiptIcon read={message.is_read} />}
               </div>
             </div>
           ) : (
@@ -361,7 +362,7 @@ export const MessageBubble = React.memo(function MessageBubble({
                   ))}
                 </div>
               )}
-              <TimeStamp message={message} />
+              <TimeStamp message={message} isOwn={isOwn} />
             </div>
           )}
 
@@ -439,12 +440,25 @@ function CtxItem({ onClick, danger, children }: { onClick: () => void; danger?: 
   )
 }
 
-function TimeStamp({ message }: { message: ChatMessage }) {
+function TimeStamp({ message, isOwn }: { message: ChatMessage; isOwn?: boolean }) {
   return (
     <div className="flex items-center gap-1 text-[10px] justify-end mt-1 -mb-0.5" style={{ opacity: 0.55 }}>
       {message.edited_at && <span>ред.</span>}
       <span>{new Date(message.created_at).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })}</span>
+      {isOwn && <ReadReceiptIcon read={message.is_read} />}
     </div>
+  )
+}
+
+// Двойная галочка — как только приходит SSE-событие message.read (см.
+// README-backend.md, "Рут chats"/realtime), is_read у своих сообщений
+// обновляется в кэше без релоада — см. handleRealtimeEvent в chat-conversation.tsx
+function ReadReceiptIcon({ read }: { read: boolean }) {
+  return (
+    <svg className={cn('w-3.5 h-3 shrink-0', read && 'text-sky-300')} viewBox="0 0 16 15" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M1 7.5l3.5 3.5L11 3.5" />
+      {read && <path strokeLinecap="round" strokeLinejoin="round" d="M5 7.5l3.5 3.5L15 3.5" />}
+    </svg>
   )
 }
 
