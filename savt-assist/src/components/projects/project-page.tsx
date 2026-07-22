@@ -263,36 +263,21 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
               </>
             ) : (
               <>
-                {isAdmin && (
-                  <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-[#1B3A72] cursor-pointer" title="Переименовать" onClick={() => setEditing(true)}>
-                    <EditIcon />
-                  </Button>
-                )}
-                <Button variant="outline" onClick={() => setShowQr(true)} className="gap-2 cursor-pointer">
-                  <QrIcon className="w-4 h-4" />
-                  QR
-                </Button>
-                {isAdmin && (
-                  <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-red-500 cursor-pointer" title="Удалить проект" onClick={() => setDeleteProjectConfirm(true)}>
-                    <TrashIcon />
-                  </Button>
-                )}
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                    <button onClick={() => setView('list')} title="Список" className={`p-2 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+                      <ListIcon />
+                    </button>
+                    <button onClick={() => setView('grid')} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+                      <GridIcon />
+                    </button>
+                    <button onClick={() => setFiltersOpen(v => !v)} title={filtersOpen ? 'Скрыть поиск и фильтры' : 'Показать поиск и фильтры'} className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${filtersOpen ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+                      <SlidersHorizontal className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
               </>
             )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 mb-3">
-          <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-            <button onClick={() => setView('list')} title="Список" className={`p-2 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
-              <ListIcon />
-            </button>
-            <button onClick={() => setView('grid')} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
-              <GridIcon />
-            </button>
-            <button onClick={() => setFiltersOpen(v => !v)} title={filtersOpen ? 'Скрыть поиск и фильтры' : 'Показать поиск и фильтры'} className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${filtersOpen ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
-              <SlidersHorizontal className="w-4 h-4" />
-            </button>
           </div>
         </div>
 

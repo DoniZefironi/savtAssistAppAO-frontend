@@ -18,6 +18,7 @@ export function AdminSidebar({ mobileOpen, onMobileClose }: { mobileOpen: boolea
   const { user, logout } = useAuthStore()
 
   const isOperator = user?.role === 'operator'
+  const isSuperadmin = user?.role === 'superadmin'
   const base = isOperator ? '/operator' : '/admin'
 
   const navItems = [
@@ -29,6 +30,10 @@ export function AdminSidebar({ mobileOpen, onMobileClose }: { mobileOpen: boolea
     { href: `${base}/kb`, label: 'База знаний', icon: BookIcon },
     { href: `${base}/faq`, label: 'ЧаВо', icon: QuestionIcon },
     ...(!isOperator ? [{ href: `${base}/settings`, label: 'Настройки', icon: SettingsIcon }] : []),
+    // Полный журнал (CUD по шкафам/проектам/пользователям и т.п.) видит только
+    // суперадмин — обычным админу/оператору бэкенд и так сузил бы выдачу до
+    // заявок, но отдельный пункт меню для них не нужен (это уже видно в «Заявках»)
+    ...(isSuperadmin ? [{ href: `${base}/audit-logs`, label: 'Журнал действий', icon: ScrollTextIcon }] : []),
   ]
 
   const handleLogout = async () => {
@@ -159,6 +164,9 @@ function LogoutIcon({ className }: { className?: string }) {
 }
 function ClipboardIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+}
+function ScrollTextIcon({ className }: { className?: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25M15 12H9m3 3H9m6-9h3M4.5 12.75V7.5A2.25 2.25 0 016.75 5.25h.75M4.5 12.75v6A2.25 2.25 0 006.75 21h10.5a2.25 2.25 0 002.25-2.25V15" /></svg>
 }
 function BookIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>

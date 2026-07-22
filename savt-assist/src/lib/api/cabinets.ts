@@ -103,8 +103,8 @@ export const cabinetsApi = {
     return data
   },
 
-  getCabinetsGeo: async (): Promise<CabinetGeoItem[]> => {
-    const { data } = await apiClient.get('/admin/cabinets/geo')
+  getCabinetsGeo: async (params: CabinetsGeoParams = {}): Promise<CabinetGeoItem[]> => {
+    const { data } = await apiClient.get('/admin/cabinets/geo', { params })
     return data
   },
 
@@ -163,6 +163,13 @@ interface DashboardActivityRaw {
   user_full_name?: string | null
   detail?: string
   created_at: string
+}
+
+export interface CabinetsGeoParams {
+  // 4 состояния легенды карты — обрати внимание, тут есть "none", которого
+  // нет в CabinetsParams.warranty_status (там только active/expired/none, без expiring_soon)
+  warranty_status?: 'active' | 'expiring_soon' | 'expired' | 'none'
+  has_open_requests?: boolean
 }
 
 export interface CabinetGeoItem {

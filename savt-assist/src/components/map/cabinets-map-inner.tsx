@@ -5,6 +5,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import { useQuery } from '@tanstack/react-query'
 import { cabinetsApi } from '@/lib/api/cabinets'
+import { cn } from '@/lib/utils'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
 import type { CabinetGeoItem } from '@/lib/api/cabinets'
 import { formatDate, getWarrantyStatus } from '@/lib/warranty'
@@ -23,12 +24,14 @@ const MARKER_COLORS: Record<MarkerColor, string> = {
   gray:   '#94A3B8',
 }
 
-const LEGEND: { color: MarkerColor; label: string }[] = [
-  { color: 'red',    label: 'Открытая заявка' },
-  { color: 'orange', label: 'Гарантия истекает' },
-  { color: 'yellow', label: 'Гарантия истекла' },
-  { color: 'green',  label: 'Всё в порядке' },
-  { color: 'gray',   label: 'Без гарантии' },
+// Легенда одновременно служит фильтром: клик по пункту переключает соответствующий
+// параметр GET /admin/cabinets/geo (warranty_status и has_open_requests — независимые
+// фильтры на бэке, можно комбинировать, напр. "истекла" + "есть заявка" разом).
+const WARRANTY_LEGEND: { color: MarkerColor; label: string; value: 'active' | 'expiring_soon' | 'expired' | 'none' }[] = [
+  { color: 'orange', label: 'Гарантия истекает', value: 'expiring_soon' },
+  { color: 'yellow', label: 'Гарантия истекла', value: 'expired' },
+  { color: 'green',  label: 'Всё в порядке', value: 'active' },
+  { color: 'gray',   label: 'Без гарантии', value: 'none' },
 ]
 
 const WARRANTY_LABELS: Record<string, string> = {
@@ -138,16 +141,22 @@ function PopupContent({
 
 export function CabinetsMapInner({ isAdmin }: Props) {
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [warrantyFilter, setWarrantyFilter] = useState<'active' | 'expiring_soon' | 'expired' | 'none' | null>(null)
+  const [hasOpenFilter, setHasOpenFilter] = useState(false)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['cabinets-geo'],
-    queryFn: cabinetsApi.getCabinetsGeo,
+    queryKey: ['cabinets-geo', warrantyFilter, hasOpenFilter],
+    queryFn: () => cabinetsApi.getCabinetsGeo({
+      warranty_status: warrantyFilter ?? undefined,
+      has_open_requests: hasOpenFilter || undefined,
+    }),
     refetchInterval: 30_000,
     staleTime: 20_000,
   })
 
   const cabinets = data ?? []
   const withGeo  = cabinets.filter(c => c.latitude != null && c.longitude != null)
+  const filtersActive = warrantyFilter !== null || hasOpenFilter
 
   return (
     <>
@@ -193,16 +202,54 @@ export function CabinetsMapInner({ isAdmin }: Props) {
           ))}
         </MapContainer>
 
-        <div className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3 z-[1000] bg-white/90 dark:bg-slate-800/90 rounded-lg px-2 py-1.5 sm:px-2.5 sm:py-2 shadow text-[10px] sm:text-xs space-y-0.5 sm:space-y-1 pointer-events-none">
-          {LEGEND.map(({ color, label }) => (
-            <div key={color} className="flex items-center gap-1.5">
-              <span
-                className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full border border-white/50 shadow-sm shrink-0"
-                style={{ backgroundColor: MARKER_COLORS[color] }}
-              />
-              <span className="text-slate-600 dark:text-slate-300">{label}</span>
-            </div>
-          ))}
+        {/* Легенда — она же фильтр: клик по пункту переключает соответствующий
+            параметр GET /admin/cabinets/geo. pointer-events-auto (родитель — none,
+            чтобы не перехватывать клики по карте под собой). */}
+        <div className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3 z-[1000] bg-white/90 dark:bg-slate-800/90 rounded-lg px-2 py-1.5 sm:px-2.5 sm:py-2 shadow text-[10px] sm:text-xs space-y-0.5 sm:space-y-1 pointer-events-auto">
+          <button
+            onClick={() => setHasOpenFilter(v => !v)}
+            className={cn(
+              'flex items-center gap-1.5 w-full text-left rounded px-1 -mx-1 py-0.5 cursor-pointer transition-colors',
+              hasOpenFilter ? 'bg-red-50 dark:bg-red-900/20' : 'hover:bg-slate-100 dark:hover:bg-slate-700/50'
+            )}
+          >
+            <span
+              className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full border border-white/50 shadow-sm shrink-0"
+              style={{ backgroundColor: MARKER_COLORS.red }}
+            />
+            <span className={cn('text-slate-600 dark:text-slate-300', hasOpenFilter && 'font-semibold text-red-600 dark:text-red-400')}>
+              Открытая заявка
+            </span>
+          </button>
+          {WARRANTY_LEGEND.map(({ color, label, value }) => {
+            const active = warrantyFilter === value
+            return (
+              <button
+                key={color}
+                onClick={() => setWarrantyFilter(v => v === value ? null : value)}
+                className={cn(
+                  'flex items-center gap-1.5 w-full text-left rounded px-1 -mx-1 py-0.5 cursor-pointer transition-colors',
+                  active ? 'bg-slate-100 dark:bg-slate-700/60' : 'hover:bg-slate-100 dark:hover:bg-slate-700/50'
+                )}
+              >
+                <span
+                  className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full border border-white/50 shadow-sm shrink-0"
+                  style={{ backgroundColor: MARKER_COLORS[color] }}
+                />
+                <span className={cn('text-slate-600 dark:text-slate-300', active && 'font-semibold text-slate-800 dark:text-slate-100')}>
+                  {label}
+                </span>
+              </button>
+            )
+          })}
+          {filtersActive && (
+            <button
+              onClick={() => { setWarrantyFilter(null); setHasOpenFilter(false) }}
+              className="text-[#1B3A72] dark:text-blue-400 hover:underline cursor-pointer pt-0.5"
+            >
+              Сбросить фильтр
+            </button>
+          )}
         </div>
 
         {cabinets.length > 0 && (
