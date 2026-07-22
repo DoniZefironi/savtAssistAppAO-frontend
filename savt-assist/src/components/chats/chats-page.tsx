@@ -88,9 +88,11 @@ export function ChatsPage() {
     return () => clearTimeout(t)
   }, [chatSearchInput])
 
+  const [archived, setArchived] = useState(false)
+
   const { data: rawChats = [], isLoading } = useQuery({
-    queryKey: ['operator-chats', chatSearch],
-    queryFn: () => chatsApi.getChats(chatSearch || undefined),
+    queryKey: ['operator-chats', chatSearch, archived],
+    queryFn: () => chatsApi.getChats({ search: chatSearch || undefined, archived }),
   })
 
   // Realtime вместо поллинга — см. README-backend.md, "Realtime (SSE) для
@@ -168,6 +170,12 @@ export function ChatsPage() {
           compact={isCompact && isDesktop}
           searchValue={chatSearchInput}
           onSearchChange={setChatSearchInput}
+          archived={archived}
+          onToggleArchived={() => {
+            setArchived(v => !v)
+            setSelectedChat(null)
+            setShowConversation(false)
+          }}
         />
       </div>
 

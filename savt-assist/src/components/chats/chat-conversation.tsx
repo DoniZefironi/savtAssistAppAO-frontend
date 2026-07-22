@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
-  Package, FileText, MessageCircle, Bot,
+  Package, FileText, MessageCircle, Bot, Wrench, Archive,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MessageBubble, DateSeparator } from './message-bubble'
@@ -636,9 +636,13 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const canSend = !sendMutation.isPending && !editMutation.isPending && !voice.recording && !uploadingFile
   const inputDisabled = voice.recording || uploadingFile
   const botActive = chat.bot_active
+  // archived_at — флаг состояния чата (см. README-backend.md, "Рут `chats`"):
+  // проставляется автоматически при закрытии заявки, сбрасывается при повторном
+  // открытии. Архивный чат read-only на бэкенде (POST .../messages -> 403).
+  const isArchivedRequest = !!chat.archived_at
   const renderItems = buildRenderItems(displayMessages, currentUser?.id ?? -1, firstUnreadId)
   const name = chatDisplayName(chat)
-  const AvatarIcon = chat.chat_type === 'cabinet' ? Package : chat.chat_type === 'notes' ? FileText : MessageCircle
+  const AvatarIcon = chat.chat_type === 'cabinet' ? Package : chat.chat_type === 'notes' ? FileText : chat.chat_type === 'service_request' ? Wrench : MessageCircle
   const avatarBg = chat.chat_type === 'cabinet' ? 'bg-[#1B3A72]' : 'bg-slate-500'
   const currentWallpaper = WALLPAPERS.find(w => w.id === wallpaper) ?? WALLPAPERS[0]
 
@@ -670,6 +674,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         avatarBg={avatarBg}
         AvatarIcon={AvatarIcon}
         botActive={botActive}
+        hideBotControls={chat.chat_type === 'service_request'}
         operatorRequested={chat.operator_requested}
         onAvatarClick={() => { setAttachmentsOpen(true); setAttachTab('media') }}
         onTake={() => { takeMutation.mutate(); setHeaderMenuOpen(false) }}
@@ -827,7 +832,19 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         </button>
       )}
 
-      {botActive && !searchOpen && !selectMode && (
+      {isArchivedRequest && !searchOpen && !selectMode && (
+        <div className="border-t border-slate-200 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/60 px-2 py-1 shrink-0">
+          <div className="flex items-center gap-3">
+            <Archive className="w-6 h-6 text-slate-400 shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Заявка закрыта — чат в архиве</p>
+              <p className="text-xs text-slate-400 mt-0.5">Только чтение, отправка сообщений недоступна</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {botActive && !isArchivedRequest && !searchOpen && !selectMode && (
         <div className="border-t border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 shrink-0">
           <div className="flex items-center gap-3">
             <Bot className="w-6 h-6 text-amber-600 dark:text-amber-400 shrink-0" />
@@ -867,7 +884,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         </div>
       )}
 
-      {!botActive && !searchOpen && !selectMode && (
+      {!botActive && !isArchivedRequest && !searchOpen && !selectMode && (
         <ChatComposer
           stickerPickerOpen={stickerPickerOpen}
           onToggleStickerPicker={() => setStickerPickerOpen(v => !v)}
@@ -904,6 +921,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
           avatarBg={avatarBg}
           AvatarIcon={AvatarIcon}
           botActive={botActive}
+          hideBotControls={chat.chat_type === 'service_request'}
           attachTab={attachTab}
           onTabChange={setAttachTab}
           allAttachments={allAttachments}

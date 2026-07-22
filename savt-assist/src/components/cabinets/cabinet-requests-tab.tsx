@@ -16,8 +16,9 @@ import { ToolIcon } from './cabinet-dialog-icons'
 
 const REQUEST_TYPE_LABELS: Record<string, string> = {
   repair: 'Ремонт',
-  maintenance: 'Обслуживание',
-  inspection: 'Осмотр',
+  diagnostics: 'Диагностика',
+  remote_adjustment: 'Наладка удалённо',
+  onsite_adjustment: 'Наладка с выездом',
   other: 'Другое',
 }
 

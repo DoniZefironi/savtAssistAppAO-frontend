@@ -28,14 +28,16 @@ export function reqStatusLabel(s: string) {
   return s === 'pending' ? 'Ожидает' : s === 'approved' ? 'Одобрена' : 'Отклонена'
 }
 export function reqTypeCls(t: string) {
-  if (t === 'maintenance') return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-  if (t === 'inspection') return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+  if (t === 'diagnostics') return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+  if (t === 'remote_adjustment') return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+  if (t === 'onsite_adjustment') return 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400'
   if (t === 'other') return 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
   return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
 }
 export function reqTypeLabel(t: string) {
-  if (t === 'maintenance') return 'Обслуживание'
-  if (t === 'inspection') return 'Осмотр'
+  if (t === 'diagnostics') return 'Диагностика'
+  if (t === 'remote_adjustment') return 'Наладка удалённо'
+  if (t === 'onsite_adjustment') return 'Наладка с выездом'
   if (t === 'other') return 'Другое'
   return 'Ремонт'
 }

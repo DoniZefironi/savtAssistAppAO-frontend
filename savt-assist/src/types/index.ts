@@ -65,7 +65,7 @@ export interface PaginatedResponse<T> {
 
 export interface Chat {
   id: number
-  chat_type: 'cabinet' | 'support' | 'notes'
+  chat_type: 'cabinet' | 'support' | 'notes' | 'service_request'
   cabinet_id: number | null
   cabinet_name: string | null
   user_name?: string | null
@@ -78,6 +78,12 @@ export interface Chat {
   problem_status: string | null
   bot_active: boolean
   operator_requested: boolean
+  service_request_id?: number | null
+  service_request_type?: string | null
+  service_request_status?: 'open' | 'in_progress' | 'closed' | null
+  service_request_description?: string | null
+  service_request_created_at?: string | null
+  archived_at?: string | null
 }
 
 export interface ChatMessage {
@@ -136,6 +142,7 @@ export interface ServiceRequest {
   request_type: string
   description: string
   status: 'open' | 'in_progress' | 'closed'
+  chat_id: number | null
   created_at: string
   closed_at: string | null
   bitrix_task_id: string | null

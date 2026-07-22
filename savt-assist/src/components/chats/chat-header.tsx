@@ -14,6 +14,11 @@ interface Props {
   avatarBg: string
   AvatarIcon: React.ComponentType<{ className?: string }>
   botActive: boolean
+  // Чаты сервисных заявок бота не имеют вообще (см. README-backend.md, "Рут `chats`" —
+  // в отличие от `support`, у `service_request` нет "с ботом") — индикатор и кнопки
+  // взять/вернуть боту для них не имеют смысла и предлагали бы включить бота там,
+  // где он структурно никогда не участвует.
+  hideBotControls?: boolean
   operatorRequested: boolean
   onAvatarClick: () => void
   onTake: () => void
@@ -35,7 +40,7 @@ interface Props {
 // самый заметный визуально блок шапки — см. разбор декомпозиции chat-conversation.tsx.
 export function ChatHeader({
   onBack, searchOpen, searchInput, onSearchInputChange, onToggleSearch,
-  name, avatarBg, AvatarIcon, botActive, operatorRequested, onAvatarClick,
+  name, avatarBg, AvatarIcon, botActive, hideBotControls, operatorRequested, onAvatarClick,
   onTake, takePending, onReturnToBot, returnToBotPending,
   headerMenuOpen, onToggleHeaderMenu, headerMenuRef,
   pinnedCount, onJumpToPinned, onUnpinAll, onClearHistory, onDeleteChat,
@@ -64,10 +69,10 @@ export function ChatHeader({
               <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm truncate">{name}</p>
               {/* overflow-hidden — без него длинный статус не обрезался, а вылезал поверх кнопок справа */}
               <div className="flex items-center gap-2 mt-0.5 min-w-0 overflow-hidden">
-                {botActive
+                {!hideBotControls && (botActive
                   ? <span className="text-xs text-slate-400 flex items-center gap-1 min-w-0 shrink"><span className="inline-block w-1.5 h-1.5 bg-green-400 rounded-full shrink-0" /><span className="truncate">Бот отвечает</span></span>
                   : <span className="text-xs text-blue-500 flex items-center gap-1 min-w-0 shrink"><span className="inline-block w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0" /><span className="truncate">Оператор отвечает</span></span>
-                }
+                )}
                 {operatorRequested && (
                   <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium shrink-0">Ожидает оператора</span>
                 )}
@@ -84,13 +89,13 @@ export function ChatHeader({
             searchOpen ? 'flex bg-[#1B3A72] text-white' : 'hidden sm:flex text-slate-400 hover:text-[#1B3A72] hover:bg-slate-100 dark:hover:bg-slate-800')}>
           <SearchIcon />
         </button>
-        {!searchOpen && botActive && (
+        {!searchOpen && !hideBotControls && botActive && (
           <button onClick={onTake} disabled={takePending}
             className="hidden sm:block text-xs bg-[#1B3A72] text-white px-3 py-1.5 rounded-lg hover:bg-[#1B3A72]/90 transition-colors font-medium cursor-pointer">
             {takePending ? '...' : 'Взять чат'}
           </button>
         )}
-        {!searchOpen && !botActive && (
+        {!searchOpen && !hideBotControls && !botActive && (
           <button onClick={onReturnToBot} disabled={returnToBotPending}
             className="hidden sm:block text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-3 py-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer">
             Вернуть боту
@@ -107,11 +112,11 @@ export function ChatHeader({
               {!searchOpen && (
                 <div className="sm:hidden">
                   <HeaderMenuItem icon={<SearchIcon />} onClick={onToggleSearch}>Поиск</HeaderMenuItem>
-                  {botActive ? (
+                  {!hideBotControls && (botActive ? (
                     <HeaderMenuItem icon={<Bot className="w-4 h-4" />} onClick={onTake}>Взять чат</HeaderMenuItem>
                   ) : (
                     <HeaderMenuItem icon={<User className="w-4 h-4" />} onClick={onReturnToBot}>Вернуть боту</HeaderMenuItem>
-                  )}
+                  ))}
                   <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
                 </div>
               )}

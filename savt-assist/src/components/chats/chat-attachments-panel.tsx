@@ -22,6 +22,7 @@ interface Props {
   avatarBg: string
   AvatarIcon: React.ComponentType<{ className?: string }>
   botActive: boolean
+  hideBotControls?: boolean
   attachTab: AttachTab
   onTabChange: (tab: AttachTab) => void
   allAttachments: AllAttachments
@@ -45,7 +46,7 @@ interface Props {
 // (цвета, обои). Самый крупный по объёму JSX-блок ChatConversation — вынесен сюда,
 // чтобы не раздувать основной файл (см. разбор декомпозиции chat-conversation.tsx).
 export function ChatAttachmentsPanel({
-  onClose, name, avatarBg, AvatarIcon, botActive, attachTab, onTabChange, allAttachments,
+  onClose, name, avatarBg, AvatarIcon, botActive, hideBotControls, attachTab, onTabChange, allAttachments,
   onOpenImage, onJumpToMessage, onContextMenu,
   chatColors, saveColor, colorScope, onColorScopeChange,
   wallpaper, customWallpaperUrl, onSelectWallpaper, onResetWallpaper, onUploadWallpaper, uploadingWallpaper,
@@ -69,9 +70,11 @@ export function ChatAttachmentsPanel({
           </div>
           <div className="min-w-0">
             <p className="font-semibold text-slate-800 dark:text-slate-100 text-base truncate">{name}</p>
-            <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
-              {botActive ? <><Bot className="w-3.5 h-3.5" />Бот отвечает</> : <><User className="w-3.5 h-3.5" />Оператор отвечает</>}
-            </p>
+            {!hideBotControls && (
+              <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
+                {botActive ? <><Bot className="w-3.5 h-3.5" />Бот отвечает</> : <><User className="w-3.5 h-3.5" />Оператор отвечает</>}
+              </p>
+            )}
           </div>
         </div>
         <div className="flex gap-1 px-4 py-2 border-b border-slate-100 dark:border-slate-700/60 shrink-0 flex-wrap">

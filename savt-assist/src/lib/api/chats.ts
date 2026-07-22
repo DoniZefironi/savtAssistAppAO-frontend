@@ -32,11 +32,16 @@ export interface ChatSettings {
 
 export type ChatSettingsPatch = Partial<Omit<ChatSettings, 'user_id' | 'chat_id'>>
 
+export interface GetChatsParams {
+  search?: string
+  chat_type?: 'cabinet' | 'support' | 'service_request'
+  // false (по умолч. на бэкенде) — активные; true — архив (чаты закрытых заявок)
+  archived?: boolean
+}
+
 export const chatsApi = {
-  getChats: async (search?: string): Promise<Chat[]> => {
-    const { data } = await apiClient.get<Chat[]>('/operator/chats', {
-      params: search ? { search } : {},
-    })
+  getChats: async (params: GetChatsParams = {}): Promise<Chat[]> => {
+    const { data } = await apiClient.get<Chat[]>('/operator/chats', { params })
     return data
   },
 

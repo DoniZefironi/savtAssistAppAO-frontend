@@ -122,6 +122,22 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
     setEditing(false)
   }
 
+  // Esc — по аналогии с закрытием модалок в остальном приложении. Если
+  // поверх страницы уже открыт какой-то диалог/подтверждение — сначала
+  // должен закрыться он (это делает сам AppModal/Dialog через base-ui),
+  // а не оба действия сразу, поэтому в этих случаях сюда не долетаем.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (deleteProjectConfirm || deleteCabinetConfirm || showQr || openCabinetId !== null || qrCabinet) return
+      if (editing) { handleCancelName(); return }
+      router.push(backHref)
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing, deleteProjectConfirm, deleteCabinetConfirm, showQr, openCabinetId, qrCabinet, backHref, router])
+
   const activeFiltersCount =
     (filters.has_documents ? 1 : 0) +
     (filters.has_photos ? 1 : 0) +

@@ -47,7 +47,16 @@
       "PowerShell(npx eslint src/components/cabinets/cabinets-view.tsx src/components/projects/project-detail-dialog.tsx src/lib/api/projects.ts src/lib/api/cabinets.ts src/components/layout/admin-sidebar.tsx --quiet)",
       "Bash(mkdir -p \"savt-assist/src/app/admin/projects/[id]\" \"savt-assist/src/app/operator/projects/[id]\" 2>&1; echo done)",
       "PowerShell(Set-Location \"C:\\\\Users\\\\ShaboldaV\\\\Documents\\\\GitHub\\\\savtAssistAppAO-frontend\\\\savt-assist\"; Remove-Item \".next\" -Recurse -Force -ErrorAction SilentlyContinue; npx tsc --noEmit -p tsconfig.json; Write-Output \"EXITCODE:$LASTEXITCODE\")",
-      "PowerShell(npx eslint src/components/cabinets/cabinets-view.tsx src/components/projects/project-page.tsx src/components/projects/project-card.tsx src/app/admin/projects src/app/operator/projects --quiet)"
+      "PowerShell(npx eslint src/components/cabinets/cabinets-view.tsx src/components/projects/project-page.tsx src/components/projects/project-card.tsx src/app/admin/projects src/app/operator/projects --quiet)",
+      "PowerShell(npx eslint src/components/chats/chats-page.tsx src/components/chats/chat-list-panel.tsx src/components/chats/chat-conversation.tsx src/lib/api/chats.ts src/components/requests/service-dialog.tsx src/components/requests/request-shared.tsx src/components/requests/requests-view.tsx src/components/cabinets/cabinet-requests-tab.tsx src/types/index.ts --quiet)",
+      "Bash(curl -s -o /tmp/resp.html -w \"%{http_code}\\\\n\" http://localhost:3000/admin/projects/1)",
+      "Bash(curl -s -o /tmp/resp3000.html -w \"%{http_code}\\\\n\" http://localhost:3000/admin/projects/1)",
+      "Bash(kill %1)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/ --max-time 5)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | Select-Object -First 5; Get-Process -Id \\(Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess\\) -ErrorAction SilentlyContinue)",
+      "Bash(curl -s -o /tmp/resp_after.html -w \"%{http_code}\\\\n\" http://localhost:3000/admin/projects/1)",
+      "PowerShell(Get-Process -Id 4744 -ErrorAction SilentlyContinue)"
     ],
     "additionalDirectories": [
       "c:\\Users\\ShaboldaV\\Documents\\GitHub\\savtAssistAppAO-frontend\\savt-assist\\src\\app\\admin\\projects"

@@ -2,7 +2,7 @@
 
 import { useMemo, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Package, FileText, MessageCircle, Search } from 'lucide-react'
+import { Package, FileText, MessageCircle, Search, Wrench, Archive } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { chatsApi } from '@/lib/api/chats'
 import type { MessageSearchResult } from '@/lib/api/chats'
@@ -19,9 +19,11 @@ interface Props {
   searchValue: string
   onSearchChange: (v: string) => void
   onCollapse?: () => void
+  archived?: boolean
+  onToggleArchived?: () => void
 }
 
-export function ChatListPanel({ chats, selectedId, onSelect, onSelectChatId, loading, compact, searchValue, onSearchChange, onCollapse }: Props) {
+export function ChatListPanel({ chats, selectedId, onSelect, onSelectChatId, loading, compact, searchValue, onSearchChange, onCollapse, archived, onToggleArchived }: Props) {
   const setPending = useChatNavStore((s) => s.setPending)
   const sorted = [...chats].sort((a, b) => {
     if (a.operator_requested && !b.operator_requested) return -1
@@ -83,6 +85,20 @@ export function ChatListPanel({ chats, selectedId, onSelect, onSelectChatId, loa
               className="w-full text-sm bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:placeholder:text-slate-500 rounded-xl pl-9 pr-3 py-2 focus:outline-none focus:bg-slate-200 dark:focus:bg-slate-700 transition-colors"
             />
           </div>
+          {onToggleArchived && (
+            <button
+              onClick={onToggleArchived}
+              title={archived ? 'Показать активные чаты' : 'Показать архив (чаты закрытых заявок)'}
+              className={cn(
+                'flex items-center justify-center w-9 h-9 rounded-xl transition-colors shrink-0 cursor-pointer',
+                archived
+                  ? 'bg-[#1B3A72] text-white'
+                  : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+              )}
+            >
+              <Archive className="w-4.5 h-4.5" />
+            </button>
+          )}
           {onCollapse && (
             <button
               onClick={onCollapse}
@@ -173,8 +189,8 @@ export function ChatListPanel({ chats, selectedId, onSelect, onSelectChatId, loa
           <>
             {sorted.length === 0 && (
               <div className="flex flex-col items-center justify-center h-32 text-slate-400 text-sm gap-2">
-                <MessageCircle className="w-7 h-7 opacity-50" />
-                Нет чатов
+                {archived ? <Archive className="w-7 h-7 opacity-50" /> : <MessageCircle className="w-7 h-7 opacity-50" />}
+                {archived ? 'В архиве пусто' : 'Нет чатов'}
               </div>
             )}
             {sorted.map((chat) => (
@@ -210,7 +226,7 @@ function CompactChatRow({ chat, selected, onSelect }: { chat: Chat; selected: bo
         'w-9 h-9 rounded-full flex items-center justify-center text-base font-semibold text-white',
         avatarBg, bg
       )}>
-        {chat.chat_type === 'cabinet' ? <Package className="w-4 h-4" /> : chat.chat_type === 'notes' ? <FileText className="w-4 h-4" /> : chatInitials(chat)}
+        {chat.chat_type === 'cabinet' ? <Package className="w-4 h-4" /> : chat.chat_type === 'notes' ? <FileText className="w-4 h-4" /> : chat.chat_type === 'service_request' ? <Wrench className="w-4 h-4" /> : chatInitials(chat)}
       </div>
 
       {hasUnread && (
@@ -282,9 +298,13 @@ function ChatAvatar({ chat, selected }: { chat: Chat; selected: boolean }) {
   const bg = selected ? 'bg-white/20' : chatColor(chat)
   return (
     <div className={cn('w-12 h-12 rounded-full flex items-center justify-center shrink-0 text-lg font-semibold', bg, !selected && 'text-white')}>
-      {chat.chat_type === 'cabinet' ? <Package className="w-5 h-5" /> : chat.chat_type === 'notes' ? <FileText className="w-5 h-5" /> : chatInitials(chat)}
+      {chat.chat_type === 'cabinet' ? <Package className="w-5 h-5" /> : chat.chat_type === 'notes' ? <FileText className="w-5 h-5" /> : chat.chat_type === 'service_request' ? <Wrench className="w-5 h-5" /> : chatInitials(chat)}
     </div>
   )
+}
+
+function truncate(s: string, n: number): string {
+  return s.length > n ? `${s.slice(0, n).trimEnd()}…` : s
 }
 
 export function chatDisplayName(chat: Chat): string {
@@ -295,6 +315,10 @@ export function chatDisplayName(chat: Chat): string {
   }
   if (chat.chat_type === 'notes') return user ? `Заметки — ${user}` : `Заметки #${chat.id}`
   if (chat.chat_type === 'support') return user ? `Поддержка — ${user}` : `Поддержка #${chat.id}`
+  if (chat.chat_type === 'service_request') {
+    const title = chat.service_request_description ? truncate(chat.service_request_description, 36) : `Заявка #${chat.id}`
+    return user ? `${title} — ${user}` : title
+  }
   return `Чат #${chat.id}`
 }
 

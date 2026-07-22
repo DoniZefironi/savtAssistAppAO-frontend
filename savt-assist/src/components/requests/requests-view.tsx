@@ -92,8 +92,9 @@ const DOC_SORT = [
 const REQUEST_TYPE_FILTERS = [
   { value: 'all', label: 'Все типы' },
   { value: 'repair', label: 'Ремонт' },
-  { value: 'maintenance', label: 'Обслуживание' },
-  { value: 'inspection', label: 'Осмотр' },
+  { value: 'diagnostics', label: 'Диагностика' },
+  { value: 'remote_adjustment', label: 'Наладка удалённо' },
+  { value: 'onsite_adjustment', label: 'Наладка с выездом' },
   { value: 'other', label: 'Другое' },
 ]
 

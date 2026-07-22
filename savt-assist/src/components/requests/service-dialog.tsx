@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { requestsApi } from '@/lib/api/requests'
@@ -9,6 +10,8 @@ import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { UserDialog } from '@/components/users/user-dialog'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
+import { useAuthStore } from '@/lib/store/auth'
+import { useChatNavStore } from '@/lib/store/chat-nav'
 import {
   DialogHeader, DRow, DRowLink, VerifiedBadge, StatusStepper,
   fmtDate, userTypeLabel, svcStatusLabel, reqTypeLabel,
@@ -16,9 +19,19 @@ import {
 
 export function ServiceDialog({ request, onClose }: { request: ServiceRequest; onClose: () => void }) {
   const qc = useQueryClient()
+  const router = useRouter()
+  const currentUser = useAuthStore(s => s.user)
+  const setPendingChatId = useChatNavStore(s => s.setPendingChatId)
   const [status, setStatus] = useState(request.status)
   const [subUserId, setSubUserId] = useState<number | null>(null)
   const [subCabinetId, setSubCabinetId] = useState<number | null>(null)
+
+  const handleOpenChat = () => {
+    if (request.chat_id == null) return
+    setPendingChatId(request.chat_id)
+    router.push(currentUser?.role === 'operator' ? '/operator/chats' : '/admin/chats')
+    onClose()
+  }
 
   const mutation = useMutation({
     mutationFn: () => requestsApi.updateServiceRequestStatus(request.id, status),
@@ -64,6 +77,9 @@ export function ServiceDialog({ request, onClose }: { request: ServiceRequest; o
         <DRow label="Статус аккаунта" value={<VerifiedBadge verified={request.user_is_verified} />} />
         {request.user_registered_at && <DRow label="Зарегистрирован" value={fmtDate(request.user_registered_at)} />}
         <DRowLink label="Шкаф управления" value={`ШУ ${request.cabinet_object_number}`} onClick={() => setSubCabinetId(request.cabinet_id)} />
+        {request.chat_id != null && (
+          <DRowLink label="Чат заявки" value={`Открыть чат #${request.chat_id}`} onClick={handleOpenChat} />
+        )}
         <DRow label="Создана" value={fmtDate(request.created_at)} />
         <DRow label="Закрыта" value={request.closed_at ? fmtDate(request.closed_at) : '—'} />
         <DRow label="Bitrix-задача" value={request.bitrix_task_id ?? '—'} />
