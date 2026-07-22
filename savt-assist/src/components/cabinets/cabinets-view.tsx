@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { X, FileText, Image, User, Wrench, CheckCircle2, XCircle, Package, FolderKanban, AlertTriangle, SlidersHorizontal } from 'lucide-react'
@@ -13,7 +14,6 @@ import { CabinetDetailDialog } from './cabinet-detail-dialog'
 import { CreateCabinetDialog } from './create-cabinet-dialog'
 import { QrDialog } from './qr-dialog'
 import { ProjectCard } from '@/components/projects/project-card'
-import { ProjectDetailDialog } from '@/components/projects/project-detail-dialog'
 import { CreateProjectDialog } from '@/components/projects/create-project-dialog'
 import { ProjectQrDialog } from '@/components/projects/project-qr-dialog'
 import { cabinetsApi } from '@/lib/api/cabinets'
@@ -69,6 +69,8 @@ interface Props {
 // шкафа внутри проекта (см. ProjectCabinetFilters), в режиме "без проекта" —
 // как раньше, напрямую по самим шкафам.
 export function CabinetsView({ isAdmin }: Props) {
+  const router = useRouter()
+  const base = isAdmin ? '/admin' : '/operator'
   const qc = useQueryClient()
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<string>('created_at')
@@ -86,7 +88,6 @@ export function CabinetsView({ isAdmin }: Props) {
   const [qrCabinet, setQrCabinet] = useState<Cabinet | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: number; name: string } | null>(null)
-  const [openProjectId, setOpenProjectId] = useState<number | null>(null)
   const [qrProject, setQrProject] = useState<Project | null>(null)
   const [showCreateProject, setShowCreateProject] = useState(false)
   const [deleteProjectConfirm, setDeleteProjectConfirm] = useState<{ id: number; name: string } | null>(null)
@@ -462,7 +463,8 @@ export function CabinetsView({ isAdmin }: Props) {
                 project={project}
                 isAdmin={isAdmin}
                 view={view}
-                onOpen={() => setOpenProjectId(project.id)}
+                onOpen={() => router.push(`${base}/projects/${project.id}`)}
+                onEdit={() => router.push(`${base}/projects/${project.id}?edit=1`)}
                 onQr={() => setQrProject(project)}
                 onDelete={() => setDeleteProjectConfirm({ id: project.id, name: project.name })}
               />
@@ -493,7 +495,6 @@ export function CabinetsView({ isAdmin }: Props) {
       {isAdmin && <CreateCabinetDialog open={showCreate} onClose={() => setShowCreate(false)} />}
       <QrDialog cabinet={qrCabinet} onClose={() => setQrCabinet(null)} />
 
-      <ProjectDetailDialog projectId={openProjectId} isAdmin={isAdmin} filters={projectCabinetFilters} onClose={() => setOpenProjectId(null)} />
       {isAdmin && <CreateProjectDialog open={showCreateProject} onClose={() => setShowCreateProject(false)} />}
       <ProjectQrDialog project={qrProject} onClose={() => setQrProject(null)} />
 

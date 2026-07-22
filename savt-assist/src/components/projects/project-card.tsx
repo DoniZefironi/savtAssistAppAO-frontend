@@ -7,11 +7,12 @@ interface Props {
   isAdmin: boolean
   view?: 'list' | 'grid'
   onOpen: () => void
+  onEdit?: () => void
   onQr: () => void
   onDelete?: () => void
 }
 
-export function ProjectCard({ project, isAdmin, view = 'list', onOpen, onQr, onDelete }: Props) {
+export function ProjectCard({ project, isAdmin, view = 'list', onOpen, onEdit, onQr, onDelete }: Props) {
   if (view === 'grid') {
     return (
       <div
@@ -24,6 +25,11 @@ export function ProjectCard({ project, isAdmin, view = 'list', onOpen, onQr, onD
             <p className="text-xs text-slate-400 mt-0.5">{project.cabinet_count} шкафов</p>
           </div>
           <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+            {isAdmin && onEdit && (
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-[#1B3A72] cursor-pointer" title="Переименовать" onClick={onEdit}>
+                <EditIcon />
+              </Button>
+            )}
             {isAdmin && onDelete && (
               <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-500 cursor-pointer" title="Удалить" onClick={onDelete}>
                 <TrashIcon />
@@ -58,14 +64,22 @@ export function ProjectCard({ project, isAdmin, view = 'list', onOpen, onQr, onD
         <p className="text-xs text-slate-400 mt-0.5">{project.cabinet_count} шкафов · {formatDate(project.created_at)}</p>
       </div>
 
-      {isAdmin && onDelete && (
+      {isAdmin && (onEdit || onDelete) && (
+        // pointer-coarse: на тач-устройствах hover нет — кнопки видны всегда
         <div
           className="flex items-center gap-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity"
           onClick={(e) => e.stopPropagation()}
         >
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-500 cursor-pointer" title="Удалить" onClick={onDelete}>
-            <TrashIcon />
-          </Button>
+          {onEdit && (
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-[#1B3A72] cursor-pointer" title="Переименовать" onClick={onEdit}>
+              <EditIcon />
+            </Button>
+          )}
+          {onDelete && (
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-500 cursor-pointer" title="Удалить" onClick={onDelete}>
+              <TrashIcon />
+            </Button>
+          )}
         </div>
       )}
     </div>
@@ -77,6 +91,13 @@ function QrIcon({ className }: { className?: string }) {
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />
+    </svg>
+  )
+}
+function EditIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
     </svg>
   )
 }

@@ -44,7 +44,13 @@
       "PowerShell(npx eslint src/components/cabinets/qr-dialog.tsx src/components/cabinets/cabinets-view.tsx --quiet)",
       "PowerShell(npx tsc --noEmit -p tsconfig.json; Write-Output \"EXITCODE:$LASTEXITCODE\")",
       "PowerShell(Set-Location \"C:\\\\Users\\\\ShaboldaV\\\\Documents\\\\GitHub\\\\savtAssistAppAO-frontend\\\\savt-assist\"; npx tsc --noEmit -p tsconfig.json; Write-Output \"EXITCODE:$LASTEXITCODE\")",
-      "PowerShell(npx eslint src/components/cabinets/cabinets-view.tsx src/components/projects/project-detail-dialog.tsx src/lib/api/projects.ts src/lib/api/cabinets.ts src/components/layout/admin-sidebar.tsx --quiet)"
+      "PowerShell(npx eslint src/components/cabinets/cabinets-view.tsx src/components/projects/project-detail-dialog.tsx src/lib/api/projects.ts src/lib/api/cabinets.ts src/components/layout/admin-sidebar.tsx --quiet)",
+      "Bash(mkdir -p \"savt-assist/src/app/admin/projects/[id]\" \"savt-assist/src/app/operator/projects/[id]\" 2>&1; echo done)",
+      "PowerShell(Set-Location \"C:\\\\Users\\\\ShaboldaV\\\\Documents\\\\GitHub\\\\savtAssistAppAO-frontend\\\\savt-assist\"; Remove-Item \".next\" -Recurse -Force -ErrorAction SilentlyContinue; npx tsc --noEmit -p tsconfig.json; Write-Output \"EXITCODE:$LASTEXITCODE\")",
+      "PowerShell(npx eslint src/components/cabinets/cabinets-view.tsx src/components/projects/project-page.tsx src/components/projects/project-card.tsx src/app/admin/projects src/app/operator/projects --quiet)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\ShaboldaV\\Documents\\GitHub\\savtAssistAppAO-frontend\\savt-assist\\src\\app\\admin\\projects"
     ]
   }
 }

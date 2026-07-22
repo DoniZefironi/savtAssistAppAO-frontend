@@ -16,6 +16,10 @@ export interface CabinetsParams {
   // false — только ШУ без привязанного проекта (см. обсуждение расширения
   // GET /admin/cabinets в контексте раздела "Проекты ШУ")
   has_project?: boolean
+  // Шкафы конкретного проекта — используется страницей проекта вместо
+  // усечённого cabinets[] из GET /admin/projects/{id}, чтобы переиспользовать
+  // тот же полный Cabinet-объект и всю существующую фильтрацию/поиск/сортировку
+  project_id?: number
 }
 
 export interface CreateCabinetDto {
