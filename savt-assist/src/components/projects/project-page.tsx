@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { AppModal } from '@/components/ui/app-modal'
 import { CabinetCard } from '@/components/cabinets/cabinet-card'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
+import { CreateCabinetDialog } from '@/components/cabinets/create-cabinet-dialog'
 import { QrDialog } from '@/components/cabinets/qr-dialog'
 import { ProjectQrDialog } from './project-qr-dialog'
 import { cabinetsApi } from '@/lib/api/cabinets'
@@ -66,6 +67,7 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
   const [nameError, setNameError] = useState<string | undefined>()
   const [showQr, setShowQr] = useState(false)
   const [deleteProjectConfirm, setDeleteProjectConfirm] = useState(false)
+  const [showCreateCabinet, setShowCreateCabinet] = useState(false)
 
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState('created_at')
@@ -263,21 +265,42 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
               </>
             ) : (
               <>
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-                    <button onClick={() => setView('list')} title="Список" className={`p-2 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
-                      <ListIcon />
-                    </button>
-                    <button onClick={() => setView('grid')} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
-                      <GridIcon />
-                    </button>
-                    <button onClick={() => setFiltersOpen(v => !v)} title={filtersOpen ? 'Скрыть поиск и фильтры' : 'Показать поиск и фильтры'} className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${filtersOpen ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
-                      <SlidersHorizontal className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
+                {isAdmin && (
+                  <Button onClick={() => setShowCreateCabinet(true)} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 dark:text-white gap-2 cursor-pointer">
+                    <PlusIcon />
+                    Добавить ШУ
+                  </Button>
+                )}
+                {isAdmin && (
+                  <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-[#1B3A72] cursor-pointer" title="Переименовать" onClick={() => setEditing(true)}>
+                    <EditIcon />
+                  </Button>
+                )}
+                <Button variant="outline" onClick={() => setShowQr(true)} className="gap-2 cursor-pointer">
+                  <QrIcon className="w-4 h-4" />
+                  QR
+                </Button>
+                {isAdmin && (
+                  <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-red-500 cursor-pointer" title="Удалить проект" onClick={() => setDeleteProjectConfirm(true)}>
+                    <TrashIcon />
+                  </Button>
+                )}
               </>
             )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 mb-3">
+          <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+            <button onClick={() => setView('list')} title="Список" className={`p-2 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+              <ListIcon />
+            </button>
+            <button onClick={() => setView('grid')} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+              <GridIcon />
+            </button>
+            <button onClick={() => setFiltersOpen(v => !v)} title={filtersOpen ? 'Скрыть поиск и фильтры' : 'Показать поиск и фильтры'} className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${filtersOpen ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+              <SlidersHorizontal className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
@@ -418,6 +441,9 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
       <CabinetDetailDialog cabinetId={openCabinetId} isAdmin={isAdmin} initialMode={openCabinetMode} onClose={() => setOpenCabinetId(null)} />
       <QrDialog cabinet={qrCabinet} onClose={() => setQrCabinet(null)} />
       <ProjectQrDialog project={showQr ? qrProject : null} onClose={() => setShowQr(false)} />
+      {isAdmin && (
+        <CreateCabinetDialog open={showCreateCabinet} onClose={() => setShowCreateCabinet(false)} projectId={projectId} />
+      )}
 
       {deleteCabinetConfirm && (
         <AppModal open onClose={() => setDeleteCabinetConfirm(null)}>
@@ -468,6 +494,9 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
   )
 }
 
+function PlusIcon() {
+  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+}
 function SearchIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
 }

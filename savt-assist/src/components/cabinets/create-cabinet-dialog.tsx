@@ -13,6 +13,9 @@ import { LocationPicker } from '@/components/map/location-picker'
 interface Props {
   open: boolean
   onClose: () => void
+  // Если открыт со страницы проекта — новый ШУ сразу привязывается к нему
+  // (PATCH .../project) после создания, отдельно ходить в карточку ШУ не нужно
+  projectId?: number
 }
 
 type FormErrors = Partial<Record<keyof CreateCabinetDto, string>>
@@ -47,7 +50,7 @@ function validate(form: CreateCabinetDto): FormErrors {
   return e
 }
 
-export function CreateCabinetDialog({ open, onClose }: Props) {
+export function CreateCabinetDialog({ open, onClose, projectId }: Props) {
   const qc = useQueryClient()
   const [form, setForm] = useState<CreateCabinetDto>(EMPTY)
   const [errors, setErrors] = useState<FormErrors>({})
@@ -56,8 +59,8 @@ export function CreateCabinetDialog({ open, onClose }: Props) {
     setErrors(prev => ({ ...prev, [key]: undefined }))
 
   const mutation = useMutation({
-    mutationFn: () =>
-      cabinetsApi.create({
+    mutationFn: async () => {
+      const cabinet = await cabinetsApi.create({
         type: form.type,
         object_number: form.object_number,
         admin_internal_name: form.admin_internal_name || null,
@@ -72,10 +75,17 @@ export function CreateCabinetDialog({ open, onClose }: Props) {
           : null,
         latitude: form.latitude ?? null,
         longitude: form.longitude ?? null,
-      }),
+      })
+      if (projectId != null) await cabinetsApi.setProject(cabinet.id, projectId)
+      return cabinet
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cabinets'] })
-      toast.success('ШУ успешно создан')
+      if (projectId != null) {
+        qc.invalidateQueries({ queryKey: ['project', projectId] })
+        qc.invalidateQueries({ queryKey: ['projects'] })
+      }
+      toast.success(projectId != null ? 'ШУ создан и привязан к проекту' : 'ШУ успешно создан')
       setForm(EMPTY)
       setErrors({})
       onClose()
@@ -116,7 +126,9 @@ export function CreateCabinetDialog({ open, onClose }: Props) {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-bold text-lg text-white leading-tight">Добавить ШУ</p>
-              <p className="text-sm text-white/60 mt-0.5">Заполните данные нового шкафа управления</p>
+              <p className="text-sm text-white/60 mt-0.5">
+                {projectId != null ? 'Шкаф будет сразу привязан к этому проекту' : 'Заполните данные нового шкафа управления'}
+              </p>
             </div>
           </div>
         </div>
