@@ -9,7 +9,7 @@ services:
     restart: unless-stopped
     ports:
       # Слушаем только на localhost — наружу отдаёт nginx через reverse proxy.
-      - "127.0.0.1:3000:3000"
+      - "3000:3000"
     networks:
       - backend
 
