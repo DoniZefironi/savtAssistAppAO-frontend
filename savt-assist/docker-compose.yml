@@ -3,7 +3,7 @@ services:
     build:
       context: .
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://helper.savt.by}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://helper.savt.by}
     image: savt-assist-frontend
     container_name: savt-assist-frontend
     restart: unless-stopped

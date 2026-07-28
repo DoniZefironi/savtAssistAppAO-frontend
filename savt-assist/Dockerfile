@@ -15,7 +15,7 @@ COPY . .
 # NEXT_PUBLIC_* переменные вшиваются в клиентский бандл на этапе сборки,
 # поэтому адрес бэкенда нужно задавать через --build-arg, а не через
 # переменные окружения контейнера в рантайме.
-ARG NEXT_PUBLIC_API_URL=http://helper.savt.by
+ARG NEXT_PUBLIC_API_URL=https://helper.savt.by
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
 
