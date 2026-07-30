@@ -4,7 +4,8 @@ import type { PaginatedResponse } from '@/types'
 
 export interface CabinetDocument {
   id: number
-  cabinet_id: number
+  cabinet_id: number | null
+  project_id: number | null
   title: string
   doc_type: string
   file_url: string
@@ -43,6 +44,21 @@ export const mediaApi = {
     const form = new FormData()
     form.append('file', file)
     form.append('cabinet_id', String(cabinetId))
+    if (title) form.append('title', title)
+    form.append('requires_approval', String(requiresApproval))
+    return uploadMultipart('/admin/documents', form)
+  },
+
+  // Документация проекта в целом (не привязанная к конкретному ШУ) — тот же
+  // эндпоинт /admin/documents, но с project_id вместо cabinet_id (ровно одно
+  // из двух, см. README-backend.md, «Рут admin: documents»)
+  listProjectDocuments: (projectId: number): Promise<PaginatedResponse<CabinetDocument>> =>
+    apiClient.get('/admin/documents', { params: { project_id: projectId, size: 100 } }).then(r => r.data),
+
+  uploadProjectDocument: (projectId: number, file: File, title?: string, requiresApproval = false): Promise<CabinetDocument> => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('project_id', String(projectId))
     if (title) form.append('title', title)
     form.append('requires_approval', String(requiresApproval))
     return uploadMultipart('/admin/documents', form)

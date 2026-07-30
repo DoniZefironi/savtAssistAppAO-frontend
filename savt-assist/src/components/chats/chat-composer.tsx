@@ -1,10 +1,10 @@
 'use client'
 
-import { Paperclip, Image as ImageIcon, X } from 'lucide-react'
+import { Paperclip, Image as ImageIcon, MapPin, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SendIcon, PaperclipIcon, MicIcon, StickerIcon } from './chat-icons'
 import type { useVoiceRecorder } from '@/lib/hooks/use-voice-recorder'
-import type { ChatMessage, MessageAttachment } from '@/types'
+import { isLocationAttachment, type ChatMessage, type MessageAttachment } from '@/types'
 
 export const STICKERS: Record<string, string[]> = {
   '😊': ['😀','😂','🥹','😍','🥰','😎','😢','😡','🤔','😴','🤗','🤩','😇','🥳','🙄','😬','🤐','😤'],
@@ -25,6 +25,8 @@ interface Props {
   onCancelContext: () => void
   fileInputRef: React.RefObject<HTMLInputElement | null>
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onShareLocation: () => void
+  locating: boolean
   voice: ReturnType<typeof useVoiceRecorder>
   canSend: boolean
   uploadingFile: boolean
@@ -42,7 +44,7 @@ interface Props {
 export function ChatComposer({
   stickerPickerOpen, onToggleStickerPicker, stickerCat, onStickerCatChange, onPickSticker,
   pendingAttachments, onRemoveAttachment, replyTo, editingMessage, onCancelContext,
-  fileInputRef, onFileChange, voice, canSend, uploadingFile,
+  fileInputRef, onFileChange, onShareLocation, locating, voice, canSend, uploadingFile,
   text, onTextChange, onKeyDown, inputDisabled, textareaRef, onSend,
 }: Props) {
   return (
@@ -76,7 +78,7 @@ export function ChatComposer({
           <div className="max-w-[100rem] mx-auto flex flex-wrap gap-2">
           {pendingAttachments.map((a, i) => (
             <div key={i} className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-700 dark:text-slate-300">
-              {a.mime_type.startsWith('image/') ? <ImageIcon className="w-3.5 h-3.5 shrink-0" /> : <Paperclip className="w-3.5 h-3.5 shrink-0" />}
+              {isLocationAttachment(a) ? <MapPin className="w-3.5 h-3.5 shrink-0" /> : a.mime_type.startsWith('image/') ? <ImageIcon className="w-3.5 h-3.5 shrink-0" /> : <Paperclip className="w-3.5 h-3.5 shrink-0" />}
               <span className="max-w-32 truncate">{a.name}</span>
               <button onClick={() => onRemoveAttachment(i)} className="text-slate-400 hover:text-red-500 ml-1 cursor-pointer">
                 <X className="w-3.5 h-3.5" />
@@ -131,6 +133,10 @@ export function ChatComposer({
             <button onClick={() => fileInputRef.current?.click()} disabled={!canSend || uploadingFile}
               className="w-9 h-9 rounded-full text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors shrink-0 disabled:opacity-40 cursor-pointer">
               {uploadingFile ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <PaperclipIcon />}
+            </button>
+            <button onClick={onShareLocation} disabled={!canSend || locating} title="Отправить геолокацию"
+              className="w-9 h-9 rounded-full text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors shrink-0 disabled:opacity-40 cursor-pointer">
+              {locating ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <MapPin className="w-4 h-4" />}
             </button>
             <button
               onClick={onToggleStickerPicker}

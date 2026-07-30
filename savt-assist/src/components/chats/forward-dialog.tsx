@@ -7,7 +7,16 @@ import { Package, FileText, MessageCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { chatsApi } from '@/lib/api/chats'
 import { chatDisplayName } from './chat-list-panel'
-import type { Chat, ChatMessage } from '@/types'
+import type { Chat, ChatAttachment, ChatMessage, MessageAttachment } from '@/types'
+
+function toMessageAttachment(a: ChatAttachment): MessageAttachment | null {
+  if (a.attachment_type === 'location') {
+    return a.latitude != null && a.longitude != null ? { latitude: a.latitude, longitude: a.longitude } : null
+  }
+  return a.file_url && a.file_name && a.mime_type && a.file_size_bytes != null
+    ? { file_url: a.file_url, file_name: a.file_name, file_size_bytes: a.file_size_bytes, mime_type: a.mime_type, duration_seconds: a.duration_seconds }
+    : null
+}
 
 export function ForwardDialog({ messages, currentChatId, onClose }: { messages: ChatMessage[]; currentChatId: number; onClose: () => void }) {
   const qc = useQueryClient()
@@ -39,7 +48,8 @@ export function ForwardDialog({ messages, currentChatId, onClose }: { messages: 
         const header = showSender && m.sender_name !== prevSender ? `↪ ${m.sender_name}` : ''
         const body = m.text ?? ''
         const text = header && body ? `${header}\n${body}` : (header || body)
-        lastMsg = await chatsApi.sendMessage(chatId, text, m.attachments?.length ? m.attachments : undefined)
+        const attachments = m.attachments?.map(toMessageAttachment).filter((a): a is MessageAttachment => a !== null)
+        lastMsg = await chatsApi.sendMessage(chatId, text, attachments?.length ? attachments : undefined)
         prevSender = m.sender_name
       }
       if (lastMsg) {

@@ -36,13 +36,14 @@ export const projectsApi = {
     return data
   },
 
-  create: async (name: string): Promise<ProjectDetail> => {
-    const { data } = await apiClient.post('/admin/projects', { name })
+  create: async (name: string, parentProjectId?: number | null): Promise<ProjectDetail> => {
+    const { data } = await apiClient.post('/admin/projects', { name, parent_project_id: parentProjectId ?? null })
     return data
   },
 
-  update: async (id: number, name: string): Promise<ProjectDetail> => {
-    const { data } = await apiClient.patch(`/admin/projects/${id}`, { name })
+  // Оба поля опциональны на бэкенде — передавать только изменённые.
+  update: async (id: number, patch: { name?: string; parent_project_id?: number | null }): Promise<ProjectDetail> => {
+    const { data } = await apiClient.patch(`/admin/projects/${id}`, patch)
     return data
   },
 
@@ -52,6 +53,14 @@ export const projectsApi = {
 
   getQr: async (id: number): Promise<Blob> => {
     const { data } = await apiClient.get(`/admin/projects/${id}/qr`, { responseType: 'blob' })
+    return data
+  },
+
+  // Ручной запуск синхронизации папки проекта на NAS — работает всегда, в
+  // отличие от ночного автопрогона (который пропускает проекты с истёкшей
+  // гарантией), см. README-backend.md.
+  syncFolder: async (id: number): Promise<ProjectDetail> => {
+    const { data } = await apiClient.post(`/admin/projects/${id}/sync-folder`)
     return data
   },
 }

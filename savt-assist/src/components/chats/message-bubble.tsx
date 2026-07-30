@@ -71,13 +71,13 @@ export const MessageBubble = React.memo(function MessageBubble({
   const hasText = !!message.text
   const hasAttachments = !!message.attachments?.length
   const replyMsg = message.reply_to_message_id != null ? messagesById?.get(message.reply_to_message_id) : undefined
-  const voiceAttachment = message.attachments?.find(a => a.mime_type.startsWith('audio/'))
+  const voiceAttachment = message.attachments?.find(a => a.mime_type?.startsWith('audio/'))
   const isPinned = !!pinnedMessageIds?.has(message.id)
   const effectiveOwnText = ownTextColor ?? (ownBubbleColor ? getContrastColor(ownBubbleColor) : undefined)
   const effectiveOtherText = otherTextColor ?? (otherBubbleColor ? getContrastColor(otherBubbleColor) : undefined)
   const effectiveBotText = botTextColor ?? (botBubbleColor ? getContrastColor(botBubbleColor) : undefined)
   const isMediaOnly = !hasText && !message.reply_to_message_id && !message.deleted_at &&
-    hasAttachments && message.attachments.every(a => a.mime_type.startsWith('image/') || a.mime_type.startsWith('video/'))
+    hasAttachments && message.attachments.every(a => !!a.mime_type && (a.mime_type.startsWith('image/') || a.mime_type.startsWith('video/')))
 
   const [ctxPos, setCtxPos] = useState<{ x: number; y: number } | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -199,7 +199,7 @@ export const MessageBubble = React.memo(function MessageBubble({
                         isOwn={false}
                         transcription={a === voiceAttachment ? transcription : undefined}
                         transcribing={a === voiceAttachment ? transcribing : undefined}
-                        onTranscribe={a === voiceAttachment && voiceAttachment && onTranscribe ? () => onTranscribe(message, voiceAttachment.file_url) : undefined}
+                        onTranscribe={a === voiceAttachment && voiceAttachment && onTranscribe ? () => onTranscribe(message, voiceAttachment.file_url!) : undefined}
                       />
                     ))}
                   </div>
@@ -294,7 +294,7 @@ export const MessageBubble = React.memo(function MessageBubble({
                   isOwn={isOwn}
                   transcription={a === voiceAttachment ? transcription : undefined}
                   transcribing={a === voiceAttachment ? transcribing : undefined}
-                  onTranscribe={a === voiceAttachment && voiceAttachment && onTranscribe ? () => onTranscribe(message, voiceAttachment.file_url) : undefined}
+                  onTranscribe={a === voiceAttachment && voiceAttachment && onTranscribe ? () => onTranscribe(message, voiceAttachment.file_url!) : undefined}
                 />
               ))}
               <div className="absolute bottom-1 right-2 flex items-center gap-1 text-[10px] text-white/80 drop-shadow px-1">
@@ -357,7 +357,7 @@ export const MessageBubble = React.memo(function MessageBubble({
                       isOwn={isOwn}
                       transcription={a === voiceAttachment ? transcription : undefined}
                       transcribing={a === voiceAttachment ? transcribing : undefined}
-                      onTranscribe={a === voiceAttachment && voiceAttachment && onTranscribe ? () => onTranscribe(message, voiceAttachment.file_url) : undefined}
+                      onTranscribe={a === voiceAttachment && voiceAttachment && onTranscribe ? () => onTranscribe(message, voiceAttachment.file_url!) : undefined}
                     />
                   ))}
                 </div>

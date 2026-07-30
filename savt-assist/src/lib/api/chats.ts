@@ -60,7 +60,7 @@ export const chatsApi = {
   sendMessage: async (
     chatId: number,
     text: string,
-    attachments?: Omit<MessageAttachment, 'duration_seconds'>[],
+    attachments?: MessageAttachment[],
     replyToId?: number
   ): Promise<ChatMessage> => {
     const { data } = await apiClient.post<ChatMessage>(`/operator/chats/${chatId}/messages`, {
@@ -132,8 +132,8 @@ export const chatsApi = {
     }
   },
 
-  getAttachments: async (chatId: number): Promise<ChatAttachment[]> => {
-    const { data } = await apiClient.get<ChatAttachment[]>(`/operator/chats/${chatId}/attachments`)
+  getAttachments: async (chatId: number, type?: 'image' | 'voice' | 'document' | 'video' | 'location'): Promise<ChatAttachment[]> => {
+    const { data } = await apiClient.get<ChatAttachment[]>(`/operator/chats/${chatId}/attachments`, { params: type ? { type } : undefined })
     return data
   },
 

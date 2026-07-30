@@ -1,9 +1,9 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import { X, FileText, FileSpreadsheet, Video, Archive, Paperclip, Mic, Music } from 'lucide-react'
+import { X, FileText, FileSpreadsheet, Video, Archive, Paperclip, Mic, Music, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { MessageAttachment } from '@/types'
+import type { ChatAttachment } from '@/types'
 
 import { toFullUrl } from '@/lib/api/base-url'
 export { toFullUrl }
@@ -46,7 +46,7 @@ function FileTypeIcon({ mime, className }: { mime: string; className?: string })
 }
 
 interface Props {
-  attachment: MessageAttachment
+  attachment: ChatAttachment
   isOwn: boolean
   transcription?: string
   transcribing?: boolean
@@ -54,30 +54,61 @@ interface Props {
 }
 
 export function AttachmentView({ attachment, isOwn, transcription, transcribing, onTranscribe }: Props) {
-  const { mime_type } = attachment
-  if (mime_type.startsWith('image/')) return <ImageAttachment a={attachment} isOwn={isOwn} />
-  if (mime_type.startsWith('audio/')) return <AudioAttachment a={attachment} isOwn={isOwn} transcription={transcription} transcribing={transcribing} onTranscribe={onTranscribe} />
-  if (mime_type.startsWith('video/')) return <VideoAttachment a={attachment} isOwn={isOwn} />
+  const { mime_type, attachment_type } = attachment
+  if (attachment_type === 'location') return <LocationAttachment a={attachment} isOwn={isOwn} />
+  if (mime_type?.startsWith('image/')) return <ImageAttachment a={attachment} isOwn={isOwn} />
+  if (mime_type?.startsWith('audio/')) return <AudioAttachment a={attachment} isOwn={isOwn} transcription={transcription} transcribing={transcribing} onTranscribe={onTranscribe} />
+  if (mime_type?.startsWith('video/')) return <VideoAttachment a={attachment} isOwn={isOwn} />
   return <FileAttachment a={attachment} isOwn={isOwn} />
 }
 
-function ImageAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean }) {
+function LocationAttachment({ a, isOwn }: { a: ChatAttachment; isOwn: boolean }) {
+  if (a.latitude == null || a.longitude == null) return null
+  const mapUrl = `https://www.google.com/maps?q=${a.latitude},${a.longitude}`
+
+  return (
+    <a
+      href={mapUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={cn(
+        'mt-1 flex items-center gap-3 rounded-xl px-3 py-2.5 min-w-[220px] max-w-xs transition-colors',
+        isOwn
+          ? 'bg-white/25 border border-white/35 hover:bg-white/30'
+          : 'bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-600'
+      )}
+    >
+      <div className={cn('w-9 h-9 rounded-full flex items-center justify-center shrink-0', isOwn ? 'bg-white/20' : 'bg-slate-100 dark:bg-slate-600')}>
+        <MapPin className={cn('w-5 h-5', isOwn ? 'text-white' : 'text-[#1B3A72] dark:text-blue-400')} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className={cn('text-sm font-medium leading-tight', isOwn ? 'text-white' : 'text-slate-800 dark:text-slate-100')}>Геолокация</p>
+        <p className={cn('text-xs mt-0.5 truncate', isOwn ? 'text-white/60' : 'text-slate-500 dark:text-slate-400')}>
+          {a.latitude.toFixed(5)}, {a.longitude.toFixed(5)}
+        </p>
+      </div>
+    </a>
+  )
+}
+
+function ImageAttachment({ a, isOwn }: { a: ChatAttachment; isOwn: boolean }) {
   const [lightbox, setLightbox] = useState(false)
-  const url = toFullUrl(a.file_url)
+  const url = toFullUrl(a.file_url ?? '')
+  const name = a.file_name ?? ''
 
   return (
     <>
       <div className="relative group mt-1 max-w-xs">
         <img
           src={url}
-          alt={a.file_name}
+          alt={name}
           onClick={() => setLightbox(true)}
           className="rounded-xl max-w-full max-h-64 object-cover cursor-zoom-in block"
           loading="lazy"
         />
         <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
-            onClick={(e) => { e.stopPropagation(); downloadBlob(url, a.file_name) }}
+            onClick={(e) => { e.stopPropagation(); downloadBlob(url, name) }}
             className="w-7 h-7 bg-black/50 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/70 cursor-pointer"
             title="Скачать"
           >
@@ -92,7 +123,7 @@ function ImageAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean })
           </button>
         </div>
       </div>
-      {lightbox && <ImageLightbox url={url} name={a.file_name} onClose={() => setLightbox(false)} />}
+      {lightbox && <ImageLightbox url={url} name={name} onClose={() => setLightbox(false)} />}
     </>
   )
 }
@@ -107,7 +138,7 @@ function seededBars(seed: string, count: number): number[] {
 }
 
 function AudioAttachment({ a, isOwn, transcription, transcribing, onTranscribe }: {
-  a: MessageAttachment
+  a: ChatAttachment
   isOwn: boolean
   transcription?: string
   transcribing?: boolean
@@ -117,9 +148,11 @@ function AudioAttachment({ a, isOwn, transcription, transcribing, onTranscribe }
   const [progress, setProgress] = useState(0)
   const [elapsed, setElapsed] = useState(0)
   const audioRef = useRef<HTMLAudioElement>(null)
-  const url = toFullUrl(a.file_url)
-  const isVoice = a.file_name === 'Голосовое сообщение' || a.mime_type.includes('ogg') || a.mime_type.includes('webm')
-  const bars = useMemo(() => seededBars(a.file_url, 34), [a.file_url])
+  const url = toFullUrl(a.file_url ?? '')
+  const name = a.file_name ?? ''
+  const mime = a.mime_type ?? ''
+  const isVoice = name === 'Голосовое сообщение' || mime.includes('ogg') || mime.includes('webm')
+  const bars = useMemo(() => seededBars(a.file_url ?? String(a.id), 34), [a.file_url, a.id])
   const duration = a.duration_seconds ?? 0
   const displayTime = playing && elapsed > 0 ? formatDuration(elapsed) : formatDuration(duration)
 
@@ -199,7 +232,7 @@ function AudioAttachment({ a, isOwn, transcription, transcribing, onTranscribe }
                 </button>
               )}
               <button
-                onClick={() => downloadBlob(url, a.file_name)}
+                onClick={() => downloadBlob(url, name)}
                 title="Скачать"
                 className={cn('cursor-pointer transition-colors', isOwn ? 'text-white/50 hover:text-white' : 'text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-slate-200')}
               >
@@ -219,8 +252,9 @@ function AudioAttachment({ a, isOwn, transcription, transcribing, onTranscribe }
   )
 }
 
-function VideoAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean }) {
-  const url = toFullUrl(a.file_url)
+function VideoAttachment({ a, isOwn }: { a: ChatAttachment; isOwn: boolean }) {
+  const url = toFullUrl(a.file_url ?? '')
+  const name = a.file_name ?? ''
 
   return (
     <div className="mt-1 relative group max-w-xs">
@@ -232,7 +266,7 @@ function VideoAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean })
       />
       <a
         href={url}
-        download={a.file_name}
+        download={name}
         className="absolute top-2 right-2 w-7 h-7 bg-black/50 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
         title="Скачать"
       >
@@ -242,8 +276,10 @@ function VideoAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean })
   )
 }
 
-function FileAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean }) {
-  const url = toFullUrl(a.file_url)
+function FileAttachment({ a, isOwn }: { a: ChatAttachment; isOwn: boolean }) {
+  const url = toFullUrl(a.file_url ?? '')
+  const name = a.file_name ?? ''
+  const size = a.file_size_bytes ?? 0
 
   return (
     <div className={cn(
@@ -252,14 +288,14 @@ function FileAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean }) 
         ? 'bg-white/25 border border-white/35'
         : 'bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 shadow-sm'
     )}>
-      <FileTypeIcon mime={a.mime_type} className={cn('w-6 h-6 shrink-0', isOwn ? 'text-white/80' : 'text-slate-400')} />
+      <FileTypeIcon mime={a.mime_type ?? ''} className={cn('w-6 h-6 shrink-0', isOwn ? 'text-white/80' : 'text-slate-400')} />
       <div className="flex-1 min-w-0">
         <p className={cn('text-sm font-medium truncate leading-tight', isOwn ? 'text-white' : 'text-slate-800 dark:text-slate-100')}>
-          {a.file_name}
+          {name}
         </p>
-        {a.file_size_bytes > 0 && (
+        {size > 0 && (
           <p className={cn('text-xs mt-0.5', isOwn ? 'text-white/60' : 'text-slate-500 dark:text-slate-400')}>
-            {formatBytes(a.file_size_bytes)}
+            {formatBytes(size)}
           </p>
         )}
       </div>
@@ -277,7 +313,7 @@ function FileAttachment({ a, isOwn }: { a: MessageAttachment; isOwn: boolean }) 
           <OpenIcon />
         </a>
         <button
-          onClick={() => downloadBlob(url, a.file_name)}
+          onClick={() => downloadBlob(url, name)}
           className={cn(
             'w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer',
             isOwn ? 'bg-white/20 hover:bg-white/30 text-white' : 'bg-slate-100 dark:bg-slate-600 hover:bg-slate-200 dark:hover:bg-slate-500 text-slate-600 dark:text-slate-300'

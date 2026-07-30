@@ -14,9 +14,12 @@ import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog
 import { CreateCabinetDialog } from '@/components/cabinets/create-cabinet-dialog'
 import { QrDialog } from '@/components/cabinets/qr-dialog'
 import { ProjectQrDialog } from './project-qr-dialog'
+import { ProjectDocsTab } from './project-docs-tab'
+import { ProjectCombobox } from '@/components/ui/project-combobox'
 import { cabinetsApi } from '@/lib/api/cabinets'
 import { projectsApi } from '@/lib/api/projects'
 import { useDebounce } from '@/lib/hooks/use-debounce'
+import { formatDate } from '@/lib/warranty'
 import { cn } from '@/lib/utils'
 import type { Cabinet, Project } from '@/types'
 
@@ -65,6 +68,7 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
   const [editing, setEditing] = useState(!!startEditing)
   const [name, setName] = useState('')
   const [nameError, setNameError] = useState<string | undefined>()
+  const [parentId, setParentId] = useState<number | null>(null)
   const [showQr, setShowQr] = useState(false)
   const [deleteProjectConfirm, setDeleteProjectConfirm] = useState(false)
   const [showCreateCabinet, setShowCreateCabinet] = useState(false)
@@ -74,6 +78,7 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [filters, setFilters] = useState<CabinetFilters>(DEFAULT_FILTERS)
   const [filtersOpen, setFiltersOpen] = useState(true)
+  const [pageTab, setPageTab] = useState<'cabinets' | 'documents'>('cabinets')
   const [view, setView] = useState<'list' | 'grid'>('list')
   const [openCabinetId, setOpenCabinetId] = useState<number | null>(null)
   const [openCabinetMode, setOpenCabinetMode] = useState<'view' | 'edit'>('view')
@@ -89,15 +94,23 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
   })
 
   useEffect(() => {
-    if (project) setName(project.name)
+    if (project) { setName(project.name); setParentId(project.parent_project_id) }
   }, [project])
 
+  // Только название нужно для хлебной крошки над заголовком — не грузим
+  // список шкафов родителя, поэтому не переиспользуем ['project', parentId].
+  const { data: parentProject } = useQuery({
+    queryKey: ['project-parent-name', project?.parent_project_id],
+    queryFn: () => projectsApi.getOne(project!.parent_project_id!),
+    enabled: project?.parent_project_id != null,
+  })
+
   const renameMutation = useMutation({
-    mutationFn: () => projectsApi.update(projectId, name.trim()),
+    mutationFn: () => projectsApi.update(projectId, { name: name.trim(), parent_project_id: parentId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['projects'] })
       qc.invalidateQueries({ queryKey: ['project', projectId] })
-      toast.success('Проект переименован')
+      toast.success('Проект сохранён')
       setEditing(false)
     },
     onError: () => toast.error('Не удалось сохранить'),
@@ -119,10 +132,19 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
     renameMutation.mutate()
   }
   const handleCancelName = () => {
-    if (project) setName(project.name)
+    if (project) { setName(project.name); setParentId(project.parent_project_id) }
     setNameError(undefined)
     setEditing(false)
   }
+
+  const syncFolderMutation = useMutation({
+    mutationFn: () => projectsApi.syncFolder(projectId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['project', projectId] })
+      toast.success('Синхронизация папки запущена')
+    },
+    onError: () => toast.error('Не удалось синхронизировать папку'),
+  })
 
   // Esc — по аналогии с закрытием модалок в остальном приложении. Если
   // поверх страницы уже открыт какой-то диалог/подтверждение — сначала
@@ -236,20 +258,40 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
           Все проекты
         </button>
 
+        {!editing && project.parent_project_id != null && (
+          <button
+            onClick={() => router.push(`/${isAdmin ? 'admin' : 'operator'}/projects/${project.parent_project_id}`)}
+            className="flex items-center gap-1 text-xs text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 transition-colors cursor-pointer mb-2 -mt-2"
+          >
+            <FolderIcon className="w-3 h-3" />
+            Внутри проекта: {parentProject?.name ?? '…'}
+          </button>
+        )}
+
         <div className="flex flex-wrap items-end justify-between gap-x-2 gap-y-3 mb-4">
           <div className="min-w-0 flex-1">
             {data && <p className="text-xs text-slate-400 font-medium mb-0.5">{total} шкафов</p>}
             {editing ? (
-              <div>
+              <div className="space-y-2 max-w-md">
                 <input
                   value={name}
                   onChange={(e) => { setName(e.target.value); setNameError(undefined) }}
                   className={cn(
-                    'text-lg sm:text-xl font-bold bg-transparent border-b outline-none w-full max-w-md',
+                    'text-lg sm:text-xl font-bold bg-transparent border-b outline-none w-full',
                     nameError ? 'border-red-400 text-red-600' : 'border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100 focus:border-[#4A8FE7]'
                   )}
                 />
                 {nameError && <p className="text-xs text-red-500 mt-1">{nameError}</p>}
+                <div>
+                  <label className="text-xs font-medium block mb-1 text-slate-400">Родительский проект</label>
+                  <ProjectCombobox
+                    value={parentId}
+                    valueLabel={parentProject?.name}
+                    onChange={setParentId}
+                    excludeId={projectId}
+                    placeholder="Без родителя — проект верхнего уровня"
+                  />
+                </div>
               </div>
             ) : (
               <h1 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100 truncate">{project.name}</h1>
@@ -290,6 +332,41 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
           </div>
         </div>
 
+        {!editing && isAdmin && (
+          <div className="flex items-center gap-2 mb-3 text-xs text-slate-400">
+            <span>
+              Папка на NAS: {project.folder_synced_at ? `синхронизирована ${formatDate(project.folder_synced_at)}` : 'ещё не синхронизирована'}
+            </span>
+            <button
+              onClick={() => syncFolderMutation.mutate()}
+              disabled={syncFolderMutation.isPending}
+              className="text-[#1B3A72] dark:text-blue-400 hover:underline cursor-pointer disabled:opacity-50"
+            >
+              {syncFolderMutation.isPending ? 'Синхронизация...' : 'Синхронизировать'}
+            </button>
+          </div>
+        )}
+
+        <div className="flex gap-1 mb-3 border-b border-slate-100 dark:border-slate-700/60">
+          {([
+            { key: 'cabinets', label: 'Шкафы' },
+            { key: 'documents', label: 'Документы проекта' },
+          ] as const).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setPageTab(key)}
+              className={cn(
+                'px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors cursor-pointer',
+                pageTab === key ? 'border-[#1B3A72] text-[#1B3A72] dark:text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {pageTab === 'cabinets' && (
+        <>
         <div className="flex items-center gap-2 mb-3">
           <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
             <button onClick={() => setView('list')} title="Список" className={`p-2 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
@@ -376,11 +453,15 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
         </div>
         </>
         )}
+        </>
+        )}
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-3 sm:py-4">
         <div className="max-w-425 mx-auto">
+        {pageTab === 'documents' && <ProjectDocsTab projectId={projectId} isAdmin={isAdmin} />}
+        {pageTab === 'cabinets' && <>
         {isLoading && (
           <div className={view === 'grid' ? GRID_CLASSES : 'space-y-3'}>
             {Array.from({ length: view === 'grid' ? 6 : 5 }).map((_, i) => (
@@ -435,6 +516,7 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
         {!hasNextPage && allItems.length > 0 && (
           <p className="text-center text-xs text-slate-300 dark:text-slate-600 py-4">Все {total} записей загружены</p>
         )}
+        </>}
         </div>
       </div>
 
@@ -494,6 +576,13 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
   )
 }
 
+function FolderIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 00-1.883 2.542l.857 6a2.25 2.25 0 002.227 1.932H19.05a2.25 2.25 0 002.227-1.932l.857-6a2.25 2.25 0 00-1.883-2.542m-16.5 0V6A2.25 2.25 0 015.25 3.75h5.379a1.5 1.5 0 011.06.44l2.122 2.12a1.5 1.5 0 001.06.44H18.75A2.25 2.25 0 0121 9v.776" />
+    </svg>
+  )
+}
 function PlusIcon() {
   return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
 }

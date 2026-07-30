@@ -50,6 +50,7 @@ export interface ProjectDetail {
   name: string
   unique_code: string
   parent_project_id: number | null
+  folder_synced_at: string | null
   cabinets: { id: number; type: string | null; object_number: string; admin_internal_name: string | null }[]
   created_at: string
   updated_at: string
@@ -97,28 +98,46 @@ export interface ChatMessage {
   created_at: string
   edited_at: string | null
   deleted_at: string | null
-  attachments: MessageAttachment[]
+  attachments: ChatAttachment[]
   reactions: { emoji: string; user_id: number }[]
 }
 
+// Вложение, приходящее с сервера (в составе сообщения или из /attachments) —
+// либо файл (file_url/file_name/mime_type/... заполнены), либо геолокация
+// (latitude/longitude заполнены, остальное null), см. attachment_type.
 export interface ChatAttachment {
   id: number
   message_id: number
-  file_url: string
-  file_name: string
-  mime_type: string
-  file_size_bytes: number
+  attachment_type: 'image' | 'voice' | 'document' | 'video' | 'location' | string
+  file_url: string | null
+  file_name: string | null
+  mime_type: string | null
+  file_size_bytes: number | null
   duration_seconds: number | null
+  latitude: number | null
+  longitude: number | null
   created_at: string
-  attachment_type: string
 }
 
-export interface MessageAttachment {
+export interface MessageFileAttachment {
   file_url: string
   file_name: string
   file_size_bytes: number
   mime_type: string
   duration_seconds: number | null
+}
+
+export interface MessageLocationAttachment {
+  latitude: number
+  longitude: number
+}
+
+// Вложение при отправке нового сообщения — либо файл, либо геолокация,
+// смешивать поля одного вложения нельзя (см. README-backend.md).
+export type MessageAttachment = MessageFileAttachment | MessageLocationAttachment
+
+export function isLocationAttachment(a: MessageAttachment): a is MessageLocationAttachment {
+  return 'latitude' in a
 }
 
 export interface DashboardStats {

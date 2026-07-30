@@ -13,12 +13,15 @@ interface Props {
   valueLabel?: string | null
   onChange: (id: number | null) => void
   placeholder?: string
+  // Проект, который нужно исключить из выдачи — например, сам редактируемый
+  // проект при выборе родителя (нельзя быть родителем самому себе).
+  excludeId?: number
 }
 
 // Поиск проекта по названию, аналогично CabinetCombobox — плюс явная кнопка
 // сброса, т.к. отвязка ШУ от проекта (project_id: null) такое же валидное
 // действие, как и выбор конкретного проекта.
-export function ProjectCombobox({ value, valueLabel, onChange, placeholder = 'Поиск проекта по названию...' }: Props) {
+export function ProjectCombobox({ value, valueLabel, onChange, placeholder = 'Поиск проекта по названию...', excludeId }: Props) {
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const [selectedLabel, setSelectedLabel] = useState(valueLabel ?? '')
@@ -30,7 +33,7 @@ export function ProjectCombobox({ value, valueLabel, onChange, placeholder = 'П
     queryFn: () => projectsApi.getAll({ search: debouncedSearch || undefined, size: 20, sort_by: 'name', sort_order: 'asc' }),
     enabled: open,
   })
-  const items = data?.items ?? []
+  const items = (data?.items ?? []).filter(p => p.id !== excludeId)
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {

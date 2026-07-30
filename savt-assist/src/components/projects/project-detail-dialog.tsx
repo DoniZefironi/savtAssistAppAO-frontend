@@ -44,12 +44,18 @@ function DetailContent({ projectId, isAdmin, filters }: { projectId: number; isA
     queryFn: () => projectsApi.getOne(projectId, filters),
   })
 
+  const { data: parentProject } = useQuery({
+    queryKey: ['project-parent-name', project?.parent_project_id],
+    queryFn: () => projectsApi.getOne(project!.parent_project_id!),
+    enabled: project?.parent_project_id != null,
+  })
+
   useEffect(() => {
     if (project) setName(project.name)
   }, [project])
 
   const updateMutation = useMutation({
-    mutationFn: () => projectsApi.update(projectId, name.trim()),
+    mutationFn: () => projectsApi.update(projectId, { name: name.trim() }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['projects'] })
       qc.invalidateQueries({ queryKey: ['project', projectId] })
@@ -105,12 +111,18 @@ function DetailContent({ projectId, isAdmin, filters }: { projectId: number; isA
               <p className="font-bold text-lg text-white leading-tight truncate">{project.name}</p>
             )}
             <p className="text-sm text-white/60 mt-0.5">{project.cabinets.length} шкафов · создан {formatDate(project.created_at)}</p>
+            {project.parent_project_id != null && (
+              <p className="text-xs text-white/50 mt-0.5">Внутри проекта: {parentProject?.name ?? '…'}</p>
+            )}
           </div>
         </div>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-4 sm:px-6 py-3 flex justify-end">
+        <div className="px-4 sm:px-6 py-3 flex items-center justify-between gap-2 text-xs text-slate-400">
+          <span>
+            Папка на NAS: {project.folder_synced_at ? `синхронизирована ${formatDate(project.folder_synced_at)}` : 'ещё не синхронизирована'}
+          </span>
           <Button variant="outline" onClick={() => setShowQr(true)} className="gap-2 cursor-pointer">
             <QrIcon className="w-4 h-4" />
             Показать QR

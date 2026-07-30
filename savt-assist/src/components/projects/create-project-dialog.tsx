@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
+import { ProjectCombobox } from '@/components/ui/project-combobox'
 import { projectsApi } from '@/lib/api/projects'
 
 interface Props {
@@ -17,13 +18,15 @@ export function CreateProjectDialog({ open, onClose }: Props) {
   const qc = useQueryClient()
   const [name, setName] = useState('')
   const [error, setError] = useState<string | undefined>()
+  const [parentId, setParentId] = useState<number | null>(null)
 
   const mutation = useMutation({
-    mutationFn: () => projectsApi.create(name.trim()),
+    mutationFn: () => projectsApi.create(name.trim(), parentId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['projects'] })
       toast.success('Проект создан')
       setName('')
+      setParentId(null)
       onClose()
     },
     onError: () => toast.error('Не удалось создать проект'),
@@ -39,6 +42,7 @@ export function CreateProjectDialog({ open, onClose }: Props) {
   const handleClose = () => {
     setName('')
     setError(undefined)
+    setParentId(null)
     onClose()
   }
 
@@ -72,6 +76,19 @@ export function CreateProjectDialog({ open, onClose }: Props) {
               )}
             />
             {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+          </div>
+          <div>
+            <label className="text-xs font-medium block mb-1.5 text-slate-500">
+              Родительский проект
+            </label>
+            <ProjectCombobox
+              value={parentId}
+              onChange={setParentId}
+              placeholder="Без родителя — проект верхнего уровня"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              Для вложенности одного проекта в другой (например, отдельная партия отгрузки внутри общего проекта)
+            </p>
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="ghost" onClick={handleClose} disabled={mutation.isPending} className="cursor-pointer">

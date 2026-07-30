@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
-import { X, Bot, User, Video, Mic as MicIconLucide } from 'lucide-react'
+import { X, Bot, User, Video, Mic as MicIconLucide, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toFullUrl, downloadBlob } from './attachment-view'
 import { EmptyAttach, FileTypeIcon, OpenExtIcon, DownloadSmIcon } from './chat-icons'
@@ -12,9 +12,10 @@ type AllAttachments = {
   media: { message_id: number; url: string; mime: string }[]
   files: { message_id: number; name: string; url: string; mime: string; size: number }[]
   voices: { message_id: number; url: string; duration: number | null }[]
+  locations: { message_id: number; latitude: number; longitude: number }[]
 }
 
-type AttachTab = 'media' | 'files' | 'voice' | 'colors' | 'wallpaper'
+type AttachTab = 'media' | 'files' | 'voice' | 'locations' | 'colors' | 'wallpaper'
 
 interface Props {
   onClose: () => void
@@ -78,11 +79,12 @@ export function ChatAttachmentsPanel({
           </div>
         </div>
         <div className="flex gap-1 px-4 py-2 border-b border-slate-100 dark:border-slate-700/60 shrink-0 flex-wrap">
-          {(['media', 'files', 'voice', 'colors', 'wallpaper'] as const).map(tab => {
+          {(['media', 'files', 'voice', 'locations', 'colors', 'wallpaper'] as const).map(tab => {
             const labels: Record<string, string> = {
               media: `Медиа (${allAttachments.media.length})`,
               files: `Файлы (${allAttachments.files.length})`,
               voice: `Голосовые (${allAttachments.voices.length})`,
+              locations: `Локации (${allAttachments.locations.length})`,
               colors: 'Цвета',
               wallpaper: 'Обои',
             }
@@ -175,6 +177,35 @@ export function ChatAttachmentsPanel({
                     </div>
                     <audio controls src={toFullUrl(item.url)} className="w-full h-8" />
                   </div>
+                ))}
+              </div>
+          )}
+          {attachTab === 'locations' && (
+            allAttachments.locations.length === 0
+              ? <EmptyAttach label="Нет геолокаций" />
+              : <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
+                {allAttachments.locations.map((item, i) => (
+                  <a
+                    key={i}
+                    href={`https://www.google.com/maps?q=${item.latitude},${item.longitude}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onContextMenu={(e) => { e.preventDefault(); onContextMenu(e, item.message_id) }}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                  >
+                    <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0 text-[#1B3A72] dark:text-blue-400">
+                      <MapPin className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-800 dark:text-slate-200">Геолокация</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{item.latitude.toFixed(5)}, {item.longitude.toFixed(5)}</p>
+                    </div>
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onJumpToMessage(item.message_id) }}
+                      className="text-[10px] font-medium text-[#1B3A72] dark:text-blue-400 hover:underline cursor-pointer shrink-0">
+                      В чат ↗
+                    </button>
+                  </a>
                 ))}
               </div>
           )}

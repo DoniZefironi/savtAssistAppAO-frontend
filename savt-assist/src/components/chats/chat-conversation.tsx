@@ -89,7 +89,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [attachmentsOpen, setAttachmentsOpen] = useState(false)
-  const [attachTab, setAttachTab] = useState<'media' | 'files' | 'voice' | 'colors' | 'wallpaper'>('media')
+  const [attachTab, setAttachTab] = useState<'media' | 'files' | 'voice' | 'locations' | 'colors' | 'wallpaper'>('media')
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
   const [confirmModal, setConfirmModal] = useState<null | 'clear' | 'delete' | 'delete-message' | 'delete-selected'>(null)
   const [deleteMessageId, setDeleteMessageId] = useState<number | null>(null)
@@ -470,6 +470,21 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   const voice = useVoiceRecorder(handleVoiceFinish)
 
+  const [locating, setLocating] = useState(false)
+
+  const handleShareLocation = () => {
+    if (!navigator.geolocation) { toast.error('Геолокация недоступна в этом браузере'); return }
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setPendingAttachments((prev) => [...prev, { latitude: pos.coords.latitude, longitude: pos.coords.longitude, name: 'Геолокация' }])
+        setLocating(false)
+      },
+      () => { toast.error('Не удалось определить местоположение'); setLocating(false) },
+      { enableHighAccuracy: true, timeout: 10_000 }
+    )
+  }
+
   const uploadFiles = async (files: FileList | File[]) => {
     for (const file of Array.from(files)) {
       setUploadingFile(true)
@@ -660,16 +675,21 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     const media: { message_id: number; url: string; mime: string }[] = []
     const files: { message_id: number; name: string; url: string; mime: string; size: number }[] = []
     const voices: { message_id: number; url: string; duration: number | null }[] = []
+    const locations: { message_id: number; latitude: number; longitude: number }[] = []
     for (const a of rawAttachments) {
-      if (a.mime_type.startsWith('image/') || a.mime_type.startsWith('video/')) {
-        media.push({ message_id: a.message_id, url: a.file_url, mime: a.mime_type })
+      if (a.attachment_type === 'location') {
+        if (a.latitude != null && a.longitude != null) locations.push({ message_id: a.message_id, latitude: a.latitude, longitude: a.longitude })
+      } else if (!a.mime_type) {
+        continue
+      } else if (a.mime_type.startsWith('image/') || a.mime_type.startsWith('video/')) {
+        media.push({ message_id: a.message_id, url: a.file_url ?? '', mime: a.mime_type })
       } else if (a.mime_type.startsWith('audio/')) {
-        voices.push({ message_id: a.message_id, url: a.file_url, duration: a.duration_seconds })
+        voices.push({ message_id: a.message_id, url: a.file_url ?? '', duration: a.duration_seconds })
       } else {
-        files.push({ message_id: a.message_id, name: a.file_name, url: a.file_url, mime: a.mime_type, size: a.file_size_bytes })
+        files.push({ message_id: a.message_id, name: a.file_name ?? '', url: a.file_url ?? '', mime: a.mime_type, size: a.file_size_bytes ?? 0 })
       }
     }
-    return { media, files, voices }
+    return { media, files, voices, locations }
   }, [rawAttachments])
 
   return (
@@ -908,6 +928,8 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
           onCancelContext={cancelContext}
           fileInputRef={fileInputRef}
           onFileChange={handleFileChange}
+          onShareLocation={handleShareLocation}
+          locating={locating}
           voice={voice}
           canSend={canSend}
           uploadingFile={uploadingFile}
