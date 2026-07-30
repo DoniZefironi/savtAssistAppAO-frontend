@@ -197,6 +197,7 @@ export interface DocumentRequest {
   user_registered_at: string | null
   document_id: number | null
   cabinet_id: number | null
+  project_id: number | null
   doc_type: string
   status: 'pending' | 'approved' | 'rejected'
   user_message: string | null

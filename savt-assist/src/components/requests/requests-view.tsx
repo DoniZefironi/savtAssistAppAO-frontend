@@ -511,7 +511,7 @@ function DocumentRequestList({ items, onSelect, view }: { items: DocumentRequest
           view={view}
           icon={<DocRequestCardIcon />}
           title={item.user_full_name ?? '—'}
-          subtitle={item.cabinet_id ? `ШУ #${item.cabinet_id}` : '—'}
+          subtitle={item.cabinet_id ? `ШУ #${item.cabinet_id}` : item.project_id ? `Проект #${item.project_id}` : '—'}
           meta={
             <TypePill
               label={item.doc_type ? item.doc_type.toUpperCase() : `Документ #${item.document_id}`}
@@ -950,6 +950,7 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
   const [rejectNote, setRejectNote] = useState('')
   const [subUserId, setSubUserId] = useState<number | null>(null)
   const [subCabinetId, setSubCabinetId] = useState<number | null>(null)
+  const [subProjectId, setSubProjectId] = useState<number | null>(null)
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['document-requests'] })
 
@@ -1004,6 +1005,7 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
           } />
         )}
         {request.cabinet_id && <DRowLink label="Шкаф" value={`ШУ #${request.cabinet_id}`} onClick={() => setSubCabinetId(request.cabinet_id!)} />}
+        {request.project_id && <DRowLink label="Проект" value={`Проект #${request.project_id}`} onClick={() => setSubProjectId(request.project_id!)} />}
         <DRow label="Создана" value={fmtDate(request.created_at)} />
         {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
         {request.resolved_by_admin_id != null && <DRow label="Обработал" value={`Администратор #${request.resolved_by_admin_id}`} />}
@@ -1067,6 +1069,7 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
       </div>
       {subUserId !== null && <UserDialog userId={subUserId} role="user" onClose={() => setSubUserId(null)} />}
       {subCabinetId !== null && <CabinetDetailDialog cabinetId={subCabinetId} isAdmin onClose={() => setSubCabinetId(null)} />}
+      {subProjectId !== null && <ProjectDetailDialog projectId={subProjectId} isAdmin onClose={() => setSubProjectId(null)} />}
     </AppModal>
   )
 }
