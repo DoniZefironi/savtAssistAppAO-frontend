@@ -58,7 +58,10 @@ function BroadcastSection() {
   const sendMut = useMutation({
     mutationFn: () => botApi.broadcastNotification({ title: title.trim(), body: body.trim(), role }),
     onSuccess: () => {
-      toast.success('Уведомление отправлено')
+      // Раньше рассылка уходила всем в обход настроек. Теперь бэкенд уважает
+      // переключатель promotional, поэтому отписавшихся среди получателей нет —
+      // «отправлено всем» было бы неправдой.
+      toast.success('Рассылка отправлена — кроме отписавшихся от рассылок')
       setTitle('')
       setBody('')
       setRole(null)

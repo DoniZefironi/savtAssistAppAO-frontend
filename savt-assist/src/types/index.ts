@@ -60,7 +60,12 @@ export interface Project {
   unique_code: string
   cabinet_count: number
   created_at: string
+  production_number?: string | null
+  // Год по тому же правилу, что и годовая папка на NAS: из производственного
+  // номера (26_170 → 2026), у заведённых вручную — по дате создания
+  year?: number | null
   company_name?: string | null
+  shipment_planned_at?: string | null
   shipment_actual_at?: string | null
   warranty_ends_at?: string | null
   // Считается по гарантии самого проекта, а не его шкафов

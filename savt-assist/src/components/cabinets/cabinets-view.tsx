@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { X, FileText, Image, User, Wrench, CheckCircle2, XCircle, Package, FolderKanban, AlertTriangle, SlidersHorizontal } from 'lucide-react'
+import { X, FileText, Image, User, Wrench, CheckCircle2, XCircle, Package, FolderKanban, AlertTriangle, SlidersHorizontal, Contact, Truck } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -17,7 +17,7 @@ import { ProjectCard } from '@/components/projects/project-card'
 import { CreateProjectDialog } from '@/components/projects/create-project-dialog'
 import { ProjectQrDialog } from '@/components/projects/project-qr-dialog'
 import { cabinetsApi } from '@/lib/api/cabinets'
-import { projectsApi, type ProjectCabinetFilters } from '@/lib/api/projects'
+import { projectsApi, type ProjectCabinetFilters, type ProjectOwnFilters, type ProjectSortField } from '@/lib/api/projects'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import type { Cabinet, Project } from '@/types'
@@ -33,13 +33,28 @@ const CABINET_SORT_OPTIONS = [
   { label: 'По гарантии', value: 'warranty_ends_at' },
   { label: 'По дате', value: 'created_at' },
 ] as const
+// Список возвращает проекты, поэтому все сортировки — проектные, даже когда
+// фильтр стоит по шкафам. У гарантии это единственное место, где название
+// без уточнения читается двусмысленно (у шкафов проекта своих гарантий много
+// и с разными датами), поэтому подписано явно.
 const PROJECT_SORT_OPTIONS = [
   { label: 'По названию', value: 'name' },
   { label: 'По дате', value: 'created_at' },
+  { label: 'По номеру', value: 'production_number' },
+  { label: 'По году', value: 'year' },
+  { label: 'По компании', value: 'company_name' },
+  { label: 'По отгрузке (план)', value: 'shipment_planned_at' },
+  { label: 'По отгрузке (факт)', value: 'shipment_actual_at' },
+  { label: 'По гарантии проекта', value: 'warranty_ends_at' },
+  { label: 'По числу ШУ', value: 'cabinet_count' },
 ] as const
 
 type ViewMode = 'list' | 'grid'
 type WarrantyFilter = 'active' | 'expired' | null
+// По чему фильтруем список проектов: по самому проекту или по его шкафам.
+// Наборы независимы, бэкенд складывает их по И — переключатель определяет
+// только то, какой набор сейчас редактируется и показан.
+type FilterScope = 'project' | 'cabinets'
 
 interface CabinetFilters {
   has_documents: boolean
@@ -57,8 +72,109 @@ const DEFAULT_FILTERS: CabinetFilters = {
   warranty_status: null,
 }
 
+interface ProjectFilters {
+  year: string
+  company: string
+  shipped: '' | 'yes' | 'no'
+  shipment_planned_from: string
+  shipment_planned_to: string
+  shipment_actual_from: string
+  shipment_actual_to: string
+  has_project_documents: boolean
+  has_project_photos: boolean
+  has_project_users: boolean
+  has_contacts: boolean
+  warranty_status: WarrantyFilter
+}
+
+const DEFAULT_PROJECT_FILTERS: ProjectFilters = {
+  year: '',
+  company: '',
+  shipped: '',
+  shipment_planned_from: '',
+  shipment_planned_to: '',
+  shipment_actual_from: '',
+  shipment_actual_to: '',
+  has_project_documents: false,
+  has_project_photos: false,
+  has_project_users: false,
+  has_contacts: false,
+  warranty_status: null,
+}
+
 interface Props {
   isAdmin: boolean
+}
+
+// Пара чипов «Гарантия есть» / «Истекла». Одна и та же вёрстка используется
+// и для гарантии проекта, и для гарантии его шкафов — отличаются только тем,
+// в какой параметр запроса уезжает значение.
+function WarrantyChips({ value, onToggle }: { value: WarrantyFilter; onToggle: (v: WarrantyFilter) => void }) {
+  return (
+    <>
+      <button
+        onClick={() => onToggle('active')}
+        className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
+          value === 'active'
+            ? 'bg-emerald-500 text-white border-emerald-500'
+            : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-emerald-400 hover:text-emerald-600'
+        }`}
+      >
+        <CheckCircle2 className="w-3.5 h-3.5" />
+        Гарантия есть
+      </button>
+      <button
+        onClick={() => onToggle('expired')}
+        className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
+          value === 'expired'
+            ? 'bg-rose-500 text-white border-rose-500'
+            : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-rose-400 hover:text-rose-500'
+        }`}
+      >
+        <XCircle className="w-3.5 h-3.5" />
+        Истекла
+      </button>
+    </>
+  )
+}
+
+function DateRangeFilter({ label, from, to, onFrom, onTo }: {
+  label: string
+  from: string
+  to: string
+  onFrom: (v: string) => void
+  onTo: (v: string) => void
+}) {
+  const active = !!(from || to)
+  return (
+    <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs ${
+      active ? 'border-[#4A8FE7] text-[#4A8FE7]' : 'border-slate-200 dark:border-slate-700 text-slate-400'
+    }`}>
+      <span className="shrink-0">{label}</span>
+      <input
+        type="date"
+        value={from}
+        onChange={e => onFrom(e.target.value)}
+        className="bg-transparent text-slate-600 dark:text-slate-300 focus:outline-none w-27"
+      />
+      <span className="text-slate-300">—</span>
+      <input
+        type="date"
+        value={to}
+        onChange={e => onTo(e.target.value)}
+        className="bg-transparent text-slate-600 dark:text-slate-300 focus:outline-none w-27"
+      />
+      {active && (
+        <button
+          onClick={() => { onFrom(''); onTo('') }}
+          className="text-slate-400 hover:text-red-500 cursor-pointer shrink-0"
+          title="Сбросить период"
+        >
+          <X className="w-3 h-3" />
+        </button>
+      )}
+    </div>
+  )
 }
 
 // Верхний уровень "Проекты ШУ": по умолчанию список проектов (переезд из
@@ -76,6 +192,8 @@ export function CabinetsView({ isAdmin }: Props) {
   const [sortBy, setSortBy] = useState<string>('created_at')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [filters, setFilters] = useState<CabinetFilters>(DEFAULT_FILTERS)
+  const [projectFilters, setProjectFilters] = useState<ProjectFilters>(DEFAULT_PROJECT_FILTERS)
+  const [filterScope, setFilterScope] = useState<FilterScope>('project')
   const [unassignedOnly, setUnassignedOnly] = useState(false)
   const [view, setView] = useState<ViewMode>('list')
   useEffect(() => {
@@ -95,12 +213,29 @@ export function CabinetsView({ isAdmin }: Props) {
   const debouncedSearch = useDebounce(search)
   const sentinelRef = useRef<HTMLDivElement>(null)
 
-  const activeFiltersCount =
+  const cabinetFiltersCount =
     (filters.has_documents ? 1 : 0) +
     (filters.has_photos ? 1 : 0) +
     (filters.has_users ? 1 : 0) +
     (filters.has_service_requests ? 1 : 0) +
     (filters.warranty_status ? 1 : 0)
+
+  const projectFiltersCount =
+    (projectFilters.year ? 1 : 0) +
+    (projectFilters.company.trim() ? 1 : 0) +
+    (projectFilters.shipped ? 1 : 0) +
+    (projectFilters.shipment_planned_from || projectFilters.shipment_planned_to ? 1 : 0) +
+    (projectFilters.shipment_actual_from || projectFilters.shipment_actual_to ? 1 : 0) +
+    (projectFilters.has_project_documents ? 1 : 0) +
+    (projectFilters.has_project_photos ? 1 : 0) +
+    (projectFilters.has_project_users ? 1 : 0) +
+    (projectFilters.has_contacts ? 1 : 0) +
+    (projectFilters.warranty_status ? 1 : 0)
+
+  // В режиме «Без проекта» набор по проекту неприменим — там просто шкафы
+  const activeFiltersCount = unassignedOnly
+    ? cabinetFiltersCount
+    : cabinetFiltersCount + projectFiltersCount
 
   const toggleBoolFilter = (key: keyof Omit<CabinetFilters, 'warranty_status'>) =>
     setFilters(f => ({ ...f, [key]: !f[key] }))
@@ -108,12 +243,43 @@ export function CabinetsView({ isAdmin }: Props) {
   const toggleWarranty = (val: WarrantyFilter) =>
     setFilters(f => ({ ...f, warranty_status: f.warranty_status === val ? null : val }))
 
+  const toggleProjectBoolFilter = (key: 'has_project_documents' | 'has_project_photos' | 'has_project_users' | 'has_contacts') =>
+    setProjectFilters(f => ({ ...f, [key]: !f[key] }))
+
+  const toggleProjectWarranty = (val: WarrantyFilter) =>
+    setProjectFilters(f => ({ ...f, warranty_status: f.warranty_status === val ? null : val }))
+
+  const setProjectFilter = <K extends keyof ProjectFilters>(key: K, value: ProjectFilters[K]) =>
+    setProjectFilters(f => ({ ...f, [key]: value }))
+
+  const resetAllFilters = () => {
+    setFilters(DEFAULT_FILTERS)
+    setProjectFilters(DEFAULT_PROJECT_FILTERS)
+  }
+
+  // Гарантия шкафов на /admin/projects — это cabinet_warranty_status:
+  // одноимённый warranty_status там относится к гарантии самого проекта.
   const projectCabinetFilters: ProjectCabinetFilters = {
     ...(filters.has_documents ? { has_documents: true } : {}),
     ...(filters.has_photos ? { has_photos: true } : {}),
     ...(filters.has_users ? { has_users: true } : {}),
     ...(filters.has_service_requests ? { has_service_requests: true } : {}),
-    ...(filters.warranty_status ? { warranty_status: filters.warranty_status } : {}),
+    ...(filters.warranty_status ? { cabinet_warranty_status: filters.warranty_status } : {}),
+  }
+
+  const projectOwnFilters: ProjectOwnFilters = {
+    ...(projectFilters.year ? { year: Number(projectFilters.year) } : {}),
+    ...(projectFilters.company.trim() ? { company: projectFilters.company.trim() } : {}),
+    ...(projectFilters.shipped ? { shipped: projectFilters.shipped === 'yes' } : {}),
+    ...(projectFilters.shipment_planned_from ? { shipment_planned_from: projectFilters.shipment_planned_from } : {}),
+    ...(projectFilters.shipment_planned_to ? { shipment_planned_to: projectFilters.shipment_planned_to } : {}),
+    ...(projectFilters.shipment_actual_from ? { shipment_actual_from: projectFilters.shipment_actual_from } : {}),
+    ...(projectFilters.shipment_actual_to ? { shipment_actual_to: projectFilters.shipment_actual_to } : {}),
+    ...(projectFilters.has_project_documents ? { has_project_documents: true } : {}),
+    ...(projectFilters.has_project_photos ? { has_project_photos: true } : {}),
+    ...(projectFilters.has_project_users ? { has_project_users: true } : {}),
+    ...(projectFilters.has_contacts ? { has_contacts: true } : {}),
+    ...(projectFilters.warranty_status ? { warranty_status: projectFilters.warranty_status } : {}),
   }
 
   const toggleScope = () => {
@@ -145,16 +311,17 @@ export function CabinetsView({ isAdmin }: Props) {
   })
 
   const prjQ = useInfiniteQuery({
-    queryKey: ['projects', { search: debouncedSearch, sortBy, sortOrder, filters }],
+    queryKey: ['projects', { search: debouncedSearch, sortBy, sortOrder, filters, projectFilters }],
     initialPageParam: 1,
     queryFn: ({ pageParam }: { pageParam: number }) =>
       projectsApi.getAll({
         search: debouncedSearch || undefined,
-        sort_by: sortBy,
+        sort_by: sortBy as ProjectSortField,
         sort_order: sortOrder,
         page: pageParam,
         size: PAGE_SIZE,
         ...projectCabinetFilters,
+        ...projectOwnFilters,
       }),
     getNextPageParam: (lastPage) =>
       lastPage.page < lastPage.pages ? lastPage.page + 1 : undefined,
@@ -305,7 +472,7 @@ export function CabinetsView({ isAdmin }: Props) {
           <Input
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder={unassignedOnly ? 'Поиск по ШУ...' : 'Поиск по проектам...'}
+            placeholder={unassignedOnly ? 'Поиск по ШУ...' : 'Проект, номер, компания, контактное лицо...'}
             className="pl-9 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 focus-visible:ring-[#4A8FE7]"
           />
           {search && (
@@ -351,59 +518,148 @@ export function CabinetsView({ isAdmin }: Props) {
             <NoProjectIcon className="w-3.5 h-3.5" />
             Без проекта
           </button>
-          {([
-            { key: 'has_documents', label: 'Документы', icon: FileText },
-            { key: 'has_photos', label: 'Фото', icon: Image },
-            { key: 'has_users', label: 'Пользователь', icon: User },
-            { key: 'has_service_requests', label: 'Заявки', icon: Wrench },
-          ] as const).map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              onClick={() => toggleBoolFilter(key)}
-              className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
-                filters[key]
-                  ? 'bg-[#4A8FE7] text-white border-[#4A8FE7]'
-                  : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-[#4A8FE7] hover:text-[#4A8FE7]'
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {label}
-            </button>
-          ))}
-          <button
-            onClick={() => toggleWarranty('active')}
-            className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
-              filters.warranty_status === 'active'
-                ? 'bg-emerald-500 text-white border-emerald-500'
-                : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-emerald-400 hover:text-emerald-600'
-            }`}
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            Гарантия есть
-          </button>
-          <button
-            onClick={() => toggleWarranty('expired')}
-            className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
-              filters.warranty_status === 'expired'
-                ? 'bg-rose-500 text-white border-rose-500'
-                : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-rose-400 hover:text-rose-500'
-            }`}
-          >
-            <XCircle className="w-3.5 h-3.5" />
-            Истекла
-          </button>
+
+          {/* Переключатель области: наборы независимы и складываются по И,
+              кнопка лишь выбирает, какой из них сейчас редактируется. Счётчик
+              на неактивной вкладке показывает, что там что-то осталось задано. */}
+          {!unassignedOnly && (
+            <div className="flex border border-slate-200 dark:border-slate-700 rounded-full overflow-hidden">
+              {([
+                { key: 'project', label: 'По проекту', count: projectFiltersCount },
+                { key: 'cabinets', label: 'По шкафам', count: cabinetFiltersCount },
+              ] as const).map(({ key, label, count }) => (
+                <button
+                  key={key}
+                  onClick={() => setFilterScope(key)}
+                  className={`px-3 py-1 text-xs font-medium transition-colors cursor-pointer ${
+                    filterScope === key
+                      ? 'bg-[#1B3A72] text-white'
+                      : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-[#1B3A72]'
+                  }`}
+                >
+                  {label}
+                  {count > 0 && <span className="ml-1 opacity-70">({count})</span>}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {(unassignedOnly || filterScope === 'cabinets') && (
+            <>
+              {([
+                { key: 'has_documents', label: 'Документы', icon: FileText },
+                { key: 'has_photos', label: 'Фото', icon: Image },
+                { key: 'has_users', label: 'Пользователь', icon: User },
+                { key: 'has_service_requests', label: 'Заявки', icon: Wrench },
+              ] as const).map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  onClick={() => toggleBoolFilter(key)}
+                  className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
+                    filters[key]
+                      ? 'bg-[#4A8FE7] text-white border-[#4A8FE7]'
+                      : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-[#4A8FE7] hover:text-[#4A8FE7]'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  {label}
+                </button>
+              ))}
+              <WarrantyChips value={filters.warranty_status} onToggle={toggleWarranty} />
+            </>
+          )}
+
+          {!unassignedOnly && filterScope === 'project' && (
+            <>
+              {([
+                { key: 'has_project_documents', label: 'Документы проекта', icon: FileText },
+                { key: 'has_project_photos', label: 'Фото проекта', icon: Image },
+                { key: 'has_project_users', label: 'Участники', icon: User },
+                { key: 'has_contacts', label: 'Контакты', icon: Contact },
+              ] as const).map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  onClick={() => toggleProjectBoolFilter(key)}
+                  className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
+                    projectFilters[key]
+                      ? 'bg-[#4A8FE7] text-white border-[#4A8FE7]'
+                      : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-[#4A8FE7] hover:text-[#4A8FE7]'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  {label}
+                </button>
+              ))}
+              {([
+                { val: 'yes', label: 'Отгружен' },
+                { val: 'no', label: 'Не отгружен' },
+              ] as const).map(({ val, label }) => (
+                <button
+                  key={val}
+                  onClick={() => setProjectFilter('shipped', projectFilters.shipped === val ? '' : val)}
+                  className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
+                    projectFilters.shipped === val
+                      ? 'bg-[#4A8FE7] text-white border-[#4A8FE7]'
+                      : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-[#4A8FE7] hover:text-[#4A8FE7]'
+                  }`}
+                >
+                  <Truck className="w-3.5 h-3.5" />
+                  {label}
+                </button>
+              ))}
+              <WarrantyChips value={projectFilters.warranty_status} onToggle={toggleProjectWarranty} />
+            </>
+          )}
+
           {activeFiltersCount > 0 && (
             <button
-              onClick={() => setFilters(DEFAULT_FILTERS)}
+              onClick={resetAllFilters}
               className="ml-1 px-3 py-1 rounded-full text-xs font-medium text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 border border-dashed border-slate-300 dark:border-slate-600 hover:border-slate-400 transition-colors cursor-pointer"
             >
               Сбросить ({activeFiltersCount})
             </button>
           )}
         </div>
-        {!unassignedOnly && activeFiltersCount > 0 && (
+
+        {/* Год, компания и диапазоны дат — отдельной строкой: полями ввода,
+            а не чипами, поэтому в общий ряд не встают */}
+        {!unassignedOnly && filterScope === 'project' && (
+          <div className="flex gap-2 mt-2 flex-wrap items-center">
+            <input
+              type="number"
+              inputMode="numeric"
+              value={projectFilters.year}
+              onChange={e => setProjectFilter('year', e.target.value)}
+              placeholder="Год"
+              className="w-20 px-2.5 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded-full bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus:border-[#4A8FE7] placeholder:text-slate-400"
+            />
+            <input
+              value={projectFilters.company}
+              onChange={e => setProjectFilter('company', e.target.value)}
+              placeholder="Компания"
+              className="w-44 px-2.5 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded-full bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus:border-[#4A8FE7] placeholder:text-slate-400"
+            />
+            <DateRangeFilter
+              label="Отгрузка план"
+              from={projectFilters.shipment_planned_from}
+              to={projectFilters.shipment_planned_to}
+              onFrom={v => setProjectFilter('shipment_planned_from', v)}
+              onTo={v => setProjectFilter('shipment_planned_to', v)}
+            />
+            <DateRangeFilter
+              label="Отгрузка факт"
+              from={projectFilters.shipment_actual_from}
+              to={projectFilters.shipment_actual_to}
+              onFrom={v => setProjectFilter('shipment_actual_from', v)}
+              onTo={v => setProjectFilter('shipment_actual_to', v)}
+            />
+          </div>
+        )}
+
+        {!unassignedOnly && cabinetFiltersCount > 0 && (
           <p className="text-xs text-slate-400 mt-2">
-            Показаны проекты, где есть хотя бы один подходящий по фильтру шкаф
+            Показаны проекты, где есть хотя бы один подходящий по фильтру шкаф.
+            Сортировка при этом остаётся по полям самого проекта — в списке проекты, а не шкафы.
           </p>
         )}
         </>

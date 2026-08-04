@@ -1,26 +1,53 @@
 import { Project, WarrantyStatus } from '@/types'
 import { Button } from '@/components/ui/button'
-import { formatDate } from '@/lib/warranty'
+import { Building2, Truck } from 'lucide-react'
+import { formatDate, shipmentLabel } from '@/lib/warranty'
 import { cn } from '@/lib/utils'
 
-// Компания и дата отгрузки приезжают из сделки Bitrix, warranty_status считается
+// Компания и даты отгрузки приезжают из сделки Bitrix, warranty_status считается
 // по гарантии самого проекта (не его шкафов) — см. README-backend.md.
+//
+// Строка «важное» (номер, гарантия) отделена от строки «подробности»
+// (заказчик, отгрузка, число ШУ): в один ряд это сливалось в кашу, а сканировать
+// список глазами нужно в первую очередь по номеру и статусу гарантии.
 function ProjectMeta({ project }: { project: Project }) {
-  if (!project.company_name && !project.shipment_actual_at && !project.warranty_status) return null
+  const shipment = shipmentLabel(project.shipment_planned_at, project.shipment_actual_at)
   return (
-    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap text-xs">
-      {project.company_name && (
-        <span className="text-slate-500 dark:text-slate-400 truncate max-w-56">{project.company_name}</span>
+    <>
+      {(project.production_number || project.year || project.warranty_status) && (
+        <div className="flex items-center gap-1.5 mt-1 flex-wrap text-xs">
+          {project.production_number && (
+            <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 font-medium text-slate-600 dark:text-slate-300">
+              {project.production_number}
+            </span>
+          )}
+          {!project.production_number && project.year && (
+            <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
+              {project.year}
+            </span>
+          )}
+          {project.warranty_status && project.warranty_status !== 'none' && (
+            <span className={cn('px-1.5 py-0.5 rounded', warrantyPill(project.warranty_status))}>
+              {warrantyText(project.warranty_status)}
+              {project.warranty_ends_at && ` до ${formatDate(project.warranty_ends_at)}`}
+            </span>
+          )}
+        </div>
       )}
-      {project.shipment_actual_at && (
-        <span className="text-slate-400">отгружен {formatDate(project.shipment_actual_at)}</span>
-      )}
-      {project.warranty_status && project.warranty_status !== 'none' && (
-        <span className={cn('px-1.5 py-0.5 rounded', warrantyPill(project.warranty_status))}>
-          {warrantyText(project.warranty_status)}
+
+      <div className="flex items-center gap-x-3 gap-y-0.5 mt-1 flex-wrap text-xs text-slate-500 dark:text-slate-400">
+        {project.company_name && (
+          <span className="flex items-center gap-1 min-w-0">
+            <Building2 className="w-3 h-3 shrink-0 text-slate-400" />
+            <span className="truncate max-w-56">{project.company_name}</span>
+          </span>
+        )}
+        <span className={cn('flex items-center gap-1', shipment.state === 'unplanned' && 'text-slate-400 italic')}>
+          <Truck className="w-3 h-3 shrink-0 text-slate-400" />
+          {shipment.text}
         </span>
-      )}
-    </div>
+      </div>
+    </>
   )
 }
 

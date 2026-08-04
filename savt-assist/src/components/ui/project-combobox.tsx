@@ -29,7 +29,9 @@ export function ProjectCombobox({ value, valueLabel, onChange, placeholder = 'П
   const debouncedSearch = useDebounce(search, 300)
 
   const { data, isFetching } = useQuery({
-    queryKey: ['projects-combobox', debouncedSearch],
+    // Вложен в префикс ['projects'] — тогда создание/переименование/удаление
+    // проекта, которое и так инвалидирует ['projects'], освежает и этот список.
+    queryKey: ['projects', 'combobox', debouncedSearch],
     queryFn: () => projectsApi.getAll({ search: debouncedSearch || undefined, size: 20, sort_by: 'name', sort_order: 'asc' }),
     enabled: open,
   })

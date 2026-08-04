@@ -22,3 +22,15 @@ export function formatDate(iso: string | null | undefined): string {
 export function toIsoDate(date: Date): string {
   return date.toISOString()
 }
+
+// Отгрузка проекта одной строкой. Порядок важен: факт вытесняет план, а когда
+// нет ни того ни другого — это не «пусто», а осмысленное «ещё не запланирована»,
+// иначе непонятно, то ли даты нет, то ли её не подтянули из сделки.
+export function shipmentLabel(
+  plannedAt: string | null | undefined,
+  actualAt: string | null | undefined,
+): { text: string; state: 'shipped' | 'planned' | 'unplanned' } {
+  if (actualAt) return { text: `Отгружен ${formatDate(actualAt)}`, state: 'shipped' }
+  if (plannedAt) return { text: `Отгрузка ${formatDate(plannedAt)}`, state: 'planned' }
+  return { text: 'Отгрузка не запланирована', state: 'unplanned' }
+}

@@ -1,18 +1,39 @@
 import { apiClient } from './client'
 import type { Project, ProjectDetail, PaginatedResponse } from '@/types'
 
-// Фильтры по вложенным ШУ (has_documents/has_photos/...) — задуманы как
-// "проект матчит, если хотя бы один его шкаф удовлетворяет всем условиям".
-// Требует расширения бэкенда на GET /admin/projects и GET /admin/projects/{id}
-// теми же параметрами, что уже поддерживает GET /admin/cabinets — см.
-// обсуждение переезда "Проектов" внутрь "Проекты ШУ".
+// Фильтры по вложенным ШУ: проект попадает в выдачу, если условиям
+// соответствует хотя бы один его шкаф.
+//
+// ВНИМАНИЕ про гарантию: здесь она называется `cabinet_warranty_status`.
+// Раньше параметр звался `warranty_status` и означал именно гарантию шкафов,
+// но теперь `warranty_status` на /admin/projects относится к гарантии САМОГО
+// проекта (см. ProjectOwnFilters) и совпадает с одноимённой колонкой в выдаче.
+// Путать их нельзя — оба валидны, но отбирают разное.
 export interface ProjectCabinetFilters {
   has_documents?: boolean
   has_photos?: boolean
   has_users?: boolean
   has_service_requests?: boolean
-  warranty_status?: 'active' | 'expired' | 'none'
+  cabinet_warranty_status?: 'active' | 'expired' | 'none'
   tag_ids?: number[]
+}
+
+// Фильтры по самому проекту — не по его шкафам.
+export interface ProjectOwnFilters {
+  // Год из производственного номера (26_170 → 2026); у заведённых вручную —
+  // по дате создания. Тот же год, по которому разложены папки на NAS.
+  year?: number
+  company?: string
+  shipped?: boolean
+  shipment_planned_from?: string
+  shipment_planned_to?: string
+  shipment_actual_from?: string
+  shipment_actual_to?: string
+  has_project_documents?: boolean
+  has_project_photos?: boolean
+  has_project_users?: boolean
+  has_contacts?: boolean
+  warranty_status?: 'active' | 'expiring_soon' | 'expired' | 'none'
 }
 
 // Ответ POST /admin/projects/{id}/sync-folder — отчёт о прогоне, не сам проект.
@@ -22,13 +43,20 @@ export interface SyncFolderResult {
   message: string
 }
 
-export interface ProjectsParams extends ProjectCabinetFilters {
+// Оба набора можно слать вместе — они складываются по И.
+export interface ProjectsParams extends ProjectCabinetFilters, ProjectOwnFilters {
+  // Поиск нечёткий и покрывает не только карточку проекта (название, номер,
+  // компания), но и контактных лиц заказчика: ФИО, должность, телефоны, почты.
   search?: string
-  sort_by?: string
+  sort_by?: ProjectSortField
   sort_order?: 'asc' | 'desc'
   page?: number
   size?: number
 }
+
+export type ProjectSortField =
+  | 'name' | 'created_at' | 'production_number' | 'year' | 'company_name'
+  | 'shipment_planned_at' | 'shipment_actual_at' | 'warranty_ends_at' | 'cabinet_count'
 
 export const projectsApi = {
   getAll: async (params: ProjectsParams = {}): Promise<PaginatedResponse<Project>> => {

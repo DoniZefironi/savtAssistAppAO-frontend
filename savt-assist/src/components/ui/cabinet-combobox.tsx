@@ -29,7 +29,10 @@ export function CabinetCombobox({ value, onChange, placeholder = 'Поиск п�
   const debouncedSearch = useDebounce(search, 300)
 
   const { data, isFetching } = useQuery({
-    queryKey: ['cabinets-combobox', debouncedSearch],
+    // Ключ вложен в префикс ['cabinets'], чтобы существующие
+    // invalidateQueries({ queryKey: ['cabinets'] }) после создания/удаления ШУ
+    // обновляли и этот список — иначе он оставался бы устаревшим.
+    queryKey: ['cabinets', 'combobox', debouncedSearch],
     queryFn: () => cabinetsApi.getAll({ search: debouncedSearch || undefined, size: 20, sort_by: 'object_number', sort_order: 'asc' }),
     enabled: open,
   })

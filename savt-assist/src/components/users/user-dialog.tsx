@@ -43,7 +43,10 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['admin-users'] })
     qc.invalidateQueries({ queryKey: ['admin-user', userId] })
-    qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
+    qc.invalidateQueries({ queryKey: ['dashboard'] })
+    // Список админов кэшируется отдельно (фильтр «обработал» в заявках) —
+    // после удаления админа он остался бы с несуществующей записью
+    qc.invalidateQueries({ queryKey: ['admins-for-filter'] })
   }
 
   const verifyMut = useMutation({

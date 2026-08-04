@@ -610,7 +610,7 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['addition-requests'] })
-    qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
+    qc.invalidateQueries({ queryKey: ['dashboard'] })
   }
 
   const approveMut = useMutation({
@@ -752,7 +752,7 @@ function ShareDialog({ request, onClose }: { request: ShareRequest; onClose: () 
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['share-requests'] })
-    qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
+    qc.invalidateQueries({ queryKey: ['dashboard'] })
   }
 
   const approveMut = useMutation({
@@ -881,7 +881,7 @@ function ProjectRequestDialog({ request, onClose }: { request: ProjectRequest; o
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['project-requests'] })
-    qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
+    qc.invalidateQueries({ queryKey: ['dashboard'] })
   }
 
   const approveMut = useMutation({

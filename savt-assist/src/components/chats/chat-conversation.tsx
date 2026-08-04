@@ -215,6 +215,9 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
           appended = true
           return { ...old, pages: [[msg, ...(old.pages[0] ?? [])], ...old.pages.slice(1)] }
         })
+        if (appended && msg.attachments?.length) {
+          qc.invalidateQueries({ queryKey: ['chat-attachments', chat.id] })
+        }
         if (appended && !wasAtBottom) {
           setNewMessageCount(c => c + 1)
           setFirstNewMessageId(id => id ?? msg.id)
@@ -231,6 +234,8 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         const { id } = envelope.data as { id: number }
         const deleted_at = new Date().toISOString()
         qc.setQueryData<MsgPages>(['messages', chat.id], (old) => patchPages(old, m => m.id === id ? { ...m, deleted_at } : m))
+        // Вложения удалённого сообщения уходят из панели вместе с ним
+        qc.invalidateQueries({ queryKey: ['chat-attachments', chat.id] })
         return
       }
       case 'message.reaction_changed':
@@ -386,6 +391,9 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
           ? { ...c, last_message_text: msg.text || msg.attachments?.[0]?.file_name || c.last_message_text, last_message_at: msg.created_at, unread_count: 0 }
           : c) ?? prev
       )
+      // Панель вложений кэшируется на 60с — без сброса только что отправленный
+      // файл/геолокация не появились бы в ней до перезагрузки страницы
+      if (msg.attachments?.length) qc.invalidateQueries({ queryKey: ['chat-attachments', chat.id] })
       setText(''); setPendingAttachments([]); setReplyTo(null)
       if (textareaRef.current) textareaRef.current.style.height = 'auto'
       setNewMessageCount(0)

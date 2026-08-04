@@ -37,7 +37,7 @@ export function ServiceDialog({ request, onClose }: { request: ServiceRequest; o
     mutationFn: () => requestsApi.updateServiceRequestStatus(request.id, status),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['service-requests'] })
-      qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
       toast.success('Статус обновлён')
       onClose()
     },
