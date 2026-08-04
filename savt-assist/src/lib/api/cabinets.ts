@@ -11,7 +11,9 @@ export interface CabinetsParams {
   has_photos?: boolean
   has_users?: boolean
   has_service_requests?: boolean
-  warranty_status?: 'active' | 'expired' | 'none'
+  // Все четыре состояния, а не только active/expired: иначе ШУ с истекающей
+  // гарантией не попадал ни в один фильтр (см. README-backend.md, GET /admin/cabinets)
+  warranty_status?: 'active' | 'expiring_soon' | 'expired' | 'none'
   tag_ids?: number[]
   // false — только ШУ без привязанного проекта (см. обсуждение расширения
   // GET /admin/cabinets в контексте раздела "Проекты ШУ")
@@ -166,8 +168,7 @@ interface DashboardActivityRaw {
 }
 
 export interface CabinetsGeoParams {
-  // 4 состояния легенды карты — обрати внимание, тут есть "none", которого
-  // нет в CabinetsParams.warranty_status (там только active/expired/none, без expiring_soon)
+  // Те же 4 состояния, что и в CabinetsParams.warranty_status
   warranty_status?: 'active' | 'expiring_soon' | 'expired' | 'none'
   has_open_requests?: boolean
 }

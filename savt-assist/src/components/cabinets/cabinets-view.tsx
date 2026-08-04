@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { X, FileText, Image, User, Wrench, CheckCircle2, XCircle, Package, FolderKanban, AlertTriangle, SlidersHorizontal, Contact, Truck } from 'lucide-react'
+import { X, FileText, Image, User, Wrench, Package, FolderKanban, AlertTriangle, SlidersHorizontal, Contact, Truck } from 'lucide-react'
+import { WarrantyChips, type WarrantyFilter } from '@/components/ui/warranty-chips'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -50,7 +51,6 @@ const PROJECT_SORT_OPTIONS = [
 ] as const
 
 type ViewMode = 'list' | 'grid'
-type WarrantyFilter = 'active' | 'expired' | null
 // По чему фильтруем список проектов: по самому проекту или по его шкафам.
 // Наборы независимы, бэкенд складывает их по И — переключатель определяет
 // только то, какой набор сейчас редактируется и показан.
@@ -104,38 +104,6 @@ const DEFAULT_PROJECT_FILTERS: ProjectFilters = {
 
 interface Props {
   isAdmin: boolean
-}
-
-// Пара чипов «Гарантия есть» / «Истекла». Одна и та же вёрстка используется
-// и для гарантии проекта, и для гарантии его шкафов — отличаются только тем,
-// в какой параметр запроса уезжает значение.
-function WarrantyChips({ value, onToggle }: { value: WarrantyFilter; onToggle: (v: WarrantyFilter) => void }) {
-  return (
-    <>
-      <button
-        onClick={() => onToggle('active')}
-        className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
-          value === 'active'
-            ? 'bg-emerald-500 text-white border-emerald-500'
-            : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-emerald-400 hover:text-emerald-600'
-        }`}
-      >
-        <CheckCircle2 className="w-3.5 h-3.5" />
-        Гарантия есть
-      </button>
-      <button
-        onClick={() => onToggle('expired')}
-        className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
-          value === 'expired'
-            ? 'bg-rose-500 text-white border-rose-500'
-            : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-rose-400 hover:text-rose-500'
-        }`}
-      >
-        <XCircle className="w-3.5 h-3.5" />
-        Истекла
-      </button>
-    </>
-  )
 }
 
 function DateRangeFilter({ label, from, to, onFrom, onTo }: {
@@ -240,14 +208,16 @@ export function CabinetsView({ isAdmin }: Props) {
   const toggleBoolFilter = (key: keyof Omit<CabinetFilters, 'warranty_status'>) =>
     setFilters(f => ({ ...f, [key]: !f[key] }))
 
-  const toggleWarranty = (val: WarrantyFilter) =>
-    setFilters(f => ({ ...f, warranty_status: f.warranty_status === val ? null : val }))
+  // Повторный клик по активному чипу сбрасывает фильтр — это делает сам
+  // WarrantyChips, сюда уже приходит итоговое значение
+  const setWarranty = (val: WarrantyFilter) =>
+    setFilters(f => ({ ...f, warranty_status: val }))
 
   const toggleProjectBoolFilter = (key: 'has_project_documents' | 'has_project_photos' | 'has_project_users' | 'has_contacts') =>
     setProjectFilters(f => ({ ...f, [key]: !f[key] }))
 
-  const toggleProjectWarranty = (val: WarrantyFilter) =>
-    setProjectFilters(f => ({ ...f, warranty_status: f.warranty_status === val ? null : val }))
+  const setProjectWarranty = (val: WarrantyFilter) =>
+    setProjectFilters(f => ({ ...f, warranty_status: val }))
 
   const setProjectFilter = <K extends keyof ProjectFilters>(key: K, value: ProjectFilters[K]) =>
     setProjectFilters(f => ({ ...f, [key]: value }))
@@ -565,7 +535,7 @@ export function CabinetsView({ isAdmin }: Props) {
                   {label}
                 </button>
               ))}
-              <WarrantyChips value={filters.warranty_status} onToggle={toggleWarranty} />
+              <WarrantyChips value={filters.warranty_status} onToggle={setWarranty} />
             </>
           )}
 
@@ -607,7 +577,7 @@ export function CabinetsView({ isAdmin }: Props) {
                   {label}
                 </button>
               ))}
-              <WarrantyChips value={projectFilters.warranty_status} onToggle={toggleProjectWarranty} />
+              <WarrantyChips value={projectFilters.warranty_status} onToggle={setProjectWarranty} />
             </>
           )}
 

@@ -14,7 +14,7 @@ export interface ProjectCabinetFilters {
   has_photos?: boolean
   has_users?: boolean
   has_service_requests?: boolean
-  cabinet_warranty_status?: 'active' | 'expired' | 'none'
+  cabinet_warranty_status?: 'active' | 'expiring_soon' | 'expired' | 'none'
   tag_ids?: number[]
 }
 

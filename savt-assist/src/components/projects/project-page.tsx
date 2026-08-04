@@ -17,6 +17,7 @@ import { ProjectQrDialog } from './project-qr-dialog'
 import { ProjectDocsTab } from './project-docs-tab'
 import { ProjectDealInfo } from './project-deal-info'
 import { ProjectPhotosTab } from '@/components/cabinets/cabinet-photos-tab'
+import { WarrantyChips, type WarrantyFilter } from '@/components/ui/warranty-chips'
 import { ProjectCombobox } from '@/components/ui/project-combobox'
 import { cabinetsApi } from '@/lib/api/cabinets'
 import { projectsApi } from '@/lib/api/projects'
@@ -40,7 +41,6 @@ const SORT_OPTIONS = [
   { label: 'По дате', value: 'created_at' },
 ] as const
 
-type WarrantyFilter = 'active' | 'expired' | null
 interface CabinetFilters {
   has_documents: boolean
   has_photos: boolean
@@ -206,8 +206,9 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
 
   const toggleBoolFilter = (key: keyof Omit<CabinetFilters, 'warranty_status'>) =>
     setFilters(f => ({ ...f, [key]: !f[key] }))
-  const toggleWarranty = (val: WarrantyFilter) =>
-    setFilters(f => ({ ...f, warranty_status: f.warranty_status === val ? null : val }))
+  // Сброс по повторному клику делает сам WarrantyChips
+  const setWarranty = (val: WarrantyFilter) =>
+    setFilters(f => ({ ...f, warranty_status: val }))
 
   const {
     data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage, refetch,
@@ -505,20 +506,7 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
               {label}
             </button>
           ))}
-          <button
-            onClick={() => toggleWarranty('active')}
-            className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${filters.warranty_status === 'active' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-emerald-400 hover:text-emerald-600'}`}
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            Гарантия есть
-          </button>
-          <button
-            onClick={() => toggleWarranty('expired')}
-            className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${filters.warranty_status === 'expired' ? 'bg-rose-500 text-white border-rose-500' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-rose-400 hover:text-rose-500'}`}
-          >
-            <XCircle className="w-3.5 h-3.5" />
-            Истекла
-          </button>
+          <WarrantyChips value={filters.warranty_status} onToggle={setWarranty} />
           {activeFiltersCount > 0 && (
             <button onClick={() => setFilters(DEFAULT_FILTERS)} className="ml-1 px-3 py-1 rounded-full text-xs font-medium text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 border border-dashed border-slate-300 dark:border-slate-600 hover:border-slate-400 transition-colors cursor-pointer">
               Сбросить ({activeFiltersCount})
