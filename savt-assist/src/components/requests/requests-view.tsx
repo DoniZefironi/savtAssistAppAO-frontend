@@ -4,11 +4,11 @@ import { useState, useEffect, useRef } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { toast } from 'sonner'
-import { X, ClipboardList, SlidersHorizontal } from 'lucide-react'
+import { X, ClipboardList, SlidersHorizontal, AlertTriangle, Phone } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toFullUrl } from '@/lib/api/base-url'
 import { requestsApi } from '@/lib/api/requests'
-import type { ServiceRequest, AdditionRequest, ShareRequest, DocumentRequest, ProjectRequest } from '@/lib/api/requests'
+import type { ServiceRequest, AdditionRequest, ShareRequest, DocumentRequest, ProjectRequest, PhoneChangeRequest } from '@/lib/api/requests'
 import { usersApi } from '@/lib/api/users'
 import { useAuthStore } from '@/lib/store/auth'
 import { AppModal } from '@/components/ui/app-modal'
@@ -27,7 +27,7 @@ import {
   userTypeLabel, fmtDate,
 } from './request-shared'
 
-type Tab = 'service' | 'additions' | 'shares' | 'projects' | 'docs'
+type Tab = 'service' | 'additions' | 'shares' | 'projects' | 'docs' | 'phone'
 
 // Сетка карточек заявок: 1 колонка на самых узких, до 4 на широких мониторах
 const GRID_CLASSES = 'grid grid-cols-1 min-[640px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3'
@@ -38,6 +38,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'shares', label: 'Доступ к ШУ' },
   { id: 'projects', label: 'Проекты' },
   { id: 'docs', label: 'Документы' },
+  { id: 'phone', label: 'Смена номера' },
 ]
 
 const SVC_FILTERS = [
@@ -52,6 +53,8 @@ const REQ_FILTERS = [
   { value: 'approved', label: 'Одобренные' },
   { value: 'rejected', label: 'Отклонённые' },
 ]
+// У заявок на смену номера есть ещё cancelled — пользователь отозвал сам
+const PHONE_FILTERS = [...REQ_FILTERS, { value: 'cancelled', label: 'Отозванные' }]
 
 const SVC_SORT = [
   { value: 'created_at', label: 'По дате' },
@@ -88,6 +91,12 @@ const DOC_SORT = [
   { value: 'user_full_name', label: 'По имени' },
   { value: 'doc_type', label: 'По типу' },
 ]
+const PHONE_SORT = [
+  { value: 'created_at', label: 'По дате' },
+  { value: 'resolved_at', label: 'По рассмотрению' },
+  { value: 'status', label: 'По статусу' },
+  { value: 'user_full_name', label: 'По имени' },
+]
 
 const REQUEST_TYPE_FILTERS = [
   { value: 'all', label: 'Все типы' },
@@ -123,6 +132,7 @@ export function RequestsView() {
   const [selectedAddition, setSelectedAddition] = useState<AdditionRequest | null>(null)
   const [selectedShare, setSelectedShare] = useState<ShareRequest | null>(null)
   const [selectedProjectRequest, setSelectedProjectRequest] = useState<ProjectRequest | null>(null)
+  const [selectedPhoneRequest, setSelectedPhoneRequest] = useState<PhoneChangeRequest | null>(null)
   const [selectedDocRequest, setSelectedDocRequest] = useState<DocumentRequest | null>(null)
 
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -192,8 +202,16 @@ export function RequestsView() {
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
     enabled: tab === 'docs',
   })
+  const phoneQ = useInfiniteQuery({
+    queryKey: ['phone-change-requests', sp, sq, sortBy, sortOrder, resolvedByAdminId],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }: { pageParam: number }) =>
+      requestsApi.getPhoneChangeRequests({ status: sp, search: sq, resolved_by_admin_id: resolvedByAdminId ?? undefined, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
+    getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
+    enabled: tab === 'phone',
+  })
 
-  const curQ = tab === 'service' ? svcQ : tab === 'additions' ? addQ : tab === 'shares' ? shrQ : tab === 'projects' ? prjQ : docQ
+  const curQ = tab === 'service' ? svcQ : tab === 'additions' ? addQ : tab === 'shares' ? shrQ : tab === 'projects' ? prjQ : tab === 'phone' ? phoneQ : docQ
   const total = curQ.data?.pages[0]?.total
 
   useEffect(() => {
@@ -216,13 +234,15 @@ export function RequestsView() {
   const shrItems = shrQ.data?.pages.flatMap(p => p.items) ?? []
   const prjItems = prjQ.data?.pages.flatMap(p => p.items) ?? []
   const docItems = docQ.data?.pages.flatMap(p => p.items) ?? []
+  const phoneItems = phoneQ.data?.pages.flatMap(p => p.items) ?? []
 
-  const filters = tab === 'service' ? SVC_FILTERS : REQ_FILTERS
+  const filters = tab === 'service' ? SVC_FILTERS : tab === 'phone' ? PHONE_FILTERS : REQ_FILTERS
   const sortOptions =
     tab === 'service' ? SVC_SORT :
     tab === 'additions' ? ADDITIONS_SORT :
     tab === 'shares' ? SHARES_SORT :
     tab === 'projects' ? PROJECTS_SORT :
+    tab === 'phone' ? PHONE_SORT :
     DOC_SORT
 
   return (
@@ -371,6 +391,9 @@ export function RequestsView() {
         {tab === 'docs' && !docQ.isLoading && !docQ.isError && (
           <DocumentRequestList items={docItems} onSelect={setSelectedDocRequest} view={view} />
         )}
+        {tab === 'phone' && !phoneQ.isLoading && !phoneQ.isError && (
+          <PhoneChangeList items={phoneItems} onSelect={setSelectedPhoneRequest} view={view} />
+        )}
 
         <div ref={sentinelRef} className="h-1 mt-2" />
         {curQ.isFetchingNextPage && (
@@ -394,6 +417,7 @@ export function RequestsView() {
       {selectedShare && <ShareDialog request={selectedShare} onClose={() => setSelectedShare(null)} />}
       {selectedProjectRequest && <ProjectRequestDialog request={selectedProjectRequest} onClose={() => setSelectedProjectRequest(null)} />}
       {selectedDocRequest && <DocumentRequestDialog request={selectedDocRequest} onClose={() => setSelectedDocRequest(null)} />}
+      {selectedPhoneRequest && <PhoneChangeDialog request={selectedPhoneRequest} onClose={() => setSelectedPhoneRequest(null)} />}
     </div>
   )
 }
@@ -469,6 +493,35 @@ function SharesList({ items, onSelect, view }: { items: ShareRequest[]; onSelect
           meta={item.organization_name
             ? <TypePill label={item.organization_name} cls="bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400" />
             : undefined}
+          statusBadge={<StatusPill label={reqStatusLabel(item.status)} cls={reqStatusCls(item.status)} />}
+          date={fmtDate(item.created_at)}
+          onClick={() => onSelect(item)}
+        />
+      ))}
+    </div>
+  )
+}
+
+function PhoneChangeList({ items, onSelect, view }: { items: PhoneChangeRequest[]; onSelect: (r: PhoneChangeRequest) => void; view: ViewMode }) {
+  if (!items.length) return <Empty text="Нет заявок на смену номера" />
+  return (
+    <div className={gridCls(view)}>
+      {items.map(item => (
+        <RequestCard
+          key={item.id}
+          view={view}
+          icon={<PhoneChangeCardIcon />}
+          title={item.user_full_name ?? '—'}
+          subtitle={`${item.old_phone ?? '—'} → ${item.new_phone}`}
+          meta={
+            // pending_rivals > 1 — на этот номер претендует несколько аккаунтов.
+            // Одобрять не разобравшись нельзя, поэтому подсвечиваем прямо в списке.
+            item.status === 'pending' && item.pending_rivals > 1
+              ? <TypePill label={`Конкурирующих заявок: ${item.pending_rivals}`} cls="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" />
+              : item.organization_name
+              ? <TypePill label={item.organization_name} cls="bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400" />
+              : undefined
+          }
           statusBadge={<StatusPill label={reqStatusLabel(item.status)} cls={reqStatusCls(item.status)} />}
           date={fmtDate(item.created_at)}
           onClick={() => onSelect(item)}
@@ -943,6 +996,150 @@ function ProjectRequestDialog({ request, onClose }: { request: ProjectRequest; o
   )
 }
 
+function PhoneChangeDialog({ request, onClose }: { request: PhoneChangeRequest; onClose: () => void }) {
+  const qc = useQueryClient()
+  const currentUser = useAuthStore(s => s.user)
+  // Просмотр доступен оператору, решение — только админу (см. README-backend.md)
+  const canDecide = currentUser?.role !== 'operator'
+  const [action, setAction] = useState<'approve' | 'reject' | null>(null)
+  const [approveNote, setApproveNote] = useState('')
+  const [rejectNote, setRejectNote] = useState('')
+  const [subUserId, setSubUserId] = useState<number | null>(null)
+  const resolvedByName = useAdminDisplayName(request.resolved_by_admin_id)
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['phone-change-requests'] })
+    qc.invalidateQueries({ queryKey: ['admin-users'] })
+  }
+
+  const approveMut = useMutation({
+    mutationFn: () => requestsApi.approvePhoneChangeRequest(request.id, approveNote || null),
+    onSuccess: () => { invalidate(); toast.success('Номер изменён'); onClose() },
+    // Занятость номера перепроверяется на момент одобрения: владелец мог
+    // зарегистрироваться сам, пока заявка ждала
+    onError: (e) => {
+      if (isAxiosError(e) && e.response?.status === 409) {
+        invalidate()
+        toast.error('Номер уже занят другим пользователем — одобрить нельзя')
+      } else toast.error('Ошибка при одобрении')
+    },
+  })
+  const rejectMut = useMutation({
+    mutationFn: () => requestsApi.rejectPhoneChangeRequest(request.id, rejectNote),
+    onSuccess: () => { invalidate(); toast.success('Заявка отклонена'); onClose() },
+    onError: () => toast.error('Ошибка при отклонении'),
+  })
+
+  const isPending = request.status === 'pending'
+  const hasRivals = isPending && request.pending_rivals > 1
+
+  return (
+    <AppModal open onClose={onClose}>
+      <div className="flex flex-col max-h-[85vh] min-w-0">
+      <DialogHeader
+        icon={<PhoneChangeModalIcon />}
+        title={`Смена номера #${request.id}`}
+        subtitle={request.user_full_name ?? '—'}
+        badge={
+          <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white">
+            {reqStatusLabel(request.status)}
+          </span>
+        }
+      />
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {hasRivals && (
+          <div className="mx-4 sm:mx-6 mt-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+            <p className="text-sm text-red-700 dark:text-red-400 flex items-start gap-1.5">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              На этот номер претендует несколько аккаунтов — необработанных заявок: {request.pending_rivals}.
+              Разберитесь, чья он на самом деле, прежде чем одобрять.
+            </p>
+          </div>
+        )}
+
+        <div className="px-4 sm:px-6 py-3">
+          <div className="flex items-center gap-3 flex-wrap text-sm">
+            <span className="text-slate-400 line-through">{request.old_phone ?? '—'}</span>
+            <span className="text-slate-400">→</span>
+            <span className="font-semibold text-slate-800 dark:text-slate-100">{request.new_phone}</span>
+          </div>
+        </div>
+
+        <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
+          <DRowLink label="Пользователь" value={request.user_full_name ?? `#${request.user_id}`} onClick={() => setSubUserId(request.user_id)} />
+          <DRow label="Тип" value={userTypeLabel(request.user_type)} />
+          {request.organization_name && <DRow label="Организация" value={request.organization_name} />}
+          <DRow label="Статус аккаунта" value={<VerifiedBadge verified={request.user_is_verified} />} />
+          {request.user_registered_at && <DRow label="Зарегистрирован" value={fmtDate(request.user_registered_at)} />}
+          <DRow label="Заявка создана" value={fmtDate(request.created_at)} />
+          {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
+          {request.resolved_by_admin_id != null && <DRow label="Обработал" value={resolvedByName} />}
+          {request.user_comment && (
+            <DRow label="Обоснование" value={
+              <span className="font-normal text-slate-600 dark:text-slate-300">{request.user_comment}</span>
+            } />
+          )}
+          {request.admin_response && (
+            <DRow label="Ответ" value={
+              <span className="font-normal text-slate-600 dark:text-slate-300">{request.admin_response}</span>
+            } />
+          )}
+        </div>
+      </div>
+
+      {isPending && canDecide && (
+        <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700">
+          {action === null ? (
+            <>
+              {/* Система владение номером не проверяет — это делает администратор
+                  вне системы. Одобрение меняет логин пользователя немедленно. */}
+              <p className="text-xs text-amber-600 dark:text-amber-400 mb-3 flex items-start gap-1">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                Система не проверяет, принадлежит ли номер заявителю. Подтвердите владение
+                сами — звонком или документами. После одобрения вход будет по новому номеру.
+              </p>
+              <div className="flex gap-2 justify-end">
+                <Button onClick={() => setAction('reject')} className="bg-red-500 hover:bg-red-600 cursor-pointer">Отклонить</Button>
+                <Button onClick={() => setAction('approve')} className="bg-green-600 hover:bg-green-700 cursor-pointer">Одобрить</Button>
+              </div>
+            </>
+          ) : action === 'approve' ? (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-slate-500 block mb-1">Комментарий</label>
+                <ModalTextarea value={approveNote} onChange={setApproveNote} placeholder="Например: проверено звонком" />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setAction(null)} className="cursor-pointer">Назад</Button>
+                <Button onClick={() => approveMut.mutate()} disabled={approveMut.isPending} className="bg-green-600 hover:bg-green-700 cursor-pointer">
+                  {approveMut.isPending ? 'Обработка...' : 'Подтвердить'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-slate-500 block mb-1">
+                  Причина отклонения <span className="text-red-500">*</span>
+                </label>
+                <ModalTextarea value={rejectNote} onChange={setRejectNote} placeholder="Причина уйдёт пользователю в уведомлении" rows={3} />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setAction(null)} className="cursor-pointer">Назад</Button>
+                <Button onClick={() => rejectMut.mutate()} disabled={!rejectNote.trim() || rejectMut.isPending} className="bg-red-500 hover:bg-red-600 cursor-pointer">
+                  {rejectMut.isPending ? 'Обработка...' : 'Подтвердить'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      </div>
+      {subUserId !== null && <UserDialog userId={subUserId} role="user" onClose={() => setSubUserId(null)} />}
+    </AppModal>
+  )
+}
+
 function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest; onClose: () => void }) {
   const qc = useQueryClient()
   const [action, setAction] = useState<'approve' | 'reject' | null>(null)
@@ -1098,6 +1295,12 @@ function DocRequestModalIcon() {
 }
 function DocRequestCardIcon() {
   return <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
+}
+function PhoneChangeModalIcon() {
+  return <Phone className="w-6 h-6 text-white" strokeWidth={1.5} />
+}
+function PhoneChangeCardIcon() {
+  return <Phone className="w-6 h-6 text-white" strokeWidth={1.5} />
 }
 function ProjectRequestModalIcon() {
   return <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 00-1.883 2.542l.857 6a2.25 2.25 0 002.227 1.932H19.05a2.25 2.25 0 002.227-1.932l.857-6a2.25 2.25 0 00-1.883-2.542m-16.5 0V6A2.25 2.25 0 015.25 3.75h5.379a1.5 1.5 0 011.06.44l2.122 2.12a1.5 1.5 0 001.06.44H18.75A2.25 2.25 0 0121 9v.776" /></svg>

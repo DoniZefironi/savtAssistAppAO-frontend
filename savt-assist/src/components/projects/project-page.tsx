@@ -15,6 +15,8 @@ import { CreateCabinetDialog } from '@/components/cabinets/create-cabinet-dialog
 import { QrDialog } from '@/components/cabinets/qr-dialog'
 import { ProjectQrDialog } from './project-qr-dialog'
 import { ProjectDocsTab } from './project-docs-tab'
+import { ProjectDealInfo } from './project-deal-info'
+import { ProjectPhotosTab } from '@/components/cabinets/cabinet-photos-tab'
 import { ProjectCombobox } from '@/components/ui/project-combobox'
 import { cabinetsApi } from '@/lib/api/cabinets'
 import { projectsApi } from '@/lib/api/projects'
@@ -22,6 +24,11 @@ import { useDebounce } from '@/lib/hooks/use-debounce'
 import { formatDate } from '@/lib/warranty'
 import { cn } from '@/lib/utils'
 import type { Cabinet, Project } from '@/types'
+
+// ISO с бэкенда → значение для input[type=date] (YYYY-MM-DD) и обратно.
+function toDateInput(iso: string | null | undefined): string {
+  return iso ? new Date(iso).toISOString().slice(0, 10) : ''
+}
 
 const PAGE_SIZE = 20
 const GRID_CLASSES = 'grid grid-cols-1 min-[640px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3'
@@ -69,6 +76,11 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
   const [name, setName] = useState('')
   const [nameError, setNameError] = useState<string | undefined>()
   const [parentId, setParentId] = useState<number | null>(null)
+  // Гарантия — единственное из карточки, что задаёт админ: в CRM такого поля нет.
+  // Формат input[type=date] — YYYY-MM-DD, в API уходит ISO.
+  const [warrantyFrom, setWarrantyFrom] = useState('')
+  const [warrantyTo, setWarrantyTo] = useState('')
+  const [warrantyError, setWarrantyError] = useState<string | undefined>()
   const [showQr, setShowQr] = useState(false)
   const [deleteProjectConfirm, setDeleteProjectConfirm] = useState(false)
   const [showCreateCabinet, setShowCreateCabinet] = useState(false)
@@ -78,7 +90,7 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [filters, setFilters] = useState<CabinetFilters>(DEFAULT_FILTERS)
   const [filtersOpen, setFiltersOpen] = useState(true)
-  const [pageTab, setPageTab] = useState<'cabinets' | 'documents'>('cabinets')
+  const [pageTab, setPageTab] = useState<'cabinets' | 'documents' | 'photos'>('cabinets')
   const [view, setView] = useState<'list' | 'grid'>('list')
   const [openCabinetId, setOpenCabinetId] = useState<number | null>(null)
   const [openCabinetMode, setOpenCabinetMode] = useState<'view' | 'edit'>('view')
@@ -94,7 +106,11 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
   })
 
   useEffect(() => {
-    if (project) { setName(project.name); setParentId(project.parent_project_id) }
+    if (!project) return
+    setName(project.name)
+    setParentId(project.parent_project_id)
+    setWarrantyFrom(toDateInput(project.warranty_starts_at))
+    setWarrantyTo(toDateInput(project.warranty_ends_at))
   }, [project])
 
   // Только название нужно для хлебной крошки над заголовком — не грузим
@@ -106,7 +122,12 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
   })
 
   const renameMutation = useMutation({
-    mutationFn: () => projectsApi.update(projectId, { name: name.trim(), parent_project_id: parentId }),
+    mutationFn: () => projectsApi.update(projectId, {
+      name: name.trim(),
+      parent_project_id: parentId,
+      warranty_starts_at: warrantyFrom ? new Date(warrantyFrom).toISOString() : null,
+      warranty_ends_at: warrantyTo ? new Date(warrantyTo).toISOString() : null,
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['projects'] })
       qc.invalidateQueries({ queryKey: ['project', projectId] })
@@ -128,20 +149,34 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
 
   const handleSaveName = () => {
     if (!name.trim()) { setNameError('Обязательное поле'); return }
+    if (warrantyFrom && warrantyTo && new Date(warrantyTo) < new Date(warrantyFrom)) {
+      setWarrantyError('Дата окончания раньше даты начала')
+      return
+    }
     setNameError(undefined)
+    setWarrantyError(undefined)
     renameMutation.mutate()
   }
   const handleCancelName = () => {
-    if (project) { setName(project.name); setParentId(project.parent_project_id) }
+    if (project) {
+      setName(project.name)
+      setParentId(project.parent_project_id)
+      setWarrantyFrom(toDateInput(project.warranty_starts_at))
+      setWarrantyTo(toDateInput(project.warranty_ends_at))
+    }
     setNameError(undefined)
+    setWarrantyError(undefined)
     setEditing(false)
   }
 
+  // Ответ — отчёт о прогоне (сколько файлов подхвачено из папки напрямую),
+  // а не сам проект, поэтому показываем его message, а данные перезапрашиваем.
   const syncFolderMutation = useMutation({
     mutationFn: () => projectsApi.syncFolder(projectId),
-    onSuccess: () => {
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['project', projectId] })
-      toast.success('Синхронизация папки запущена')
+      if (res.imported_documents > 0) qc.invalidateQueries({ queryKey: ['project-docs', projectId] })
+      toast.success(res.message || 'Папка синхронизирована')
     },
     onError: () => toast.error('Не удалось синхронизировать папку'),
   })
@@ -244,6 +279,10 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
     unique_code: project.unique_code,
     cabinet_count: total,
     created_at: project.created_at,
+    company_name: project.company_name,
+    shipment_actual_at: project.shipment_actual_at,
+    warranty_ends_at: project.warranty_ends_at,
+    warranty_status: project.warranty_status,
   }
 
   return (
@@ -292,6 +331,36 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
                     placeholder="Без родителя — проект верхнего уровня"
                   />
                 </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs font-medium block mb-1 text-slate-400">Гарантия с</label>
+                    <input
+                      type="date"
+                      value={warrantyFrom}
+                      onChange={(e) => { setWarrantyFrom(e.target.value); setWarrantyError(undefined) }}
+                      className="w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none border-slate-200 dark:border-slate-600 focus:border-[#4A8FE7]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium block mb-1 text-slate-400">Гарантия до</label>
+                    <input
+                      type="date"
+                      value={warrantyTo}
+                      onChange={(e) => { setWarrantyTo(e.target.value); setWarrantyError(undefined) }}
+                      className={cn(
+                        'w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none',
+                        warrantyError ? 'border-red-400 dark:border-red-500' : 'border-slate-200 dark:border-slate-600 focus:border-[#4A8FE7]'
+                      )}
+                    />
+                  </div>
+                </div>
+                {warrantyError && <p className="text-xs text-red-500">{warrantyError}</p>}
+                <p className="text-xs text-amber-600 dark:text-amber-400 flex items-start gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  «Гарантия до» управляет ночной синхронизацией папки проекта на NAS: после
+                  истечения (плюс неделя запаса) папка перестаёт синхронизироваться. Пока поле
+                  пустое, отбор идёт по крайней дате среди гарантий ШУ проекта.
+                </p>
               </div>
             ) : (
               <h1 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100 truncate">{project.name}</h1>
@@ -332,7 +401,9 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
           </div>
         </div>
 
-        {!editing && isAdmin && (
+        {!editing && <ProjectDealInfo project={project} />}
+
+        {!editing && (
           <div className="flex items-center gap-2 mb-3 text-xs text-slate-400">
             <span>
               Папка на NAS: {project.folder_synced_at ? `синхронизирована ${formatDate(project.folder_synced_at)}` : 'ещё не синхронизирована'}
@@ -351,6 +422,7 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
           {([
             { key: 'cabinets', label: 'Шкафы' },
             { key: 'documents', label: 'Документы проекта' },
+            { key: 'photos', label: 'Фото проекта' },
           ] as const).map(({ key, label }) => (
             <button
               key={key}
@@ -461,6 +533,7 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
       <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-3 sm:py-4">
         <div className="max-w-425 mx-auto">
         {pageTab === 'documents' && <ProjectDocsTab projectId={projectId} isAdmin={isAdmin} />}
+        {pageTab === 'photos' && <ProjectPhotosTab projectId={projectId} isAdmin={isAdmin} />}
         {pageTab === 'cabinets' && <>
         {isLoading && (
           <div className={view === 'grid' ? GRID_CLASSES : 'space-y-3'}>

@@ -21,7 +21,7 @@ import { FileIcon, PdfIcon, ImageIcon, TrashIcon, UploadIcon, DownloadIcon, TagI
 export function ProjectDocsTab({ projectId, isAdmin }: { projectId: number; isAdmin: boolean }) {
   const qc = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
-  const [pending, setPending] = useState<{ file: File; title: string; requiresApproval: boolean } | null>(null)
+  const [pending, setPending] = useState<{ file: File; title: string; requiresApproval: boolean; isInternal: boolean } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; title: string } | null>(null)
 
   const { data, isLoading } = useQuery({
@@ -33,7 +33,7 @@ export function ProjectDocsTab({ projectId, isAdmin }: { projectId: number; isAd
   const allTags = tagsQ.data ?? []
 
   const uploadMut = useMutation({
-    mutationFn: () => mediaApi.uploadProjectDocument(projectId, pending!.file, pending!.title || undefined, pending!.requiresApproval),
+    mutationFn: () => mediaApi.uploadProjectDocument(projectId, pending!.file, pending!.title || undefined, pending!.requiresApproval, pending!.isInternal),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['project-docs', projectId] })
       toast.success('Документ загружен')
@@ -68,7 +68,7 @@ export function ProjectDocsTab({ projectId, isAdmin }: { projectId: number; isAd
     if (!file) return
     const error = validateDocFile(file)
     if (error) { toast.error(error); e.target.value = ''; return }
-    setPending({ file, title: file.name.replace(/\.[^.]+$/, ''), requiresApproval: false })
+    setPending({ file, title: file.name.replace(/\.[^.]+$/, ''), requiresApproval: false, isInternal: false })
     e.target.value = ''
   }
 
@@ -79,7 +79,7 @@ export function ProjectDocsTab({ projectId, isAdmin }: { projectId: number; isAd
     if (!file) return
     const error = validateDocFile(file)
     if (error) { toast.error(error); return }
-    setPending({ file, title: file.name.replace(/\.[^.]+$/, ''), requiresApproval: false })
+    setPending({ file, title: file.name.replace(/\.[^.]+$/, ''), requiresApproval: false, isInternal: false })
   }
 
   const docs = data?.items ?? []
@@ -105,16 +105,32 @@ export function ProjectDocsTab({ projectId, isAdmin }: { projectId: number; isAd
                 }`}
               />
               {!pending.title.trim() && <p className="text-xs text-red-500">Обязательное поле</p>}
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 text-xs text-slate-500 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={pending.requiresApproval}
-                    onChange={e => setPending(p => p ? { ...p, requiresApproval: e.target.checked } : p)}
-                    className="rounded"
-                  />
-                  Требует согласования
-                </label>
+              <div className="flex items-end justify-between gap-3 flex-wrap">
+                {/* requires_approval и is_internal — разные вещи: первый виден
+                    пользователю без ссылки и доступ можно запросить, второй не
+                    виден ему вообще (см. README-backend.md, «admin: documents») */}
+                <div className="space-y-1.5">
+                  <label className="flex items-center gap-2 text-xs text-slate-500 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={pending.requiresApproval}
+                      onChange={e => setPending(p => p ? { ...p, requiresApproval: e.target.checked, isInternal: e.target.checked ? false : p.isInternal } : p)}
+                      className="rounded"
+                    />
+                    Требует согласования
+                    <span className="text-slate-400">— виден, доступ по заявке</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-slate-500 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={pending.isInternal}
+                      onChange={e => setPending(p => p ? { ...p, isInternal: e.target.checked, requiresApproval: e.target.checked ? false : p.requiresApproval } : p)}
+                      className="rounded"
+                    />
+                    Служебный
+                    <span className="text-slate-400">— пользователю не виден вовсе</span>
+                  </label>
+                </div>
                 <div className="flex gap-2">
                   <Button variant="ghost" onClick={() => setPending(null)} className="h-7 text-xs px-2 cursor-pointer">Отмена</Button>
                   <Button
@@ -176,8 +192,13 @@ export function ProjectDocsTab({ projectId, isAdmin }: { projectId: number; isAd
               projectId={projectId}
               allTags={allTags}
               isAdmin={isAdmin}
-              onOpen={() => window.open(mediaApi.toFullUrl(doc.file_url), '_blank')}
-              onDownload={() => mediaApi.downloadDocument(doc.file_url, doc.title)}
+              onOpen={() => doc.file_url
+                ? window.open(mediaApi.toFullUrl(doc.file_url), '_blank')
+                : mediaApi.downloadDocumentById(doc.id, doc.title).catch(() => toast.error('Не удалось открыть документ'))}
+              onDownload={() => (doc.file_url
+                ? mediaApi.downloadDocument(doc.file_url, doc.title)
+                : mediaApi.downloadDocumentById(doc.id, doc.title)
+              ).catch(() => toast.error('Не удалось скачать документ'))}
               onDelete={isAdmin ? () => setDeleteTarget({ id: doc.id, title: doc.title }) : undefined}
               deleting={deleteMut.isPending}
             />
@@ -284,6 +305,14 @@ function DocRow({ doc, projectId, allTags, isAdmin, onOpen, onDownload, onDelete
             {doc.requires_approval && (
               <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
                 Согласование
+              </span>
+            )}
+            {doc.is_internal && (
+              <span
+                title="Служебный документ: пользователю не виден вовсе"
+                className="text-xs px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300"
+              >
+                Служебный
               </span>
             )}
             {doc.tags.map(tag => (

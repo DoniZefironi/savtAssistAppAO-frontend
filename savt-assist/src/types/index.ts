@@ -3,7 +3,12 @@ export type UserRole = 'superadmin' | 'admin' | 'operator' | 'user'
 export interface User {
   id: number
   login: string | null
+  // Подтверждённый номер из Telegram, он же логин. Пользователь его не меняет —
+  // только через заявку с одобрением админа (см. admin: phone change requests).
   phone: string | null
+  // Рабочий номер для связи. НЕ подтверждён, на вход не влияет, меняется
+  // пользователем свободно — полагаться на него при идентификации нельзя.
+  contact_phone?: string | null
   full_name: string | null
   email: string | null
   role: UserRole
@@ -37,12 +42,29 @@ export interface Cabinet {
   created_at: string
 }
 
+export type WarrantyStatus = 'active' | 'expiring_soon' | 'expired' | 'none'
+
+// Контактное лицо заказчика из сделки Bitrix. Только в админских ответах —
+// в GET /projects/{id} их нет (персональные данные, а доступ к проекту по QR).
+export interface ProjectContact {
+  id: number
+  full_name: string
+  post: string | null
+  phones: string[]
+  emails: string[]
+}
+
 export interface Project {
   id: number
   name: string
   unique_code: string
   cabinet_count: number
   created_at: string
+  company_name?: string | null
+  shipment_actual_at?: string | null
+  warranty_ends_at?: string | null
+  // Считается по гарантии самого проекта, а не его шкафов
+  warranty_status?: WarrantyStatus | null
 }
 
 export interface ProjectDetail {
@@ -54,6 +76,17 @@ export interface ProjectDetail {
   cabinets: { id: number; type: string | null; object_number: string; admin_internal_name: string | null }[]
   created_at: string
   updated_at: string
+  // Из сделки Bitrix — только для чтения: перезаписываются на каждом изменении
+  // сделки, PATCH их не принимает (см. README-backend.md, «Поля сделки в карточке проекта»)
+  production_number?: string | null
+  shipment_planned_at?: string | null
+  shipment_actual_at?: string | null
+  company_name?: string | null
+  contacts?: ProjectContact[]
+  // Наше, редактируется админом: в CRM гарантии нет
+  warranty_starts_at?: string | null
+  warranty_ends_at?: string | null
+  warranty_status?: WarrantyStatus | null
 }
 
 export interface PaginatedResponse<T> {
@@ -66,9 +99,12 @@ export interface PaginatedResponse<T> {
 
 export interface Chat {
   id: number
-  chat_type: 'cabinet' | 'support' | 'notes' | 'service_request'
+  chat_type: 'cabinet' | 'project' | 'support' | 'notes' | 'service_request'
   cabinet_id: number | null
   cabinet_name: string | null
+  // Чат проекта в целом — отдельный от чатов ШУ, заполнен вместо cabinet_*
+  project_id?: number | null
+  project_name?: string | null
   user_name?: string | null
   user_full_name?: string | null
   user_phone?: string | null
@@ -225,6 +261,31 @@ export interface ShareRequest {
   resolved_by_admin_id: number | null
   created_at: string
   resolved_at: string | null
+}
+
+// Заявка на смену номера телефона. Самостоятельной смены больше нет: номер —
+// это логин, а подтвердить владение им система не может (SMS отключены), поэтому
+// решение принимает администратор вне системы. См. README-backend.md,
+// «admin: phone change requests».
+export interface PhoneChangeRequest {
+  id: number
+  user_id: number
+  new_phone: string
+  old_phone: string | null
+  user_comment: string | null
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled'
+  admin_response: string | null
+  resolved_by_admin_id: number | null
+  created_at: string
+  resolved_at: string | null
+  user_full_name: string | null
+  user_type: 'individual' | 'organization' | null
+  organization_name: string | null
+  user_is_verified: boolean
+  user_registered_at: string | null
+  // Сколько всего необработанных заявок на ЭТОТ ЖЕ номер, включая текущую.
+  // > 1 — на номер претендует несколько аккаунтов, одобрять не разобравшись нельзя.
+  pending_rivals: number
 }
 
 export interface ProjectRequest {

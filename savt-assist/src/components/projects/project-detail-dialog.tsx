@@ -11,6 +11,7 @@ import { formatDate } from '@/lib/warranty'
 import { cn } from '@/lib/utils'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
 import { ProjectQrDialog } from './project-qr-dialog'
+import { ProjectDealInfo } from './project-deal-info'
 import type { Project } from '@/types'
 
 interface Props {
@@ -85,6 +86,10 @@ function DetailContent({ projectId, isAdmin, filters }: { projectId: number; isA
     unique_code: project.unique_code,
     cabinet_count: project.cabinets.length,
     created_at: project.created_at,
+    company_name: project.company_name,
+    shipment_actual_at: project.shipment_actual_at,
+    warranty_ends_at: project.warranty_ends_at,
+    warranty_status: project.warranty_status,
   }
 
   return (
@@ -119,6 +124,9 @@ function DetailContent({ projectId, isAdmin, filters }: { projectId: number; isA
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="px-4 sm:px-6 pt-3">
+          <ProjectDealInfo project={project} />
+        </div>
         <div className="px-4 sm:px-6 py-3 flex items-center justify-between gap-2 text-xs text-slate-400">
           <span>
             Папка на NAS: {project.folder_synced_at ? `синхронизирована ${formatDate(project.folder_synced_at)}` : 'ещё не синхронизирована'}

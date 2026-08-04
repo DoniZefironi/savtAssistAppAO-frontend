@@ -23,9 +23,15 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
   const [deleteStep, setDeleteStep] = useState(false)
   const [selectedCabinetId, setSelectedCabinetId] = useState<number | null>(null)
 
-  // Админ/суперадмин в списке — это staff-карточка: только просмотр, без действий
-  // (на управление админами серверных эндпоинтов нет, есть лишь GET /admin/admins/{id}).
+  // Админ/суперадмин в списке — staff-карточка: верификация/блокировка к ним
+  // не применяются. Единственное доступное действие — удаление админа, и только
+  // суперадмином (DELETE /admin/admins/{id}).
   const isStaffAdmin = role === 'admin' || isSuperadminRole(role)
+  // Суперадминов этим эндпоинтом удалить нельзя (их заводит только CLI), себя — тоже.
+  const canDeleteAdmin = isSuperadminRole(currentUser?.role ?? '')
+    && role === 'admin'
+    && !isSuperadminRole(role)
+    && currentUser?.id !== userId
   const canFetchDetail = role === 'user' || role === 'operator' || isStaffAdmin
 
   const { data: user, isLoading } = useQuery({
@@ -63,6 +69,12 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
   const deleteOperatorMut = useMutation({
     mutationFn: () => usersApi.deleteOperator(userId),
     onSuccess: () => { invalidate(); toast.success('Оператор удалён'); onClose() },
+    onError: () => toast.error('Ошибка при удалении'),
+  })
+
+  const deleteAdminMut = useMutation({
+    mutationFn: () => usersApi.deleteAdmin(userId),
+    onSuccess: () => { invalidate(); toast.success('Администратор удалён'); onClose() },
     onError: () => toast.error('Ошибка при удалении'),
   })
 
@@ -136,7 +148,19 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
 
           <div className="overflow-y-auto flex-1">
             <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
-              {user.phone && <DRow label="Телефон" value={user.phone} />}
+              {user.phone && <DRow label="Телефон (логин)" value={user.phone} />}
+              {/* Не подтверждён и меняется пользователем свободно — по нему нельзя
+                  опознавать звонящего, поэтому подписываем явно */}
+              {user.contact_phone && (
+                <DRow label="Телефон для связи" value={
+                  <span className="flex items-center gap-2 flex-wrap">
+                    {user.contact_phone}
+                    <span className="text-xs font-normal px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
+                      не подтверждён
+                    </span>
+                  </span>
+                } />
+              )}
               {user.login && <DRow label="Логин" value={user.login} />}
               {user.email && <DRow label="Email" value={user.email} />}
               {user.organization_name && <DRow label="Организация" value={user.organization_name} />}
@@ -176,6 +200,37 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
               </div>
             )}
           </div>
+
+          {isStaffAdmin && canDeleteAdmin && (
+            <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700 shrink-0">
+              {deleteStep ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-slate-600 dark:text-slate-300 wrap-break-word">
+                    Удалить администратора <strong>{user.full_name ?? user.login}</strong>? Все сессии
+                    будут отозваны, аккаунт деактивируется и обезличится. Журнал действий и
+                    обработанные им заявки сохранятся.
+                  </p>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="ghost" onClick={() => setDeleteStep(false)} disabled={deleteAdminMut.isPending} className="cursor-pointer">Отмена</Button>
+                    <Button onClick={() => deleteAdminMut.mutate()} disabled={deleteAdminMut.isPending} className="bg-red-600 hover:bg-red-700 cursor-pointer">
+                      {deleteAdminMut.isPending ? 'Удаление...' : 'Удалить'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => setDeleteStep(true)}
+                    disabled={deleteAdminMut.isPending}
+                    className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/20 cursor-pointer"
+                  >
+                    Удалить администратора
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
 
           {!isReadOnly && !isStaffAdmin && <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700 shrink-0">
             {deleteStep ? (

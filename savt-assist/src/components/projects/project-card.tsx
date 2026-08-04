@@ -1,6 +1,40 @@
-import { Project } from '@/types'
+import { Project, WarrantyStatus } from '@/types'
 import { Button } from '@/components/ui/button'
 import { formatDate } from '@/lib/warranty'
+import { cn } from '@/lib/utils'
+
+// Компания и дата отгрузки приезжают из сделки Bitrix, warranty_status считается
+// по гарантии самого проекта (не его шкафов) — см. README-backend.md.
+function ProjectMeta({ project }: { project: Project }) {
+  if (!project.company_name && !project.shipment_actual_at && !project.warranty_status) return null
+  return (
+    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap text-xs">
+      {project.company_name && (
+        <span className="text-slate-500 dark:text-slate-400 truncate max-w-56">{project.company_name}</span>
+      )}
+      {project.shipment_actual_at && (
+        <span className="text-slate-400">отгружен {formatDate(project.shipment_actual_at)}</span>
+      )}
+      {project.warranty_status && project.warranty_status !== 'none' && (
+        <span className={cn('px-1.5 py-0.5 rounded', warrantyPill(project.warranty_status))}>
+          {warrantyText(project.warranty_status)}
+        </span>
+      )}
+    </div>
+  )
+}
+
+function warrantyPill(s: WarrantyStatus): string {
+  if (s === 'active') return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+  if (s === 'expiring_soon') return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+  return 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'
+}
+
+function warrantyText(s: WarrantyStatus): string {
+  if (s === 'active') return 'Гарантия'
+  if (s === 'expiring_soon') return 'Истекает'
+  return 'Истекла'
+}
 
 interface Props {
   project: Project
@@ -23,6 +57,7 @@ export function ProjectCard({ project, isAdmin, view = 'list', onOpen, onEdit, o
           <div className="min-w-0">
             <p className="font-semibold text-slate-800 dark:text-slate-100 truncate leading-tight">{project.name}</p>
             <p className="text-xs text-slate-400 mt-0.5">{project.cabinet_count} шкафов</p>
+            <ProjectMeta project={project} />
           </div>
           <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
             {isAdmin && onEdit && (
@@ -62,6 +97,7 @@ export function ProjectCard({ project, isAdmin, view = 'list', onOpen, onEdit, o
       <div className="flex-1 min-w-0 cursor-pointer" onClick={onOpen}>
         <p className="font-semibold text-slate-800 dark:text-slate-100 truncate">{project.name}</p>
         <p className="text-xs text-slate-400 mt-0.5">{project.cabinet_count} шкафов · {formatDate(project.created_at)}</p>
+        <ProjectMeta project={project} />
       </div>
 
       {isAdmin && (onEdit || onDelete) && (

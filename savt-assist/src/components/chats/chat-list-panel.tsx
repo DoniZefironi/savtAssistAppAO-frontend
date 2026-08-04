@@ -2,7 +2,7 @@
 
 import { useMemo, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Package, FileText, MessageCircle, Search, Wrench, Archive } from 'lucide-react'
+import { Package, FileText, MessageCircle, Search, Wrench, Archive, Folder } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { chatsApi } from '@/lib/api/chats'
 import type { MessageSearchResult } from '@/lib/api/chats'
@@ -160,7 +160,7 @@ export function ChatListPanel({ chats, selectedId, onSelect, onSelectChatId, loa
                   className="w-full text-left flex items-start gap-3 px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer border-b border-slate-50 dark:border-slate-800"
                 >
                   <div className="w-10 h-10 rounded-full bg-[#1B3A72]/10 dark:bg-blue-900/30 flex items-center justify-center shrink-0 mt-0.5 text-[#1B3A72] dark:text-blue-400">
-                    {item.chat_type === 'cabinet' ? <Package className="w-4 h-4" /> : <MessageCircle className="w-4 h-4" />}
+                    {item.chat_type === 'cabinet' ? <Package className="w-4 h-4" /> : item.chat_type === 'project' ? <Folder className="w-4 h-4" /> : <MessageCircle className="w-4 h-4" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1 mb-0.5">
@@ -226,7 +226,7 @@ function CompactChatRow({ chat, selected, onSelect }: { chat: Chat; selected: bo
         'w-9 h-9 rounded-full flex items-center justify-center text-base font-semibold text-white',
         avatarBg, bg
       )}>
-        {chat.chat_type === 'cabinet' ? <Package className="w-4 h-4" /> : chat.chat_type === 'notes' ? <FileText className="w-4 h-4" /> : chat.chat_type === 'service_request' ? <Wrench className="w-4 h-4" /> : chatInitials(chat)}
+        {chat.chat_type === 'cabinet' ? <Package className="w-4 h-4" /> : chat.chat_type === 'project' ? <Folder className="w-4 h-4" /> : chat.chat_type === 'notes' ? <FileText className="w-4 h-4" /> : chat.chat_type === 'service_request' ? <Wrench className="w-4 h-4" /> : chatInitials(chat)}
       </div>
 
       {hasUnread && (
@@ -298,7 +298,7 @@ function ChatAvatar({ chat, selected }: { chat: Chat; selected: boolean }) {
   const bg = selected ? 'bg-white/20' : chatColor(chat)
   return (
     <div className={cn('w-12 h-12 rounded-full flex items-center justify-center shrink-0 text-lg font-semibold', bg, !selected && 'text-white')}>
-      {chat.chat_type === 'cabinet' ? <Package className="w-5 h-5" /> : chat.chat_type === 'notes' ? <FileText className="w-5 h-5" /> : chat.chat_type === 'service_request' ? <Wrench className="w-5 h-5" /> : chatInitials(chat)}
+      {chat.chat_type === 'cabinet' ? <Package className="w-5 h-5" /> : chat.chat_type === 'project' ? <Folder className="w-5 h-5" /> : chat.chat_type === 'notes' ? <FileText className="w-5 h-5" /> : chat.chat_type === 'service_request' ? <Wrench className="w-5 h-5" /> : chatInitials(chat)}
     </div>
   )
 }
@@ -312,6 +312,10 @@ export function chatDisplayName(chat: Chat): string {
   if (chat.chat_type === 'cabinet') {
     const cabinet = chat.cabinet_name ?? `ШУ #${chat.id}`
     return chat.user_name ? `${cabinet} — ${chat.user_name}` : cabinet
+  }
+  if (chat.chat_type === 'project') {
+    const project = chat.project_name ?? `Проект #${chat.id}`
+    return user ? `${project} — ${user}` : project
   }
   if (chat.chat_type === 'notes') return user ? `Заметки — ${user}` : `Заметки #${chat.id}`
   if (chat.chat_type === 'support') return user ? `Поддержка — ${user}` : `Поддержка #${chat.id}`
@@ -330,7 +334,11 @@ function chatInitials(chat: Chat): ReactNode {
 
 function chatColor(chat: Chat): string {
   const colors = ['bg-violet-500', 'bg-rose-500', 'bg-sky-500', 'bg-emerald-500', 'bg-orange-500', 'bg-pink-500']
-  return chat.chat_type === 'cabinet' ? 'bg-[#1B3A72]' : colors[chat.id % colors.length]
+  // ШУ и проект — фиксированные цвета: это не «ещё один собеседник», а объект,
+  // и цвет должен читаться одинаково во всех чатах этого объекта.
+  if (chat.chat_type === 'cabinet') return 'bg-[#1B3A72]'
+  if (chat.chat_type === 'project') return 'bg-teal-600'
+  return colors[chat.id % colors.length]
 }
 
 export function formatTime(iso: string): string {

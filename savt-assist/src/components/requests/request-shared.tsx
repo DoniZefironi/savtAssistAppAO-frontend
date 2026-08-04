@@ -17,15 +17,19 @@ export function svcStatusCls(s: string) {
 export function svcStatusLabel(s: string) {
   return s === 'open' ? 'Открыта' : s === 'in_progress' ? 'В работе' : 'Закрыта'
 }
+// cancelled — заявку отозвал сам пользователь (пока только у заявок на смену
+// номера). Без отдельной ветки она отрисовалась бы как «Отклонена» красным.
 export function reqStatusCls(s: string) {
-  return s === 'pending'
-    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-    : s === 'approved'
-    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-    : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+  if (s === 'pending') return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+  if (s === 'approved') return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+  if (s === 'cancelled') return 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
+  return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
 }
 export function reqStatusLabel(s: string) {
-  return s === 'pending' ? 'Ожидает' : s === 'approved' ? 'Одобрена' : 'Отклонена'
+  if (s === 'pending') return 'Ожидает'
+  if (s === 'approved') return 'Одобрена'
+  if (s === 'cancelled') return 'Отозвана'
+  return 'Отклонена'
 }
 export function reqTypeCls(t: string) {
   if (t === 'diagnostics') return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'

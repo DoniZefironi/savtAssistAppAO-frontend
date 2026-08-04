@@ -3,7 +3,10 @@ import type { PaginatedResponse } from '@/types'
 
 export interface AdminUser {
   id: number
+  // phone — подтверждённый номер из Telegram (логин), contact_phone — рабочий
+  // номер, указанный самим пользователем и ничем не подтверждённый.
   phone: string | null
+  contact_phone?: string | null
   login: string | null
   full_name: string | null
   user_type: string | null
@@ -73,6 +76,13 @@ export const usersApi = {
 
   createAdmin: (data: { login: string; password: string; full_name?: string | null }): Promise<AdminUser> =>
     apiClient.post('/admin/admins', data).then(r => r.data),
+
+  // Только суперадмин. Механика как у удаления оператора: сессии отзываются,
+  // аккаунт деактивируется и обезличивается, но из базы не стирается — на него
+  // ссылаются журнал действий и обработанные заявки. Суперадмина этим
+  // эндпоинтом удалить нельзя (403), как и самого себя.
+  deleteAdmin: (id: number): Promise<void> =>
+    apiClient.delete(`/admin/admins/${id}`).then(() => undefined),
 
   verify: (id: number) => apiClient.post(`/admin/users/${id}/verify`, {}),
   unverify: (id: number) => apiClient.post(`/admin/users/${id}/unverify`, {}),

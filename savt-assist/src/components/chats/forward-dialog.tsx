@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Package, FileText, MessageCircle } from 'lucide-react'
+import { Package, FileText, MessageCircle, Folder } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { chatsApi } from '@/lib/api/chats'
 import { chatDisplayName } from './chat-list-panel'
@@ -92,11 +92,11 @@ export function ForwardDialog({ messages, currentChatId, onClose }: { messages: 
         <div className="overflow-y-auto flex-1 py-1">
           {chats.length === 0 && <p className="text-sm text-slate-400 text-center py-8">Нет других чатов</p>}
           {chats.map((c) => {
-            const ItemIcon = c.chat_type === 'cabinet' ? Package : c.chat_type === 'notes' ? FileText : MessageCircle
+            const ItemIcon = c.chat_type === 'cabinet' ? Package : c.chat_type === 'project' ? Folder : c.chat_type === 'notes' ? FileText : MessageCircle
             return (
             <button key={c.id} disabled={sending} onClick={() => forward(c.id)}
               className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors text-left disabled:opacity-50 cursor-pointer">
-              <div className={cn('w-9 h-9 rounded-full flex items-center justify-center text-sm shrink-0', c.chat_type === 'cabinet' ? 'bg-[#1B3A72] text-white' : 'bg-slate-400 text-white')}>
+              <div className={cn('w-9 h-9 rounded-full flex items-center justify-center text-sm shrink-0 text-white', c.chat_type === 'cabinet' ? 'bg-[#1B3A72]' : c.chat_type === 'project' ? 'bg-teal-600' : 'bg-slate-400')}>
                 <ItemIcon className="w-4 h-4" />
               </div>
               <div className="flex-1 min-w-0">

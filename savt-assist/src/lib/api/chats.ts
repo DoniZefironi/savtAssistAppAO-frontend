@@ -34,7 +34,7 @@ export type ChatSettingsPatch = Partial<Omit<ChatSettings, 'user_id' | 'chat_id'
 
 export interface GetChatsParams {
   search?: string
-  chat_type?: 'cabinet' | 'support' | 'service_request'
+  chat_type?: 'cabinet' | 'project' | 'support' | 'service_request'
   // false (по умолч. на бэкенде) — активные; true — архив (чаты закрытых заявок)
   archived?: boolean
 }

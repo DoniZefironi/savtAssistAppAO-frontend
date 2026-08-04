@@ -8,23 +8,44 @@ export interface CabinetDocument {
   project_id: number | null
   title: string
   doc_type: string
-  file_url: string
+  // null у документов с ограниченным доступом — прямой подписанной ссылки они
+  // не получают вовсе, качать через GET /documents/{id}/download (см. раздел 8.1)
+  file_url: string | null
   file_size_bytes: number
   mime_type: string
+  // Требует согласования: пользователь видит документ, но без ссылки, и может
+  // запросить доступ. Не путать с is_internal.
   requires_approval: boolean
+  // Служебный (счёт, договор): пользователю не виден ни в одном ответе вообще,
+  // download и запрос доступа отвечают 404. Виден только операторам и админам.
+  is_internal?: boolean
   version: number
   tags: { id: number; name: string; scope: string }[]
   created_at: string
   updated_at: string
 }
 
+// Фото привязано либо к ШУ, либо к проекту — ровно одно из двух заполнено
+// (ck_photo_cabinet_or_project на уровне БД), как и у документов.
 export interface CabinetPhoto {
   id: number
-  cabinet_id: number
+  cabinet_id: number | null
+  project_id: number | null
   url: string
   caption: string | null
   sort_order: number
   created_at: string
+}
+
+function saveBlob(blob: Blob, filename: string) {
+  const blobUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = blobUrl
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(blobUrl)
 }
 
 async function uploadMultipart<T>(path: string, form: FormData): Promise<T> {
@@ -40,12 +61,13 @@ export const mediaApi = {
   listDocuments: (cabinetId: number): Promise<PaginatedResponse<CabinetDocument>> =>
     apiClient.get('/admin/documents', { params: { cabinet_id: cabinetId, size: 100 } }).then(r => r.data),
 
-  uploadDocument: (cabinetId: number, file: File, title?: string, requiresApproval = false): Promise<CabinetDocument> => {
+  uploadDocument: (cabinetId: number, file: File, title?: string, requiresApproval = false, isInternal = false): Promise<CabinetDocument> => {
     const form = new FormData()
     form.append('file', file)
     form.append('cabinet_id', String(cabinetId))
     if (title) form.append('title', title)
     form.append('requires_approval', String(requiresApproval))
+    form.append('is_internal', String(isInternal))
     return uploadMultipart('/admin/documents', form)
   },
 
@@ -55,12 +77,13 @@ export const mediaApi = {
   listProjectDocuments: (projectId: number): Promise<PaginatedResponse<CabinetDocument>> =>
     apiClient.get('/admin/documents', { params: { project_id: projectId, size: 100 } }).then(r => r.data),
 
-  uploadProjectDocument: (projectId: number, file: File, title?: string, requiresApproval = false): Promise<CabinetDocument> => {
+  uploadProjectDocument: (projectId: number, file: File, title?: string, requiresApproval = false, isInternal = false): Promise<CabinetDocument> => {
     const form = new FormData()
     form.append('file', file)
     form.append('project_id', String(projectId))
     if (title) form.append('title', title)
     form.append('requires_approval', String(requiresApproval))
+    form.append('is_internal', String(isInternal))
     return uploadMultipart('/admin/documents', form)
   },
 
@@ -71,17 +94,18 @@ export const mediaApi = {
     try {
       const res = await fetch(url)
       const blob = await res.blob()
-      const blobUrl = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = blobUrl
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(blobUrl)
+      saveBlob(blob, filename)
     } catch {
       window.open(url, '_blank')
     }
+  },
+
+  // Для документов без прямой ссылки (file_url: null у требующих согласования):
+  // качаем через эндпоинт с проверкой прав, а не по подписанной ссылке.
+  downloadDocumentById: async (docId: number, filename: string) => {
+    const res = await authorizedFetch(`/documents/${docId}/download`)
+    if (!res.ok) throw new Error(`Download failed: ${res.status}`)
+    saveBlob(await res.blob(), filename)
   },
 
   listPhotos: (cabinetId: number): Promise<PaginatedResponse<CabinetPhoto>> =>
@@ -91,6 +115,19 @@ export const mediaApi = {
     const form = new FormData()
     form.append('file', file)
     form.append('cabinet_id', String(cabinetId))
+    if (caption) form.append('caption', caption)
+    return uploadMultipart('/admin/photos', form)
+  },
+
+  // Фото проекта в целом — тот же эндпоинт, но с project_id вместо cabinet_id
+  // (ровно одно из двух, иначе 422).
+  listProjectPhotos: (projectId: number): Promise<PaginatedResponse<CabinetPhoto>> =>
+    apiClient.get('/admin/photos', { params: { project_id: projectId, size: 100 } }).then(r => r.data),
+
+  uploadProjectPhoto: (projectId: number, file: File, caption?: string): Promise<CabinetPhoto> => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('project_id', String(projectId))
     if (caption) form.append('caption', caption)
     return uploadMultipart('/admin/photos', form)
   },

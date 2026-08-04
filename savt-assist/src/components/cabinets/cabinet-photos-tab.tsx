@@ -11,7 +11,20 @@ import type { CabinetPhoto } from '@/lib/api/media'
 import { fmtSize, validatePhotoFile } from './cabinet-dialog-shared'
 import { ImageIcon, PencilIcon, TrashIcon, UploadIcon, XIcon, ChevronLeftIcon, ChevronRightIcon } from './cabinet-dialog-icons'
 
+// Фото привязано либо к ШУ, либо к проекту (ровно одно из двух, см.
+// README-backend.md «POST /admin/photos»). UX одинаковый, отличаются только
+// ключ кэша и пара вызовов API — поэтому одна вкладка на оба случая, а не копия.
+type PhotoOwner = { kind: 'cabinet' | 'project'; id: number }
+
 export function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }) {
+  return <PhotosTabCore owner={{ kind: 'cabinet', id: cabinetId }} isAdmin={isAdmin} />
+}
+
+export function ProjectPhotosTab({ projectId, isAdmin }: { projectId: number; isAdmin: boolean }) {
+  return <PhotosTabCore owner={{ kind: 'project', id: projectId }} isAdmin={isAdmin} />
+}
+
+function PhotosTabCore({ owner, isAdmin }: { owner: PhotoOwner; isAdmin: boolean }) {
   const qc = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
@@ -19,15 +32,20 @@ export function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: 
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<CabinetPhoto | null>(null)
 
+  const isProject = owner.kind === 'project'
+  const queryKey = [isProject ? 'project-photos' : 'cabinet-photos', owner.id]
+
   const { data, isLoading } = useQuery({
-    queryKey: ['cabinet-photos', cabinetId],
-    queryFn: () => mediaApi.listPhotos(cabinetId),
+    queryKey,
+    queryFn: () => isProject ? mediaApi.listProjectPhotos(owner.id) : mediaApi.listPhotos(owner.id),
   })
 
   const uploadMut = useMutation({
-    mutationFn: () => mediaApi.uploadPhoto(cabinetId, pendingFile!, caption || undefined),
+    mutationFn: () => isProject
+      ? mediaApi.uploadProjectPhoto(owner.id, pendingFile!, caption || undefined)
+      : mediaApi.uploadPhoto(owner.id, pendingFile!, caption || undefined),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['cabinet-photos', cabinetId] })
+      qc.invalidateQueries({ queryKey })
       toast.success('Фото добавлено')
       setPendingFile(null)
       setCaption('')
@@ -38,7 +56,7 @@ export function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: 
   const deleteMut = useMutation({
     mutationFn: (photoId: number) => mediaApi.deletePhoto(photoId),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['cabinet-photos', cabinetId] })
+      qc.invalidateQueries({ queryKey })
       toast.success('Фото удалено')
       setDeleteTarget(null)
     },
@@ -49,7 +67,7 @@ export function PhotosTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: 
     mutationFn: ({ id, caption, sort_order }: { id: number; caption: string | null; sort_order: number }) =>
       mediaApi.updatePhoto(id, caption, sort_order),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['cabinet-photos', cabinetId] })
+      qc.invalidateQueries({ queryKey })
       toast.success('Фото обновлено')
     },
     onError: () => toast.error('Ошибка при обновлении'),

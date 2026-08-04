@@ -152,7 +152,9 @@ function AudioAttachment({ a, isOwn, transcription, transcribing, onTranscribe }
   const name = a.file_name ?? ''
   const mime = a.mime_type ?? ''
   const isVoice = name === 'Голосовое сообщение' || mime.includes('ogg') || mime.includes('webm')
-  const bars = useMemo(() => seededBars(a.file_url ?? String(a.id), 34), [a.file_url, a.id])
+  // Сеем по id, а не по file_url: ссылки теперь подписанные (?md5=…&expires=…)
+  // и меняются при каждом рефетче — рисунок волны прыгал бы у того же файла.
+  const bars = useMemo(() => seededBars(String(a.id), 34), [a.id])
   const duration = a.duration_seconds ?? 0
   const displayTime = playing && elapsed > 0 ? formatDuration(elapsed) : formatDuration(duration)
 

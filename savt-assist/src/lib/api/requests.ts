@@ -1,7 +1,7 @@
 import { apiClient } from './client'
-import type { ServiceRequest, AdditionRequest, ShareRequest, DocumentRequest, ProjectRequest, PaginatedResponse } from '@/types'
+import type { ServiceRequest, AdditionRequest, ShareRequest, DocumentRequest, ProjectRequest, PhoneChangeRequest, PaginatedResponse } from '@/types'
 
-export type { ServiceRequest, AdditionRequest, ShareRequest, DocumentRequest, ProjectRequest }
+export type { ServiceRequest, AdditionRequest, ShareRequest, DocumentRequest, ProjectRequest, PhoneChangeRequest }
 
 interface ListParams {
   status?: string
@@ -68,6 +68,24 @@ export const requestsApi = {
 
   rejectProjectRequest: async (id: number, admin_response: string) => {
     const { data } = await apiClient.post(`/admin/project-requests/${id}/reject`, { admin_response })
+    return data
+  },
+
+  // Смена номера телефона. Просмотр — оператору, решение — только админу.
+  // Одобрение меняет номер (то есть логин) немедленно, поэтому владение номером
+  // администратор обязан подтвердить вне системы — сама она этого не умеет.
+  getPhoneChangeRequests: async (params?: ListParams) => {
+    const { data } = await apiClient.get<PaginatedResponse<PhoneChangeRequest>>('/admin/phone-change-requests', { params })
+    return data
+  },
+
+  approvePhoneChangeRequest: async (id: number, admin_response: string | null) => {
+    const { data } = await apiClient.post(`/admin/phone-change-requests/${id}/approve`, { admin_response })
+    return data
+  },
+
+  rejectPhoneChangeRequest: async (id: number, admin_response: string) => {
+    const { data } = await apiClient.post(`/admin/phone-change-requests/${id}/reject`, { admin_response })
     return data
   },
 

@@ -46,6 +46,13 @@ export function useRealtimeEvents(
     let cancelled = false
     let retryTimer: ReturnType<typeof setTimeout> | null = null
     let everConnected = false
+    // Подряд идущие обрывы без единого успешного открытия. EventSource не отдаёт
+    // HTTP-статус в onerror, поэтому отличить «сеть моргнула» от «доступа нет»
+    // (403 на чужой чат / чужие заметки) можно только по тому, что соединение
+    // ни разу не открылось. Без этого постоянный 403 крутил бы вечный цикл
+    // «запрос тикета + попытка стрима» каждые 3 секунды.
+    let failedHandshakes = 0
+    const MAX_FAILED_HANDSHAKES = 5
 
     async function connect() {
       if (cancelled) return
@@ -59,6 +66,7 @@ export function useRealtimeEvents(
         es.onopen = () => {
           if (everConnected) onReconnectRef.current?.()
           everConnected = true
+          failedHandshakes = 0
         }
 
         for (const type of eventTypesKey.split(',')) {
@@ -73,10 +81,17 @@ export function useRealtimeEvents(
         es.onerror = () => {
           es?.close()
           es = null
-          if (!cancelled) retryTimer = setTimeout(connect, 3000)
+          if (cancelled) return
+          // Соединение открывалось раньше — это обычный обрыв, переподключаемся.
+          // Ни разу не открывалось — вероятно 401/403, после нескольких попыток
+          // сдаёмся, чтобы не долбить сервер вечно.
+          if (!everConnected && ++failedHandshakes >= MAX_FAILED_HANDSHAKES) return
+          retryTimer = setTimeout(connect, 3000)
         }
       } catch {
-        if (!cancelled) retryTimer = setTimeout(connect, 3000)
+        if (cancelled) return
+        if (!everConnected && ++failedHandshakes >= MAX_FAILED_HANDSHAKES) return
+        retryTimer = setTimeout(connect, 3000)
       }
     }
 

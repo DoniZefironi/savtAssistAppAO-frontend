@@ -15,6 +15,13 @@ export interface ProjectCabinetFilters {
   tag_ids?: number[]
 }
 
+// Ответ POST /admin/projects/{id}/sync-folder — отчёт о прогоне, не сам проект.
+export interface SyncFolderResult {
+  synced_at: string
+  imported_documents: number
+  message: string
+}
+
 export interface ProjectsParams extends ProjectCabinetFilters {
   search?: string
   sort_by?: string
@@ -41,8 +48,15 @@ export const projectsApi = {
     return data
   },
 
-  // Оба поля опциональны на бэкенде — передавать только изменённые.
-  update: async (id: number, patch: { name?: string; parent_project_id?: number | null }): Promise<ProjectDetail> => {
+  // Все поля опциональны на бэкенде — передавать только изменённые.
+  // Поля из Bitrix (shipment_*, company_name, production_number, contacts) этот
+  // эндпоинт не принимает: они перезаписываются при изменении сделки.
+  update: async (id: number, patch: {
+    name?: string
+    parent_project_id?: number | null
+    warranty_starts_at?: string | null
+    warranty_ends_at?: string | null
+  }): Promise<ProjectDetail> => {
     const { data } = await apiClient.patch(`/admin/projects/${id}`, patch)
     return data
   },
@@ -58,8 +72,10 @@ export const projectsApi = {
 
   // Ручной запуск синхронизации папки проекта на NAS — работает всегда, в
   // отличие от ночного автопрогона (который пропускает проекты с истёкшей
-  // гарантией), см. README-backend.md.
-  syncFolder: async (id: number): Promise<ProjectDetail> => {
+  // гарантией), см. README-backend.md. Доступно оператору и администратору.
+  // Отдаёт не проект, а отчёт о прогоне: сколько файлов подхвачено из папки
+  // напрямую (положенных туда мимо приложения).
+  syncFolder: async (id: number): Promise<SyncFolderResult> => {
     const { data } = await apiClient.post(`/admin/projects/${id}/sync-folder`)
     return data
   },

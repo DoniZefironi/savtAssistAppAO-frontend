@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
-  Package, FileText, MessageCircle, Bot, Wrench, Archive,
+  Package, FileText, MessageCircle, Bot, Wrench, Archive, Folder,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MessageBubble, DateSeparator } from './message-bubble'
@@ -634,7 +634,8 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const handleTranscribe = useCallback(async (msg: ChatMessage, audioUrl: string) => {
     setTranscriptions(prev => new Map(prev).set(msg.id, { text: '', loading: true }))
     try {
-      // file_url — относительный путь /static/voices/...; файл уже загружен через /upload/voice
+      // Ссылка приходит подписанной (?md5=…&expires=…) — отправляем как есть,
+      // сервер сам снимет подпись перед обработкой (см. README-backend.md, 8.1)
       const { text: result } = await chatsApi.transcribeVoice(audioUrl)
       setTranscriptions(prev => new Map(prev).set(msg.id, { text: result, loading: false }))
     } catch (e) {
@@ -667,8 +668,8 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const isArchivedRequest = !!chat.archived_at
   const renderItems = buildRenderItems(displayMessages, currentUser?.id ?? -1, firstUnreadId)
   const name = chatDisplayName(chat)
-  const AvatarIcon = chat.chat_type === 'cabinet' ? Package : chat.chat_type === 'notes' ? FileText : chat.chat_type === 'service_request' ? Wrench : MessageCircle
-  const avatarBg = chat.chat_type === 'cabinet' ? 'bg-[#1B3A72]' : 'bg-slate-500'
+  const AvatarIcon = chat.chat_type === 'cabinet' ? Package : chat.chat_type === 'project' ? Folder : chat.chat_type === 'notes' ? FileText : chat.chat_type === 'service_request' ? Wrench : MessageCircle
+  const avatarBg = chat.chat_type === 'cabinet' ? 'bg-[#1B3A72]' : chat.chat_type === 'project' ? 'bg-teal-600' : 'bg-slate-500'
   const currentWallpaper = WALLPAPERS.find(w => w.id === wallpaper) ?? WALLPAPERS[0]
 
   const allAttachments = useMemo(() => {

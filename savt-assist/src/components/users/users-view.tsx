@@ -55,10 +55,12 @@ function activeCls(a: boolean) {
 function userName(u: AdminUser) {
   return u.full_name ?? u.login ?? u.phone ?? `#${u.id}`
 }
+// В подзаголовке основной — phone (логин, подтверждён). Рабочий contact_phone
+// показываем рядом, но он не подтверждён — опознавать по нему звонящего нельзя.
 function userSubtitle(u: AdminUser) {
-  if (u.full_name) return u.phone ?? u.login ?? '—'
-  if (u.login) return u.phone ?? '—'
-  return '—'
+  const primary = u.full_name ? (u.phone ?? u.login) : u.login ? u.phone : null
+  if (!primary) return '—'
+  return u.contact_phone ? `${primary} · раб. ${u.contact_phone}` : primary
 }
 
 function getListFn(role: RoleTab) {
