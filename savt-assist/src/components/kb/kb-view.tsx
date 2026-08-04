@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { AlertTriangle, FolderTree, SlidersHorizontal, FolderUp } from 'lucide-react'
@@ -1150,6 +1151,42 @@ function TagSelector({ selected, allTags, onChange, onCreateTag }: {
   const [input, setInput] = useState('')
   const [creating, setCreating] = useState(false)
   const [open, setOpen] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  // Дропдаун рендерится порталом с position: fixed. Обычный absolute обрезался
+  // сразу двумя предками: скроллящимся телом модалки (overflow-y-auto) и самим
+  // DialogContent (overflow-hidden) — меню уезжало за видимую зону.
+  const [dropPos, setDropPos] = useState<{ top: number; left: number; width: number; flipped: boolean } | null>(null)
+
+  const updateDropPos = useCallback(() => {
+    const el = inputRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const MAX_H = 176 // max-h-44
+    const spaceBelow = window.innerHeight - r.bottom
+    // Не влезает вниз, а вверх места больше — открываем над полем
+    const flipped = spaceBelow < MAX_H + 8 && r.top > spaceBelow
+    setDropPos({
+      top: flipped ? r.top - 4 : r.bottom + 4,
+      left: r.left,
+      width: r.width,
+      flipped,
+    })
+  }, [])
+
+  // Поле живёт внутри скроллящейся модалки: без пересчёта меню «отклеилось» бы
+  // от инпута при прокрутке. capture — чтобы ловить скролл любого предка.
+  useLayoutEffect(() => {
+    // Закрыт — позицию не сбрасываем: меню всё равно не рендерится, а на
+    // следующем открытии она пересчитается здесь же до отрисовки кадра.
+    if (!open) return
+    updateDropPos()
+    window.addEventListener('scroll', updateDropPos, true)
+    window.addEventListener('resize', updateDropPos)
+    return () => {
+      window.removeEventListener('scroll', updateDropPos, true)
+      window.removeEventListener('resize', updateDropPos)
+    }
+  }, [open, updateDropPos])
 
   const available = allTags.filter(t => !selected.some(s => s.id === t.id))
   const filtered = available.filter(t => t.name.toLowerCase().includes(input.toLowerCase()))
@@ -1184,8 +1221,9 @@ function TagSelector({ selected, allTags, onChange, onCreateTag }: {
           ))}
         </div>
       )}
-      <div className="relative">
+      <div>
         <input
+          ref={inputRef}
           value={input}
           onChange={e => { setInput(e.target.value); setOpen(true) }}
           onFocus={() => setOpen(true)}
@@ -1194,8 +1232,18 @@ function TagSelector({ selected, allTags, onChange, onCreateTag }: {
           placeholder="Найти или создать тег..."
           className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] placeholder:text-slate-400"
         />
-        {open && (filtered.length > 0 || showCreate) && (
-          <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden max-h-44 overflow-y-auto">
+        {/* zIndex выше модалки (она на z-[1200]), иначе меню окажется под ней */}
+        {open && dropPos && (filtered.length > 0 || showCreate) && createPortal(
+          <div
+            className="fixed bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg overflow-y-auto max-h-44"
+            style={{
+              top: dropPos.flipped ? undefined : dropPos.top,
+              bottom: dropPos.flipped ? window.innerHeight - dropPos.top : undefined,
+              left: dropPos.left,
+              width: dropPos.width,
+              zIndex: 1300,
+            }}
+          >
             {filtered.map(tag => (
               <button key={tag.id} onMouseDown={() => addTag(tag)} className="w-full text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer">
                 {tag.name}
@@ -1207,7 +1255,8 @@ function TagSelector({ selected, allTags, onChange, onCreateTag }: {
                 <span>«{input.trim()}»</span>
               </button>
             )}
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </div>
