@@ -8,6 +8,7 @@ import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { mediaApi } from '@/lib/api/media'
+import { apiErrorMessage } from '@/lib/api/errors'
 import type { CabinetDocument } from '@/lib/api/media'
 import { kbApi } from '@/lib/api/kb'
 import type { Tag } from '@/lib/api/tags'
@@ -39,7 +40,7 @@ export function ProjectDocsTab({ projectId, isAdmin }: { projectId: number; isAd
       toast.success('Документ загружен')
       setPending(null)
     },
-    onError: () => toast.error('Ошибка при загрузке'),
+    onError: (e) => toast.error(apiErrorMessage(e, 'Ошибка при загрузке')),
   })
 
   const deleteMut = useMutation({

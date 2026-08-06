@@ -17,10 +17,19 @@ export function NotificationBell() {
   const dropRef = useRef<HTMLDivElement>(null)
   const qc = useQueryClient()
 
+  // Бейдж опрашивается постоянно, поэтому берётся отдельной дешёвой ручкой:
+  // раньше ради одного числа каждые 10 секунд тянулась страница из 50 записей.
+  const { data: unreadCount = 0 } = useQuery({
+    queryKey: ['notifications', 'unread-count'],
+    queryFn: notificationsApi.getUnreadCount,
+    refetchInterval: 10_000,
+  })
+
+  // Сам список нужен только когда выпадашка открыта
   const { data: unreadData, isLoading: unreadLoading } = useQuery({
     queryKey: ['notifications', 'unread'],
     queryFn: () => notificationsApi.getList({ is_read: false, size: 50 }),
-    refetchInterval: 10_000,
+    enabled: open,
   })
 
   const { data: readData, isLoading: readLoading } = useQuery({
@@ -70,7 +79,6 @@ export function NotificationBell() {
 
   const unreadItems = unreadData?.items ?? []
   const readItems = readData?.items ?? []
-  const unreadCount = unreadData?.total ?? unreadItems.length
   const hasUnread = unreadCount > 0
 
   const currentItems = tab === 'unread' ? unreadItems : readItems

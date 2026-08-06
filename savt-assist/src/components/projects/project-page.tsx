@@ -21,6 +21,7 @@ import { WarrantyChips, type WarrantyFilter } from '@/components/ui/warranty-chi
 import { ProjectCombobox } from '@/components/ui/project-combobox'
 import { cabinetsApi } from '@/lib/api/cabinets'
 import { projectsApi } from '@/lib/api/projects'
+import { apiErrorMessage } from '@/lib/api/errors'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { formatDate } from '@/lib/warranty'
 import { cn } from '@/lib/utils'
@@ -134,7 +135,9 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
       toast.success('Проект сохранён')
       setEditing(false)
     },
-    onError: () => toast.error('Не удалось сохранить'),
+    // 404 — родитель не найден, 409 — смена родителя создала бы цикл;
+    // в обоих случаях сервер объясняет причину точнее, чем общая фраза
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось сохранить')),
   })
 
   const deleteProjectMutation = useMutation({
@@ -178,7 +181,9 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
       if (res.imported_documents > 0) qc.invalidateQueries({ queryKey: ['project-docs', projectId] })
       toast.success(res.message || 'Папка синхронизирована')
     },
-    onError: () => toast.error('Не удалось синхронизировать папку'),
+    // 404 — проект не найден либо PROJECT_FOLDERS_ROOT не настроен;
+    // это разные причины, и различить их можно только по detail
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось синхронизировать папку')),
   })
 
   // Esc — по аналогии с закрытием модалок в остальном приложении. Если

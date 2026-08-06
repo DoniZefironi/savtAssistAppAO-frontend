@@ -8,6 +8,7 @@ import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { ProjectCombobox } from '@/components/ui/project-combobox'
 import { projectsApi } from '@/lib/api/projects'
+import { apiErrorMessage } from '@/lib/api/errors'
 
 interface Props {
   open: boolean
@@ -29,7 +30,8 @@ export function CreateProjectDialog({ open, onClose }: Props) {
       setParentId(null)
       onClose()
     },
-    onError: () => toast.error('Не удалось создать проект'),
+    // 404 — указанный родительский проект не существует
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось создать проект')),
   })
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {

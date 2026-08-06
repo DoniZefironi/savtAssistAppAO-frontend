@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { authApi } from '@/lib/api/auth'
 import { setAccessToken } from '@/lib/api/client'
+import { apiErrorMessage } from '@/lib/api/errors'
 import { useAuthStore } from '@/lib/store/auth'
 import { isEndUserRole } from '@/lib/utils'
 
@@ -45,8 +46,11 @@ export function LoginForm() {
 
       if (user.role === 'operator') router.push('/operator/dashboard')
       else router.push('/admin/dashboard')
-    } catch {
-      toast.error('Неверный логин или пароль')
+    } catch (err) {
+      // /auth/admin-login ограничен 5 запросами в минуту — без разбора 429
+      // пользователь после нескольких опечаток видел бы «неверный пароль»
+      // и продолжал подбирать, хотя его уже придержали
+      toast.error(apiErrorMessage(err, 'Неверный логин или пароль'))
     } finally {
       setLoading(false)
     }
