@@ -2,6 +2,7 @@
 
 import { isAxiosError } from 'axios'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
@@ -30,6 +31,8 @@ import { PinnedBanner } from './pinned-banner'
 import { ChatComposer, STICKERS } from './chat-composer'
 import { ChatConfirmDialog } from './chat-confirm-dialog'
 import { useRealtimeEvents, type RealtimeEnvelope } from '@/lib/hooks/use-realtime-events'
+import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
+import { UserDialog } from '@/components/users/user-dialog'
 
 const MESSAGE_EVENT_TYPES = [
   'message.created', 'message.updated', 'message.deleted',
@@ -53,10 +56,13 @@ function patchPages(old: MsgPages | undefined, fn: (m: ChatMessage) => ChatMessa
 
 export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted }: Props) {
   const qc = useQueryClient()
+  const router = useRouter()
   const currentUser = useAuthStore((s) => s.user)
   const setUser = useAuthStore((s) => s.setUser)
   const pendingMessageId = useChatNavStore((s) => s.pendingMessageId)
   const clearPendingMessage = useChatNavStore((s) => s.clearPendingMessage)
+  const [subCabinetId, setSubCabinetId] = useState<number | null>(null)
+  const [subUserId, setSubUserId] = useState<number | null>(null)
 
   useEffect(() => {
     if (!currentUser) authApi.me().then(setUser).catch(() => {})
@@ -975,6 +981,15 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
           AvatarIcon={AvatarIcon}
           botActive={botActive}
           hideBotControls={chat.chat_type === 'service_request'}
+          cabinetLink={chat.chat_type === 'cabinet' && chat.cabinet_id != null
+            ? { label: chat.cabinet_name ?? `ШУ #${chat.cabinet_id}`, onClick: () => setSubCabinetId(chat.cabinet_id!) }
+            : null}
+          projectLink={chat.chat_type === 'project' && chat.project_id != null
+            ? { label: chat.project_name ?? `Проект #${chat.project_id}`, onClick: () => router.push(`/${currentUser?.role === 'operator' ? 'operator' : 'admin'}/projects/${chat.project_id}`) }
+            : null}
+          userLink={chat.user_id != null
+            ? { label: chat.user_full_name ?? chat.user_name ?? `Пользователь #${chat.user_id}`, phone: chat.user_phone ?? null, onClick: () => setSubUserId(chat.user_id!) }
+            : null}
           attachTab={attachTab}
           onTabChange={setAttachTab}
           allAttachments={allAttachments}
@@ -996,6 +1011,9 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
       )}
 
       {lightbox && <ImageLightbox url={lightbox.url} name={lightbox.name} onClose={() => setLightbox(null)} />}
+
+      <CabinetDetailDialog cabinetId={subCabinetId} isAdmin={currentUser?.role !== 'operator'} onClose={() => setSubCabinetId(null)} />
+      {subUserId !== null && <UserDialog userId={subUserId} role="user" onClose={() => setSubUserId(null)} />}
 
       {ctxMenu && (
         <div className="fixed inset-0 z-50" onClick={() => setCtxMenu(null)} onContextMenu={(e) => { e.preventDefault(); setCtxMenu(null) }}>

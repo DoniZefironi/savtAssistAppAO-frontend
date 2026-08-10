@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
-import { X, Bot, User, Video, Mic as MicIconLucide, MapPin } from 'lucide-react'
+import { X, Bot, User, Video, Mic as MicIconLucide, MapPin, Package, Folder, ChevronRight, Phone } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toFullUrl, downloadBlob } from './attachment-view'
 import { EmptyAttach, FileTypeIcon, OpenExtIcon, DownloadSmIcon } from './chat-icons'
@@ -17,6 +17,11 @@ type AllAttachments = {
 
 type AttachTab = 'media' | 'files' | 'voice' | 'locations' | 'colors' | 'wallpaper'
 
+interface LinkInfo {
+  label: string
+  onClick: () => void
+}
+
 interface Props {
   onClose: () => void
   name: string
@@ -24,6 +29,11 @@ interface Props {
   AvatarIcon: React.ComponentType<{ className?: string }>
   botActive: boolean
   hideBotControls?: boolean
+  // ШУ/проект чата и его пользователь — переход к карточке. Ровно один из
+  // cabinetLink/projectLink (или ни одного — support/notes/service_request).
+  cabinetLink?: LinkInfo | null
+  projectLink?: LinkInfo | null
+  userLink?: (LinkInfo & { phone: string | null }) | null
   attachTab: AttachTab
   onTabChange: (tab: AttachTab) => void
   allAttachments: AllAttachments
@@ -47,7 +57,9 @@ interface Props {
 // (цвета, обои). Самый крупный по объёму JSX-блок ChatConversation — вынесен сюда,
 // чтобы не раздувать основной файл (см. разбор декомпозиции chat-conversation.tsx).
 export function ChatAttachmentsPanel({
-  onClose, name, avatarBg, AvatarIcon, botActive, hideBotControls, attachTab, onTabChange, allAttachments,
+  onClose, name, avatarBg, AvatarIcon, botActive, hideBotControls,
+  cabinetLink, projectLink, userLink,
+  attachTab, onTabChange, allAttachments,
   onOpenImage, onJumpToMessage, onContextMenu,
   chatColors, saveColor, colorScope, onColorScopeChange,
   wallpaper, customWallpaperUrl, onSelectWallpaper, onResetWallpaper, onUploadWallpaper, uploadingWallpaper,
@@ -78,6 +90,13 @@ export function ChatAttachmentsPanel({
             )}
           </div>
         </div>
+        {(cabinetLink || projectLink || userLink) && (
+          <div className="divide-y divide-slate-100 dark:divide-slate-700/60 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
+            {cabinetLink && <InfoLinkRow icon={<Package className="w-4 h-4" />} label={cabinetLink.label} onClick={cabinetLink.onClick} />}
+            {projectLink && <InfoLinkRow icon={<Folder className="w-4 h-4" />} label={projectLink.label} onClick={projectLink.onClick} />}
+            {userLink && <InfoLinkRow icon={<User className="w-4 h-4" />} label={userLink.label} sublabel={userLink.phone} onClick={userLink.onClick} />}
+          </div>
+        )}
         <div className="flex gap-1 px-4 py-2 border-b border-slate-100 dark:border-slate-700/60 shrink-0 flex-wrap">
           {(['media', 'files', 'voice', 'locations', 'colors', 'wallpaper'] as const).map(tab => {
             const labels: Record<string, string> = {
@@ -332,6 +351,33 @@ export function ChatAttachmentsPanel({
         </div>
       </div>
     </div>
+  )
+}
+
+function InfoLinkRow({ icon, label, sublabel, onClick }: {
+  icon: React.ReactNode
+  label: string
+  sublabel?: string | null
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full flex items-center gap-3 px-5 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer text-left"
+    >
+      <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 text-slate-500 dark:text-slate-400">
+        {icon}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{label}</p>
+        {sublabel && (
+          <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
+            <Phone className="w-3 h-3" />{sublabel}
+          </p>
+        )}
+      </div>
+      <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 shrink-0" />
+    </button>
   )
 }
 

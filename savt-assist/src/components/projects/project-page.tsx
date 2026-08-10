@@ -92,7 +92,13 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
   const [filters, setFilters] = useState<CabinetFilters>(DEFAULT_FILTERS)
   const [filtersOpen, setFiltersOpen] = useState(true)
   const [pageTab, setPageTab] = useState<'cabinets' | 'documents' | 'photos'>('cabinets')
+  // Тот же ключ, что и в общем списке ШУ (cabinets-view.tsx) — это одна и та же
+  // настройка отображения карточек ШУ, а не отдельная для страницы проекта.
   const [view, setView] = useState<'list' | 'grid'>('list')
+  useEffect(() => {
+    const saved = localStorage.getItem('view-mode-cabinets')
+    if (saved === 'list' || saved === 'grid') setView(saved)
+  }, [])
   const [openCabinetId, setOpenCabinetId] = useState<number | null>(null)
   const [openCabinetMode, setOpenCabinetMode] = useState<'view' | 'edit'>('view')
   const [qrCabinet, setQrCabinet] = useState<Cabinet | null>(null)
@@ -449,10 +455,10 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
         <>
         <div className="flex items-center gap-2 mb-3">
           <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-            <button onClick={() => setView('list')} title="Список" className={`p-2 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+            <button onClick={() => { setView('list'); localStorage.setItem('view-mode-cabinets', 'list') }} title="Список" className={`p-2 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
               <ListIcon />
             </button>
-            <button onClick={() => setView('grid')} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+            <button onClick={() => { setView('grid'); localStorage.setItem('view-mode-cabinets', 'grid') }} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
               <GridIcon />
             </button>
             <button onClick={() => setFiltersOpen(v => !v)} title={filtersOpen ? 'Скрыть поиск и фильтры' : 'Показать поиск и фильтры'} className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${filtersOpen ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
