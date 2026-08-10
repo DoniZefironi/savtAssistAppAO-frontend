@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { X, FileText, Image, User, Wrench, Package, FolderKanban, AlertTriangle, SlidersHorizontal, Contact, Truck } from 'lucide-react'
+import { X, FileText, Image, User, Wrench, Package, FolderKanban, AlertTriangle, SlidersHorizontal, Contact, Truck, RefreshCw } from 'lucide-react'
 import { WarrantyChips, type WarrantyFilter } from '@/components/ui/warranty-chips'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,7 @@ import { CreateProjectDialog } from '@/components/projects/create-project-dialog
 import { ProjectQrDialog } from '@/components/projects/project-qr-dialog'
 import { cabinetsApi } from '@/lib/api/cabinets'
 import { projectsApi, type ProjectCabinetFilters, type ProjectOwnFilters, type ProjectSortField } from '@/lib/api/projects'
+import { apiErrorMessage } from '@/lib/api/errors'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import type { Cabinet, Project } from '@/types'
@@ -335,6 +336,18 @@ export function CabinetsView({ isAdmin }: Props) {
     onError: () => toast.error('Не удалось удалить проект'),
   })
 
+  // Кнопка «Синхронизировать все» — то же, что ночной прогон, но по требованию.
+  // Ответ несёт готовое сообщение с разбивкой (сколько сверено/перенесено/с
+  // ошибкой) — показываем его как есть, а не свою обобщённую фразу.
+  const syncAllFoldersMutation = useMutation({
+    mutationFn: () => projectsApi.syncAllFolders(),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['projects'] })
+      toast.success(res.message)
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось синхронизировать проекты')),
+  })
+
   const sortOptions = unassignedOnly ? CABINET_SORT_OPTIONS : PROJECT_SORT_OPTIONS
   const handleSortClick = (value: string) => {
     if (sortBy === value) {
@@ -413,6 +426,18 @@ export function CabinetsView({ isAdmin }: Props) {
               </button>
             </div>
 
+            {!unassignedOnly && (
+              <Button
+                onClick={() => syncAllFoldersMutation.mutate()}
+                disabled={syncAllFoldersMutation.isPending}
+                variant="outline"
+                title="Синхронизировать папки всех проектов на NAS"
+                className="gap-2 cursor-pointer"
+              >
+                <RefreshCw className={`w-4 h-4 ${syncAllFoldersMutation.isPending ? 'animate-spin' : ''}`} />
+                {syncAllFoldersMutation.isPending ? 'Синхронизация...' : 'Синхронизировать все'}
+              </Button>
+            )}
             {isAdmin && !unassignedOnly && (
               <Button
                 onClick={() => setShowCreateProject(true)}

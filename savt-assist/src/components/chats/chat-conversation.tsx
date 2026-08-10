@@ -423,6 +423,18 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     onError: () => toast.error('Не удалось удалить сообщение'),
   })
 
+  // Один запрос вместо цикла отдельных DELETE — на выборке в десятки сообщений
+  // цикл упирался в общий rate-limit (200/minute), см. README-backend.md.
+  const deleteManyMutation = useMutation({
+    mutationFn: (messageIds: number[]) => chatsApi.deleteMessages(chat.id, messageIds),
+    onSuccess: ({ deleted_ids }) => {
+      const deleted_at = new Date().toISOString()
+      const ids = new Set(deleted_ids)
+      qc.setQueryData<MsgPages>(['messages', chat.id], (old) => patchPages(old, m => ids.has(m.id) ? { ...m, deleted_at } : m))
+    },
+    onError: () => toast.error('Не удалось удалить сообщения'),
+  })
+
   const takeMutation = useMutation({
     mutationFn: () => chatsApi.takeChat(chat.id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['operator-chats'] }); toast.success('Чат взят — теперь вы можете отвечать') },
@@ -621,7 +633,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const handleDeleteSelected = () => setConfirmModal('delete-selected')
 
   const confirmDeleteSelected = () => {
-    selectedIds.forEach(id => deleteMutation.mutate(id))
+    deleteManyMutation.mutate(Array.from(selectedIds))
     handleCancelSelect()
     setConfirmModal(null)
   }

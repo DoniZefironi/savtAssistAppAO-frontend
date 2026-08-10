@@ -45,6 +45,14 @@ export const chatsApi = {
     return data
   },
 
+  // Чат напрямую по id — не нужно искать его в уже загруженном списке
+  // (активные/архив, суженном ещё и поиском). 404 — не существует либо
+  // это чужие личные заметки (notes), оператору недоступны.
+  getChat: async (chatId: number): Promise<Chat> => {
+    const { data } = await apiClient.get<Chat>(`/operator/chats/${chatId}`)
+    return data
+  },
+
   getMessages: async (chatId: number, beforeId?: number, afterId?: number, search?: string): Promise<ChatMessage[]> => {
     const { data } = await apiClient.get<ChatMessage[]>(`/operator/chats/${chatId}/messages`, {
       params: {
@@ -78,6 +86,14 @@ export const chatsApi = {
 
   deleteMessage: async (chatId: number, messageId: number): Promise<void> => {
     await apiClient.delete(`/chats/${chatId}/messages/${messageId}`)
+  },
+
+  // Одним запросом вместо цикла отдельных DELETE — тот упирается в общий
+  // rate-limit (200/minute) на паре десятков выбранных сообщений. Чужие/
+  // несуществующие/уже удалённые id сервер молча пропускает.
+  deleteMessages: async (chatId: number, messageIds: number[]): Promise<{ deleted_ids: number[] }> => {
+    const { data } = await apiClient.delete(`/chats/${chatId}/messages`, { data: { message_ids: messageIds } })
+    return data
   },
 
   addReaction: async (chatId: number, messageId: number, emoji: string): Promise<void> => {

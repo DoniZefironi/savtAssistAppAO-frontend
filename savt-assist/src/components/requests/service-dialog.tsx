@@ -13,7 +13,7 @@ import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog
 import { useAuthStore } from '@/lib/store/auth'
 import { useChatNavStore } from '@/lib/store/chat-nav'
 import {
-  DialogHeader, DRow, DRowLink, VerifiedBadge, StatusStepper,
+  DialogHeader, DRow, DRowLink, VerifiedBadge, StatusStepper, PostponedToggle,
   fmtDate, userTypeLabel, svcStatusLabel, reqTypeLabel,
 } from './request-shared'
 
@@ -93,8 +93,11 @@ export function ServiceDialog({ request, onClose }: { request: ServiceRequest; o
       </div>
       <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700">
         <p className="text-xs text-slate-400 mb-4">Изменить статус <b className='font-extrabold animate-pulse bg-gradient-to-r bg-clip-text  text-transparent from-indigo-500 via-purple-500 to-indigo-500 animate-text'>(кликабельно!)</b></p>
-        <div className="mb-4">
-          <StatusStepper status={status} onChange={setStatus} />
+        <div className="mb-4 flex items-start gap-3">
+          <div className="flex-1 pt-1">
+            <StatusStepper status={status} onChange={setStatus} />
+          </div>
+          <PostponedToggle status={status} onChange={setStatus} />
         </div>
         {status !== request.status && (
           <div className="flex justify-end">

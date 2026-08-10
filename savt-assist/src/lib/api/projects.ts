@@ -43,6 +43,15 @@ export interface SyncFolderResult {
   message: string
 }
 
+// Ответ POST /admin/projects/sync-folders — сводка по всем проектам разом.
+export interface SyncAllFoldersResult {
+  total_projects: number
+  synced_projects: number
+  relocated_projects: number
+  failed_projects: number
+  message: string
+}
+
 // Оба набора можно слать вместе — они складываются по И.
 export interface ProjectsParams extends ProjectCabinetFilters, ProjectOwnFilters {
   // Поиск нечёткий и покрывает не только карточку проекта (название, номер,
@@ -105,6 +114,15 @@ export const projectsApi = {
   // напрямую (положенных туда мимо приложения).
   syncFolder: async (id: number): Promise<SyncFolderResult> => {
     const { data } = await apiClient.post(`/admin/projects/${id}/sync-folder`)
+    return data
+  },
+
+  // Синхронизировать папки всех активных проектов одним запросом (ночной прогон
+  // по кнопке). В отличие от syncFolder — по-прежнему пропускает полную сверку
+  // проектов с истёкшей гарантией (только переносит папку в годовую), см.
+  // README-backend.md.
+  syncAllFolders: async (): Promise<SyncAllFoldersResult> => {
+    const { data } = await apiClient.post('/admin/projects/sync-folders')
     return data
   },
 }

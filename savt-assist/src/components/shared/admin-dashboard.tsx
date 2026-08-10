@@ -137,6 +137,7 @@ const TYPE_META: Record<ActivityItem['type'], { label: string; color: string; ic
 const STATUS_STYLE: Record<string, string> = {
   open:       'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
   in_progress:'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400',
+  postponed:  'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400',
   closed:     'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400',
   pending:    'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
   approved:   'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400',
@@ -144,7 +145,7 @@ const STATUS_STYLE: Record<string, string> = {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  open: 'открыта', in_progress: 'в работе', closed: 'закрыта',
+  open: 'открыта', in_progress: 'в работе', postponed: 'отложена', closed: 'закрыта',
   pending: 'ожидает', approved: 'одобрено', rejected: 'отклонено',
 }
 

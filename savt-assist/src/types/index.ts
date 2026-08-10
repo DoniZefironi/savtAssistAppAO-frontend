@@ -122,7 +122,7 @@ export interface Chat {
   operator_requested: boolean
   service_request_id?: number | null
   service_request_type?: string | null
-  service_request_status?: 'open' | 'in_progress' | 'closed' | null
+  service_request_status?: 'open' | 'in_progress' | 'postponed' | 'closed' | null
   service_request_description?: string | null
   service_request_created_at?: string | null
   archived_at?: string | null
@@ -201,7 +201,7 @@ export interface ServiceRequest {
   cabinet_object_number: string
   request_type: string
   description: string
-  status: 'open' | 'in_progress' | 'closed'
+  status: 'open' | 'in_progress' | 'postponed' | 'closed'
   chat_id: number | null
   created_at: string
   closed_at: string | null

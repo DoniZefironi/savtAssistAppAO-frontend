@@ -45,6 +45,7 @@ const SVC_FILTERS = [
   { value: 'all', label: 'Все' },
   { value: 'open', label: 'Открытые' },
   { value: 'in_progress', label: 'В работе' },
+  { value: 'postponed', label: 'Отложенные' },
   { value: 'closed', label: 'Закрытые' },
 ]
 const REQ_FILTERS = [

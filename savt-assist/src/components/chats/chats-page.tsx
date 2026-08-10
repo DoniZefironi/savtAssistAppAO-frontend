@@ -137,13 +137,11 @@ export function ChatsPage() {
 
   const enrichedSelected = selectedChat ? (chats.find((c) => c.id === selectedChat.id) ?? selectedChat) : null
 
-  // Переход «открыть чат заявки» кладёт id в стор, а страница ищет его в
-  // загруженном списке. Загружен при этом только один из двух списков —
-  // активные ИЛИ архив, — плюс список сужен строкой поиска. Поэтому чат
-  // закрытой заявки (он в архиве) не находился, и переход просто открывал
-  // страницу чатов, ничего не открывая. Не найдя чат, переключаемся на второй
-  // список и пробуем ещё раз; если и там нет — сдаёмся, но обязательно чистим
-  // pendingChatId, иначе он висел бы и дёргал страницу при следующем заходе.
+  // Переход «открыть чат заявки» кладёт id в стор. Быстрый путь — чат уже есть
+  // в загруженном списке. Если нет (список отфильтрован поиском, чат в архиве,
+  // а показаны активные, или просто ещё не подгружен) — запрашиваем чат
+  // напрямую по id через GET /operator/chats/{chat_id}, а не гадаем,
+  // переключая архив/список туда-сюда в расчёте на удачу.
   useEffect(() => {
     if (!pendingChatId) { pendingProbedRef.current = null; return }
     if (isLoading) return
@@ -157,17 +155,25 @@ export function ChatsPage() {
       return
     }
 
-    if (pendingProbedRef.current !== pendingChatId) {
-      pendingProbedRef.current = pendingChatId
-      // Поиск мог скрыть нужный чат — сбрасываем вместе с переключением списка
-      if (chatSearch || chatSearchInput) { setChatSearchInput(''); setChatSearch('') }
-      setArchived(a => !a)
-      return
-    }
+    if (pendingProbedRef.current === pendingChatId) return
+    pendingProbedRef.current = pendingChatId
 
-    setPendingChatId(null)
-    pendingProbedRef.current = null
-    toast.error('Чат заявки не найден')
+    chatsApi.getChat(pendingChatId)
+      .then((fetchedChat) => {
+        // Поиск и неверная папка (архив/активные) могли бы скрыть чат в
+        // списке — синхронизируем оба фильтра под найденный чат.
+        if (chatSearch || chatSearchInput) { setChatSearchInput(''); setChatSearch('') }
+        setArchived(!!fetchedChat.archived_at)
+        setSelectedChat(fetchedChat)
+        setShowConversation(true)
+        setPendingChatId(null)
+        pendingProbedRef.current = null
+      })
+      .catch(() => {
+        setPendingChatId(null)
+        pendingProbedRef.current = null
+        toast.error('Чат заявки не найден')
+      })
   }, [pendingChatId, chats, isLoading, chatSearch, chatSearchInput, setPendingChatId])
 
   const handleSelect = useCallback((chat: Chat) => {
