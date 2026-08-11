@@ -40,16 +40,6 @@ export interface CreateCabinetDto {
   longitude?: number | null
 }
 
-export interface CabinetUser {
-  user_id: number
-  full_name: string | null
-  phone: string | null
-  user_type: string | null
-  is_primary: boolean
-  custom_name: string | null
-  added_at: string
-}
-
 export interface UpdateCabinetDto {
   type?: string | null
   object_number?: string | null
@@ -94,15 +84,6 @@ export const cabinetsApi = {
   setProject: (cabinetId: number, projectId: number | null): Promise<void> =>
     apiClient.patch(`/admin/cabinets/${cabinetId}/project`, { project_id: projectId }).then(() => undefined),
 
-  getCabinetUsers: async (cabinetId: number): Promise<CabinetUser[]> => {
-    const { data } = await apiClient.get(`/admin/cabinets/${cabinetId}/users`)
-    return data
-  },
-
-  removeCabinetUser: async (cabinetId: number, userId: number, reason: string): Promise<void> => {
-    await apiClient.delete(`/admin/cabinets/${cabinetId}/users/${userId}`, { data: { reason } })
-  },
-
   getCabinetsGeo: async (params: CabinetsGeoParams = {}): Promise<CabinetGeoItem[]> => {
     const { data } = await apiClient.get('/admin/cabinets/geo', { params })
     return data
@@ -125,7 +106,7 @@ export const cabinetsApi = {
         unreadChats: s.unread_chats ?? 0,
         openServiceRequests: s.open_service_requests ?? 0,
         pendingDocumentRequests: s.pending_document_requests ?? 0,
-        pendingShareRequests: s.pending_share_requests ?? 0,
+        pendingProjectShareRequests: s.pending_project_share_requests ?? 0,
         pendingAdditionRequests: s.pending_addition_requests ?? 0,
       },
       activity,
@@ -147,7 +128,7 @@ export interface DashboardStats {
   unreadChats: number
   openServiceRequests: number
   pendingDocumentRequests: number
-  pendingShareRequests: number
+  pendingProjectShareRequests: number
   pendingAdditionRequests: number
 }
 

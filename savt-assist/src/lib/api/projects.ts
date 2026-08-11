@@ -52,6 +52,17 @@ export interface SyncAllFoldersResult {
   message: string
 }
 
+// Доступ к ШУ хранится только на уровне проекта — единый список участников
+// на все шкафы проекта разом, см. README-backend.md, GET /admin/projects/{id}/users.
+export interface ProjectUser {
+  user_id: number
+  full_name: string | null
+  phone: string | null
+  user_type: string | null
+  is_primary: boolean
+  added_at: string
+}
+
 // Оба набора можно слать вместе — они складываются по И.
 export interface ProjectsParams extends ProjectCabinetFilters, ProjectOwnFilters {
   // Поиск нечёткий и покрывает не только карточку проекта (название, номер,
@@ -124,5 +135,16 @@ export const projectsApi = {
   syncAllFolders: async (): Promise<SyncAllFoldersResult> => {
     const { data } = await apiClient.post('/admin/projects/sync-folders')
     return data
+  },
+
+  getUsers: async (id: number): Promise<ProjectUser[]> => {
+    const { data } = await apiClient.get(`/admin/projects/${id}/users`)
+    return data
+  },
+
+  // Убирает пользователя из проекта целиком — теряет доступ разом ко всем его
+  // шкафам, точечно из одного ШУ выйти нельзя (см. README-backend.md).
+  removeUser: async (id: number, userId: number, reason: string): Promise<void> => {
+    await apiClient.delete(`/admin/projects/${id}/users/${userId}`, { data: { reason } })
   },
 }

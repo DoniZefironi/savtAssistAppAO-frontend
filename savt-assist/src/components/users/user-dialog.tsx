@@ -189,9 +189,9 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
                         {c.custom_name ?? `ШУ ${c.object_number}`}
                       </span>
                       {c.type && <span className="text-xs text-slate-400">{c.type}</span>}
-                      {c.is_primary && (
+                      {c.project_name && (
                         <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                          Основной
+                          {c.project_name}
                         </span>
                       )}
                       <svg className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 group-hover:text-[#1B3A72] dark:group-hover:text-blue-400 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

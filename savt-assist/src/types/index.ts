@@ -220,6 +220,11 @@ export interface AdditionRequest {
   user_comment: string | null
   status: 'pending' | 'approved' | 'rejected'
   cabinet_id: number | null
+  // Заявитель уже должен состоять в этом проекте на момент подачи (см.
+  // README-backend.md, POST /cabinets/add-by-photo). null — старые заявки,
+  // поданные до перехода на проектную модель доступа.
+  project_id: number | null
+  project_name: string | null
   admin_response: string | null
   resolved_by_admin_id: number | null
   created_at: string
@@ -241,26 +246,6 @@ export interface DocumentRequest {
   doc_type: string
   status: 'pending' | 'approved' | 'rejected'
   user_message: string | null
-  admin_response: string | null
-  resolved_by_admin_id: number | null
-  created_at: string
-  resolved_at: string | null
-}
-
-export interface ShareRequest {
-  id: number
-  user_id: number
-  user_full_name: string | null
-  user_phone: string | null
-  user_type: 'individual' | 'organization' | null
-  organization_name: string | null
-  user_is_verified: boolean
-  user_registered_at: string | null
-  cabinet_id: number
-  cabinet_type: string
-  cabinet_object_number: string
-  user_comment: string | null
-  status: 'pending' | 'approved' | 'rejected'
   admin_response: string | null
   resolved_by_admin_id: number | null
   created_at: string

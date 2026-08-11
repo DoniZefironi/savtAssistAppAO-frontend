@@ -30,8 +30,10 @@ export interface UserCabinet {
   warranty_ends_at: string
   warranty_status: string
   custom_name: string | null
-  is_primary: boolean
-  added_at: string
+  // Доступ выводится из проекта, не хранится по-шкафно — вот через какой именно
+  // проект открыт доступ к этому ШУ (см. README-backend.md, GET /admin/users/{id}).
+  project_id: number | null
+  project_name: string | null
 }
 
 interface ListParams {

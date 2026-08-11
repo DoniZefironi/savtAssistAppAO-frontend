@@ -208,7 +208,7 @@ function DetailContent({ cabinetId, initialMode }: {
         )}
         {tab === 'docs' && <DocsTab cabinetId={cabinetId} isAdmin={isAdmin} />}
         {tab === 'photos' && <PhotosTab cabinetId={cabinetId} isAdmin={isAdmin} />}
-        {tab === 'users' && <UsersTab cabinetId={cabinetId} isAdmin={isAdmin} />}
+        {tab === 'users' && <UsersTab projectId={cabinet.project_id} projectName={cabinet.project_name} isAdmin={isAdmin} />}
         {tab === 'requests' && <ServiceRequestsTab cabinetId={cabinetId} />}
       </div>
 

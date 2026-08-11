@@ -3,32 +3,47 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { cabinetsApi } from '@/lib/api/cabinets'
-import type { CabinetUser } from '@/lib/api/cabinets'
+import { projectsApi } from '@/lib/api/projects'
+import type { ProjectUser } from '@/lib/api/projects'
 import { UserDialog } from '@/components/users/user-dialog'
 import { UsersIcon, TrashIcon } from './cabinet-dialog-icons'
 
-export function UsersTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }) {
+// Доступ к ШУ хранится только на уровне проекта (см. README-backend.md, «2. Шкафы
+// управления» — врезка про Cabinet.project_id) — этой вкладке нужен projectId
+// шкафа, а не сам cabinetId. Убрать пользователя отсюда = убрать его разом со
+// всех шкафов проекта, точечно из одного ШУ выйти нельзя.
+export function UsersTab({ projectId, projectName, isAdmin }: { projectId: number | null; projectName: string | null; isAdmin: boolean }) {
   const qc = useQueryClient()
   const [viewUserId, setViewUserId] = useState<number | null>(null)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['cabinet-users', cabinetId],
-    queryFn: () => cabinetsApi.getCabinetUsers(cabinetId),
+    queryKey: ['project-users', projectId],
+    queryFn: () => projectsApi.getUsers(projectId!),
+    enabled: projectId != null,
   })
 
   const removeMut = useMutation({
     mutationFn: ({ userId, reason }: { userId: number; reason: string }) =>
-      cabinetsApi.removeCabinetUser(cabinetId, userId, reason),
+      projectsApi.removeUser(projectId!, userId, reason),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['cabinet-users', cabinetId] })
-      toast.success('Пользователь откреплён')
+      qc.invalidateQueries({ queryKey: ['project-users', projectId] })
+      toast.success('Пользователь убран из проекта')
     },
-    onError: () => toast.error('Ошибка при откреплении'),
+    onError: () => toast.error('Ошибка при удалении'),
   })
+
+  if (projectId == null) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-slate-400 text-center px-6">
+        <UsersIcon className="w-8 h-8 mb-2 opacity-40" />
+        <p className="text-sm">ШУ не привязан к проекту — доступ к нему выводится из проекта, поэтому пока у него нет ни одного пользователя</p>
+      </div>
+    )
+  }
 
   const users = data ?? []
 
@@ -44,13 +59,16 @@ export function UsersTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: b
     return (
       <div className="flex flex-col items-center justify-center py-12 text-slate-400">
         <UsersIcon className="w-8 h-8 mb-2 opacity-40" />
-        <p className="text-sm">Нет привязанных пользователей</p>
+        <p className="text-sm">Нет пользователей с доступом</p>
       </div>
     )
   }
 
   return (
     <>
+      <p className="text-xs text-slate-400 px-6 pt-3">
+        Это участники проекта «{projectName}» — у них доступ ко всем его шкафам разом, не только к этому.
+      </p>
       <div className="divide-y divide-slate-50 dark:divide-slate-700/30">
         {users.map(u => (
           <UserRow
@@ -71,7 +89,7 @@ export function UsersTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: b
 }
 
 function UserRow({ user, isAdmin, onView, onRemove, removing }: {
-  user: CabinetUser
+  user: ProjectUser
   isAdmin: boolean
   onView: () => void
   onRemove: (reason: string) => void
@@ -117,16 +135,13 @@ function UserRow({ user, isAdmin, onView, onRemove, removing }: {
             {user.phone && (
               <span className="text-xs text-slate-400">{user.phone}</span>
             )}
-            {user.custom_name && (
-              <span className="text-xs text-slate-400 italic">«{user.custom_name}»</span>
-            )}
             <span className="text-xs text-slate-400">с {fmtDate(user.added_at)}</span>
           </div>
         </button>
         {isAdmin && !showForm && (
           <button
             onClick={() => setShowForm(true)}
-            title="Открепить"
+            title="Убрать из проекта"
             className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer shrink-0"
           >
             <TrashIcon className="w-4 h-4" />
@@ -136,8 +151,12 @@ function UserRow({ user, isAdmin, onView, onRemove, removing }: {
 
       {showForm && (
         <div className="mt-2 space-y-2 pl-12">
+          <p className="text-xs text-amber-600 dark:text-amber-400 flex items-start gap-1">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            Уберёт доступ разом ко всем шкафам этого проекта, не только к этому.
+          </p>
           <label className="text-xs font-medium text-slate-500 block">
-            Причина открепления <span className="text-red-500">*</span>
+            Причина удаления <span className="text-red-500">*</span>
           </label>
           <textarea
             value={reason}
@@ -166,7 +185,7 @@ function UserRow({ user, isAdmin, onView, onRemove, removing }: {
               disabled={removing}
               className="h-7 text-xs px-3 bg-red-500 hover:bg-red-600 cursor-pointer"
             >
-              {removing ? 'Откреп...' : 'Открепить'}
+              {removing ? 'Удаление...' : 'Убрать'}
             </Button>
           </div>
         </div>

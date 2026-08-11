@@ -1,7 +1,7 @@
 import { apiClient } from './client'
-import type { ServiceRequest, AdditionRequest, ShareRequest, DocumentRequest, ProjectRequest, PhoneChangeRequest, PaginatedResponse } from '@/types'
+import type { ServiceRequest, AdditionRequest, DocumentRequest, ProjectRequest, PhoneChangeRequest, PaginatedResponse } from '@/types'
 
-export type { ServiceRequest, AdditionRequest, ShareRequest, DocumentRequest, ProjectRequest, PhoneChangeRequest }
+export type { ServiceRequest, AdditionRequest, DocumentRequest, ProjectRequest, PhoneChangeRequest }
 
 interface ListParams {
   status?: string
@@ -38,21 +38,6 @@ export const requestsApi = {
 
   rejectAddition: async (id: number, admin_response: string) => {
     const { data } = await apiClient.post(`/admin/cabinet-requests/additions/${id}/reject`, { admin_response })
-    return data
-  },
-
-  getShares: async (params?: ListParams) => {
-    const { data } = await apiClient.get<PaginatedResponse<ShareRequest>>('/admin/cabinet-requests/shares', { params })
-    return data
-  },
-
-  approveShare: async (id: number, admin_response: string | null) => {
-    const { data } = await apiClient.post(`/admin/cabinet-requests/shares/${id}/approve`, { admin_response })
-    return data
-  },
-
-  rejectShare: async (id: number, admin_response: string) => {
-    const { data } = await apiClient.post(`/admin/cabinet-requests/shares/${id}/reject`, { admin_response })
     return data
   },
 
