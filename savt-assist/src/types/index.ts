@@ -196,8 +196,12 @@ export interface ServiceRequest {
   organization_name: string | null
   user_is_verified: boolean
   user_registered_at: string | null
-  cabinet_id: number
-  cabinet_object_number: string
+  // Заявка либо по конкретному ШУ, либо по проекту в целом — ровно одна пара
+  // заполнена, вторая всегда null (см. README-backend.md, POST /service-requests).
+  cabinet_id: number | null
+  cabinet_object_number: string | null
+  project_id: number | null
+  project_name: string | null
   request_type: string
   description: string
   status: 'open' | 'in_progress' | 'postponed' | 'closed'

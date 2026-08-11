@@ -422,7 +422,7 @@ function ServiceList({ items, onSelect, view }: { items: ServiceRequest[]; onSel
           key={item.id}
           view={view}
           icon={<ServiceCardIcon />}
-          title={`ШУ ${item.cabinet_object_number}`}
+          title={item.cabinet_object_number ? `ШУ ${item.cabinet_object_number}` : `Проект: ${item.project_name}`}
           subtitle={item.user_full_name ?? '—'}
           meta={<TypePill label={reqTypeLabel(item.request_type)} cls={reqTypeCls(item.request_type)} />}
           statusBadge={<StatusPill label={svcStatusLabel(item.status)} cls={svcStatusCls(item.status)} />}

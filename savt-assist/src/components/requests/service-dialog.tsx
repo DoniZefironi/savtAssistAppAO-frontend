@@ -10,6 +10,7 @@ import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { UserDialog } from '@/components/users/user-dialog'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
+import { ProjectDetailDialog } from '@/components/projects/project-detail-dialog'
 import { useAuthStore } from '@/lib/store/auth'
 import { useChatNavStore } from '@/lib/store/chat-nav'
 import {
@@ -25,6 +26,7 @@ export function ServiceDialog({ request, onClose }: { request: ServiceRequest; o
   const [status, setStatus] = useState(request.status)
   const [subUserId, setSubUserId] = useState<number | null>(null)
   const [subCabinetId, setSubCabinetId] = useState<number | null>(null)
+  const [subProjectId, setSubProjectId] = useState<number | null>(null)
 
   const handleOpenChat = () => {
     if (request.chat_id == null) return
@@ -54,7 +56,7 @@ export function ServiceDialog({ request, onClose }: { request: ServiceRequest; o
       <DialogHeader
         icon={<WrenchModalIcon />}
         title={`Заявка #${request.id}`}
-        subtitle={`ШУ ${request.cabinet_object_number}`}
+        subtitle={request.cabinet_object_number ? `ШУ ${request.cabinet_object_number}` : (request.project_name ?? '—')}
         badge={
           <div className="flex gap-1.5 flex-wrap">
             <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white">
@@ -76,7 +78,11 @@ export function ServiceDialog({ request, onClose }: { request: ServiceRequest; o
         {request.organization_name && <DRow label="Организация" value={request.organization_name} />}
         <DRow label="Статус аккаунта" value={<VerifiedBadge verified={request.user_is_verified} />} />
         {request.user_registered_at && <DRow label="Зарегистрирован" value={fmtDate(request.user_registered_at)} />}
-        <DRowLink label="Шкаф управления" value={`ШУ ${request.cabinet_object_number}`} onClick={() => setSubCabinetId(request.cabinet_id)} />
+        {request.cabinet_id != null ? (
+          <DRowLink label="Шкаф управления" value={`ШУ ${request.cabinet_object_number}`} onClick={() => setSubCabinetId(request.cabinet_id)} />
+        ) : (
+          <DRowLink label="Проект" value={request.project_name ?? `#${request.project_id}`} onClick={() => setSubProjectId(request.project_id)} />
+        )}
         {request.chat_id != null && (
           <DRowLink label="Чат заявки" value={`Открыть чат #${request.chat_id}`} onClick={handleOpenChat} />
         )}
@@ -114,6 +120,7 @@ export function ServiceDialog({ request, onClose }: { request: ServiceRequest; o
       </div>
       {subUserId !== null && <UserDialog userId={subUserId} role="user" onClose={() => setSubUserId(null)} />}
       {subCabinetId !== null && <CabinetDetailDialog cabinetId={subCabinetId} isAdmin onClose={() => setSubCabinetId(null)} />}
+      <ProjectDetailDialog projectId={subProjectId} isAdmin onClose={() => setSubProjectId(null)} />
     </AppModal>
   )
 }
