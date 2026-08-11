@@ -20,20 +20,22 @@ export interface AdminUser {
 
 export interface AdminUserDetail extends AdminUser {
   email: string | null
-  cabinets: UserCabinet[]
+  // Доступ к ШУ выводится из проекта целиком, не хранится по-шкафно — карточка
+  // пользователя показывает проекты, в которых он состоит, а не отдельные ШУ
+  // (см. README-backend.md, GET /admin/users/{id}). Переход по строке должен
+  // вести на карточку проекта.
+  projects: UserProject[]
 }
 
-export interface UserCabinet {
-  cabinet_id: number
-  type: string
-  object_number: string
-  warranty_ends_at: string
-  warranty_status: string
-  custom_name: string | null
-  // Доступ выводится из проекта, не хранится по-шкафно — вот через какой именно
-  // проект открыт доступ к этому ШУ (см. README-backend.md, GET /admin/users/{id}).
-  project_id: number | null
-  project_name: string | null
+export interface UserProject {
+  project_id: number
+  name: string
+  is_primary: boolean
+  // Сколько шкафов вообще в проекте — не значит, что у пользователя к каждому
+  // отдельный доступ: он либо есть ко всем шкафам проекта, либо ни к одному.
+  cabinet_count: number
+  company_name: string | null
+  warranty_status: 'active' | 'expiring_soon' | 'expired' | 'none'
 }
 
 interface ListParams {
