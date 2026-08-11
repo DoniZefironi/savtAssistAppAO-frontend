@@ -89,6 +89,12 @@ export const mediaApi = {
 
   deleteDocument: (docId: number) => apiClient.delete(`/admin/documents/${docId}`),
 
+  // Единственный способ открыть документ, который синхронизация подхватила
+  // прямо с NAS-папки, — такие всегда заводятся с is_internal: true (см.
+  // README-backend.md, «Файл положили в папку напрямую»).
+  updateDocument: (docId: number, patch: { requires_approval?: boolean; is_internal?: boolean }): Promise<CabinetDocument> =>
+    apiClient.patch(`/admin/documents/${docId}`, patch).then(r => r.data),
+
   downloadDocument: async (fileUrl: string, filename: string) => {
     const url = toFullUrl(fileUrl)
     try {

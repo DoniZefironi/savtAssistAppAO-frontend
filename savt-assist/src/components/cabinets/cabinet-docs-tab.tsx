@@ -14,7 +14,7 @@ import { kbApi } from '@/lib/api/kb'
 import type { Tag } from '@/lib/api/tags'
 import { useFolderUpload } from '@/lib/hooks/use-folder-upload'
 import { fmtSize, validateDocFile, DOC_ACCEPT } from './cabinet-dialog-shared'
-import { FileIcon, PdfIcon, ImageIcon, TrashIcon, UploadIcon, DownloadIcon, TagIcon } from './cabinet-dialog-icons'
+import { FileIcon, PdfIcon, ImageIcon, TrashIcon, UploadIcon, DownloadIcon, TagIcon, PencilIcon } from './cabinet-dialog-icons'
 
 export function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }) {
   const qc = useQueryClient()
@@ -246,6 +246,9 @@ function DocRow({ doc, allTags, isAdmin, onOpen, onDownload, onDelete, deleting 
   const [selectedTags, setSelectedTags] = useState<Tag[]>(doc.tags)
   const [tagInput, setTagInput] = useState('')
   const [creatingTag, setCreatingTag] = useState(false)
+  const [editingAccess, setEditingAccess] = useState(false)
+  const [accessRequiresApproval, setAccessRequiresApproval] = useState(doc.requires_approval)
+  const [accessIsInternal, setAccessIsInternal] = useState(doc.is_internal ?? false)
 
   const tagMut = useMutation({
     mutationFn: () => mediaApi.updateDocumentTags(doc.id, selectedTags.map(t => t.id)),
@@ -258,6 +261,25 @@ function DocRow({ doc, allTags, isAdmin, onOpen, onDownload, onDelete, deleting 
     },
     onError: () => toast.error('Ошибка при обновлении тегов'),
   })
+
+  // Основной сценарий — открыть документ, который синхронизация подхватила
+  // прямо с NAS-папки: такие всегда заводятся закрытыми (is_internal: true),
+  // см. README-backend.md, «Файл положили в папку напрямую».
+  const accessMut = useMutation({
+    mutationFn: () => mediaApi.updateDocument(doc.id, { requires_approval: accessRequiresApproval, is_internal: accessIsInternal }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cabinet-docs', doc.cabinet_id] })
+      toast.success('Доступ обновлён')
+      setEditingAccess(false)
+    },
+    onError: () => toast.error('Ошибка при обновлении доступа'),
+  })
+
+  const cancelAccessEdit = () => {
+    setAccessRequiresApproval(doc.requires_approval)
+    setAccessIsInternal(doc.is_internal ?? false)
+    setEditingAccess(false)
+  }
 
   const available = allTags.filter(t => !selectedTags.some(s => s.id === t.id))
   const filtered = available.filter(t => t.name.toLowerCase().includes(tagInput.toLowerCase()))
@@ -324,6 +346,15 @@ function DocRow({ doc, allTags, isAdmin, onOpen, onDownload, onDelete, deleting 
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           {isAdmin && (
             <button
+              onClick={e => { e.stopPropagation(); setEditingAccess(v => !v) }}
+              title="Доступ"
+              className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 transition-colors cursor-pointer"
+            >
+              <PencilIcon className="w-4 h-4" />
+            </button>
+          )}
+          {isAdmin && (
+            <button
               onClick={e => { e.stopPropagation(); setEditingTags(v => !v) }}
               title="Теги"
               className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 transition-colors cursor-pointer"
@@ -350,6 +381,37 @@ function DocRow({ doc, allTags, isAdmin, onOpen, onDownload, onDelete, deleting 
           )}
         </div>
       </div>
+
+      {editingAccess && (
+        <div onClick={e => e.stopPropagation()} className="px-6 pb-3 pt-2 space-y-1.5 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-700/30">
+          <label className="flex items-center gap-2 text-xs text-slate-500 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={accessRequiresApproval}
+              onChange={e => { setAccessRequiresApproval(e.target.checked); if (e.target.checked) setAccessIsInternal(false) }}
+              className="rounded"
+            />
+            Требует согласования
+            <span className="text-slate-400">— виден, доступ по заявке</span>
+          </label>
+          <label className="flex items-center gap-2 text-xs text-slate-500 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={accessIsInternal}
+              onChange={e => { setAccessIsInternal(e.target.checked); if (e.target.checked) setAccessRequiresApproval(false) }}
+              className="rounded"
+            />
+            Служебный
+            <span className="text-slate-400">— пользователю не виден вовсе</span>
+          </label>
+          <div className="flex justify-end gap-2 pt-0.5">
+            <Button variant="ghost" onClick={cancelAccessEdit} disabled={accessMut.isPending} className="h-6 text-xs px-2 cursor-pointer">Отмена</Button>
+            <Button onClick={() => accessMut.mutate()} disabled={accessMut.isPending} className="h-6 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white">
+              {accessMut.isPending ? 'Сохранение...' : 'Сохранить'}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {editingTags && (
         <div onClick={e => e.stopPropagation()} className="px-6 pb-3 space-y-2 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-700/30">
