@@ -12,7 +12,6 @@ import { AppModal } from '@/components/ui/app-modal'
 import { CabinetCard } from '@/components/cabinets/cabinet-card'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
 import { CreateCabinetDialog } from '@/components/cabinets/create-cabinet-dialog'
-import { QrDialog } from '@/components/cabinets/qr-dialog'
 import { ProjectQrDialog } from './project-qr-dialog'
 import { ProjectDocsTab } from './project-docs-tab'
 import { ProjectDealInfo } from './project-deal-info'
@@ -26,7 +25,7 @@ import { useDebounce } from '@/lib/hooks/use-debounce'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import { formatDate } from '@/lib/warranty'
 import { cn } from '@/lib/utils'
-import type { Cabinet, Project } from '@/types'
+import type { Project } from '@/types'
 
 // ISO с бэкенда → значение для input[type=date] (YYYY-MM-DD) и обратно.
 function toDateInput(iso: string | null | undefined): string {
@@ -104,7 +103,6 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
   }, [])
   const [openCabinetId, setOpenCabinetId] = useState<number | null>(null)
   const [openCabinetMode, setOpenCabinetMode] = useState<'view' | 'edit'>('view')
-  const [qrCabinet, setQrCabinet] = useState<Cabinet | null>(null)
   const [deleteCabinetConfirm, setDeleteCabinetConfirm] = useState<{ id: number; name: string } | null>(null)
 
   const debouncedSearch = useDebounce(search)
@@ -202,14 +200,14 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
-      if (deleteProjectConfirm || deleteCabinetConfirm || showQr || openCabinetId !== null || qrCabinet) return
+      if (deleteProjectConfirm || deleteCabinetConfirm || showQr || openCabinetId !== null) return
       if (editing) { handleCancelName(); return }
       router.push(backHref)
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing, deleteProjectConfirm, deleteCabinetConfirm, showQr, openCabinetId, qrCabinet, backHref, router])
+  }, [editing, deleteProjectConfirm, deleteCabinetConfirm, showQr, openCabinetId, backHref, router])
 
   const activeFiltersCount =
     (filters.has_documents ? 1 : 0) +
@@ -569,10 +567,8 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
                 cabinet={cabinet}
                 isAdmin={isAdmin}
                 view={view}
-                loading={false}
                 onOpen={() => { setOpenCabinetMode('view'); setOpenCabinetId(cabinet.id) }}
                 onEdit={() => { setOpenCabinetMode('edit'); setOpenCabinetId(cabinet.id) }}
-                onQr={() => setQrCabinet(cabinet)}
                 onDelete={() => setDeleteCabinetConfirm({ id: cabinet.id, name: cabinet.admin_internal_name ?? cabinet.object_number })}
               />
             ))}
@@ -598,7 +594,6 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
       </div>
 
       <CabinetDetailDialog cabinetId={openCabinetId} isAdmin={isAdmin} initialMode={openCabinetMode} onClose={() => setOpenCabinetId(null)} />
-      <QrDialog cabinet={qrCabinet} onClose={() => setQrCabinet(null)} />
       <ProjectQrDialog project={showQr ? qrProject : null} onClose={() => setShowQr(false)} />
       {isAdmin && (
         <CreateCabinetDialog open={showCreateCabinet} onClose={() => setShowCreateCabinet(false)} projectId={projectId} />

@@ -24,7 +24,6 @@ export interface AuthTokens {
 
 export interface Cabinet {
   id: number
-  unique_code: string
   type: string | null
   object_number: string
   admin_internal_name: string | null

@@ -13,7 +13,6 @@ import { AppModal } from '@/components/ui/app-modal'
 import { CabinetCard } from './cabinet-card'
 import { CabinetDetailDialog } from './cabinet-detail-dialog'
 import { CreateCabinetDialog } from './create-cabinet-dialog'
-import { QrDialog } from './qr-dialog'
 import { ProjectCard } from '@/components/projects/project-card'
 import { CreateProjectDialog } from '@/components/projects/create-project-dialog'
 import { ProjectQrDialog } from '@/components/projects/project-qr-dialog'
@@ -172,7 +171,6 @@ export function CabinetsView({ isAdmin }: Props) {
   const [filtersOpen, setFiltersOpen] = usePersistentState('filters-open-cabinets', true)
   const [openId, setOpenId] = useState<number | null>(null)
   const [openMode, setOpenMode] = useState<'view' | 'edit'>('view')
-  const [qrCabinet, setQrCabinet] = useState<Cabinet | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: number; name: string } | null>(null)
   const [qrProject, setQrProject] = useState<Project | null>(null)
@@ -696,10 +694,8 @@ export function CabinetsView({ isAdmin }: Props) {
                 cabinet={cabinet}
                 isAdmin={isAdmin}
                 view={view}
-                loading={false}
                 onOpen={() => openDialog(cabinet.id, 'view')}
                 onEdit={() => openDialog(cabinet.id, 'edit')}
-                onQr={() => setQrCabinet(cabinet)}
                 onDelete={() => handleDelete(cabinet.id, cabinet.admin_internal_name ?? cabinet.object_number)}
               />
             ))}
@@ -744,7 +740,6 @@ export function CabinetsView({ isAdmin }: Props) {
 
       <CabinetDetailDialog cabinetId={openId} isAdmin={isAdmin} initialMode={openMode} onClose={() => setOpenId(null)} />
       {isAdmin && <CreateCabinetDialog open={showCreate} onClose={() => setShowCreate(false)} />}
-      <QrDialog cabinet={qrCabinet} onClose={() => setQrCabinet(null)} />
 
       {isAdmin && <CreateProjectDialog open={showCreateProject} onClose={() => setShowCreateProject(false)} />}
       <ProjectQrDialog project={qrProject} onClose={() => setQrProject(null)} />

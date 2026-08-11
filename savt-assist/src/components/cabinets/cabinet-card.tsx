@@ -6,15 +6,13 @@ import { Button } from '@/components/ui/button'
 interface Props {
   cabinet: Cabinet
   isAdmin: boolean
-  loading?: boolean
   view?: 'list' | 'grid'
   onOpen: () => void
   onEdit: () => void
-  onQr: () => void
   onDelete?: () => void
 }
 
-export function CabinetCard({ cabinet, isAdmin, loading, view = 'list', onOpen, onEdit, onQr, onDelete }: Props) {
+export function CabinetCard({ cabinet, isAdmin, view = 'list', onOpen, onEdit, onDelete }: Props) {
   const displayName = cabinet.admin_internal_name ?? cabinet.object_number
 
   if (view === 'grid') {
@@ -38,20 +36,6 @@ export function CabinetCard({ cabinet, isAdmin, loading, view = 'list', onOpen, 
                 </Button>
               </>
             )}
-            <button
-              onClick={onQr}
-              title="Показать QR-код"
-              className="w-8 h-8 bg-[#1B3A72] rounded-lg flex items-center justify-center shrink-0 hover:bg-[#1B3A72]/80 transition-colors cursor-pointer"
-            >
-              {loading ? (
-                <svg className="w-3.5 h-3.5 text-white animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-              ) : (
-                <QrIcon className="w-4 h-4 text-white" />
-              )}
-            </button>
           </div>
         </div>
 
@@ -80,18 +64,11 @@ export function CabinetCard({ cabinet, isAdmin, loading, view = 'list', onOpen, 
     <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 sm:p-4 flex items-center gap-3 sm:gap-4 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-600 transition-all group">
 
       <button
-        onClick={onQr}
-        title="Показать QR-код"
+        onClick={onOpen}
+        title={displayName}
         className="w-10 h-10 sm:w-12 sm:h-12 bg-[#1B3A72] rounded-xl flex items-center justify-center shrink-0 hover:bg-[#1B3A72]/80 transition-colors relative cursor-pointer"
       >
-        {loading ? (
-          <svg className="w-5 h-5 text-white animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-          </svg>
-        ) : (
-          <QrIcon className="w-5 h-5 text-white" />
-        )}
+        <CabinetIcon className="w-5 h-5 text-white" />
       </button>
 
       <div className="flex-1 min-w-0 cursor-pointer" onClick={onOpen}>
@@ -136,11 +113,13 @@ export function CabinetCard({ cabinet, isAdmin, loading, view = 'list', onOpen, 
 }
 
 
-function QrIcon({ className }: { className?: string }) {
+// Декоративная иконка вместо убранной кнопки QR (у ШУ больше нет своего QR-кода,
+// см. README-backend.md, «Рут `admin: cabinets`» — /admin/cabinets/{id}/qr убран).
+function CabinetIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 5.25A2.25 2.25 0 016 3h12a2.25 2.25 0 012.25 2.25v13.5A2.25 2.25 0 0118 21H6a2.25 2.25 0 01-2.25-2.25V5.25z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5M8.25 7.5h.008M8.25 16.5h.008" />
     </svg>
   )
 }

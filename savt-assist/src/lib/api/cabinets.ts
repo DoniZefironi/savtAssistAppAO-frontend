@@ -100,11 +100,6 @@ export const cabinetsApi = {
     await apiClient.delete(`/admin/cabinets/${cabinetId}/users/${userId}`, { data: { reason } })
   },
 
-  getQr: async (id: number): Promise<Blob> => {
-    const { data } = await apiClient.get(`/admin/cabinets/${id}/qr`, { responseType: 'blob' })
-    return data
-  },
-
   getCabinetsGeo: async (params: CabinetsGeoParams = {}): Promise<CabinetGeoItem[]> => {
     const { data } = await apiClient.get('/admin/cabinets/geo', { params })
     return data
