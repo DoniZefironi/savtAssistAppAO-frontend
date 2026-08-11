@@ -74,8 +74,6 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
   const router = useRouter()
   const qc = useQueryClient()
   const [editing, setEditing] = useState(!!startEditing)
-  const [name, setName] = useState('')
-  const [nameError, setNameError] = useState<string | undefined>()
   const [parentId, setParentId] = useState<number | null>(null)
   // Гарантия — единственное из карточки, что задаёт админ: в CRM такого поля нет.
   // Формат input[type=date] — YYYY-MM-DD, в API уходит ISO.
@@ -115,7 +113,6 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
 
   useEffect(() => {
     if (!project) return
-    setName(project.name)
     setParentId(project.parent_project_id)
     setWarrantyFrom(toDateInput(project.warranty_starts_at))
     setWarrantyTo(toDateInput(project.warranty_ends_at))
@@ -129,9 +126,8 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
     enabled: project?.parent_project_id != null,
   })
 
-  const renameMutation = useMutation({
+  const settingsMutation = useMutation({
     mutationFn: () => projectsApi.update(projectId, {
-      name: name.trim(),
       parent_project_id: parentId,
       warranty_starts_at: warrantyFrom ? new Date(warrantyFrom).toISOString() : null,
       warranty_ends_at: warrantyTo ? new Date(warrantyTo).toISOString() : null,
@@ -157,24 +153,20 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
     onError: () => toast.error('Не удалось удалить проект'),
   })
 
-  const handleSaveName = () => {
-    if (!name.trim()) { setNameError('Обязательное поле'); return }
+  const handleSaveSettings = () => {
     if (warrantyFrom && warrantyTo && new Date(warrantyTo) < new Date(warrantyFrom)) {
       setWarrantyError('Дата окончания раньше даты начала')
       return
     }
-    setNameError(undefined)
     setWarrantyError(undefined)
-    renameMutation.mutate()
+    settingsMutation.mutate()
   }
-  const handleCancelName = () => {
+  const handleCancelSettings = () => {
     if (project) {
-      setName(project.name)
       setParentId(project.parent_project_id)
       setWarrantyFrom(toDateInput(project.warranty_starts_at))
       setWarrantyTo(toDateInput(project.warranty_ends_at))
     }
-    setNameError(undefined)
     setWarrantyError(undefined)
     setEditing(false)
   }
@@ -201,7 +193,7 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
     const handler = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       if (deleteProjectConfirm || deleteCabinetConfirm || showQr || openCabinetId !== null) return
-      if (editing) { handleCancelName(); return }
+      if (editing) { handleCancelSettings(); return }
       router.push(backHref)
     }
     document.addEventListener('keydown', handler)
@@ -325,17 +317,12 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
         <div className="flex flex-wrap items-end justify-between gap-x-2 gap-y-3 mb-4">
           <div className="min-w-0 flex-1">
             {data && <p className="text-xs text-slate-400 font-medium mb-0.5">{total} шкафов</p>}
-            {editing ? (
-              <div className="space-y-2 max-w-md">
-                <input
-                  value={name}
-                  onChange={(e) => { setName(e.target.value); setNameError(undefined) }}
-                  className={cn(
-                    'text-lg sm:text-xl font-bold bg-transparent border-b outline-none w-full',
-                    nameError ? 'border-red-400 text-red-600' : 'border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100 focus:border-[#4A8FE7]'
-                  )}
-                />
-                {nameError && <p className="text-xs text-red-500 mt-1">{nameError}</p>}
+            {/* Название — только из Bitrix (title сделки), правится только там,
+                поэтому здесь всегда просто текст, даже в режиме редактирования
+                (см. README-backend.md: PATCH /admin/projects/{id} name не принимает) */}
+            <h1 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100 truncate">{project.name}</h1>
+            {editing && (
+              <div className="space-y-2 max-w-md mt-2">
                 <div>
                   <label className="text-xs font-medium block mb-1 text-slate-400">Родительский проект</label>
                   <ProjectCombobox
@@ -377,16 +364,14 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
                   пустое, отбор идёт по крайней дате среди гарантий ШУ проекта.
                 </p>
               </div>
-            ) : (
-              <h1 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100 truncate">{project.name}</h1>
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {editing ? (
               <>
-                <Button variant="ghost" onClick={handleCancelName} disabled={renameMutation.isPending} className="cursor-pointer">Отмена</Button>
-                <Button onClick={handleSaveName} disabled={renameMutation.isPending} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white">
-                  {renameMutation.isPending ? 'Сохранение...' : 'Сохранить'}
+                <Button variant="ghost" onClick={handleCancelSettings} disabled={settingsMutation.isPending} className="cursor-pointer">Отмена</Button>
+                <Button onClick={handleSaveSettings} disabled={settingsMutation.isPending} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white">
+                  {settingsMutation.isPending ? 'Сохранение...' : 'Сохранить'}
                 </Button>
               </>
             ) : (
@@ -398,7 +383,7 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
                   </Button>
                 )}
                 {isAdmin && (
-                  <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-[#1B3A72] cursor-pointer" title="Переименовать" onClick={() => setEditing(true)}>
+                  <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-[#1B3A72] cursor-pointer" title="Родительский проект и гарантия" onClick={() => setEditing(true)}>
                     <EditIcon />
                   </Button>
                 )}
@@ -633,7 +618,9 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
             </p>
             <p className="text-sm text-amber-600 dark:text-amber-400 mt-1 flex items-start gap-1">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-              Уникальный код проекта нельзя будет использовать снова, но существующие привязки пользователей и шкафов не изменятся.
+              Существующие привязки пользователей и шкафов не изменятся. Пока сделка в Bitrix жива,
+              удаление не окончательно: при ближайшем изменении сделки проект воскреснет сам —
+              удалить насовсем можно только закрыв сделку в Bitrix.
             </p>
             <div className="flex justify-end gap-2 mt-4">
               <Button variant="ghost" onClick={() => setDeleteProjectConfirm(false)} disabled={deleteProjectMutation.isPending} className="cursor-pointer">Отмена</Button>

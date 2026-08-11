@@ -1,14 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { projectsApi, type ProjectCabinetFilters } from '@/lib/api/projects'
 import { formatDate } from '@/lib/warranty'
-import { cn } from '@/lib/utils'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
 import { ProjectQrDialog } from './project-qr-dialog'
 import { ProjectDealInfo } from './project-deal-info'
@@ -30,10 +28,6 @@ export function ProjectDetailDialog({ projectId, isAdmin, filters, onClose }: Pr
 }
 
 function DetailContent({ projectId, isAdmin, filters }: { projectId: number; isAdmin: boolean; filters?: ProjectCabinetFilters }) {
-  const qc = useQueryClient()
-  const [editing, setEditing] = useState(false)
-  const [name, setName] = useState('')
-  const [error, setError] = useState<string | undefined>()
   const [showQr, setShowQr] = useState(false)
   const [subCabinetId, setSubCabinetId] = useState<number | null>(null)
 
@@ -50,33 +44,6 @@ function DetailContent({ projectId, isAdmin, filters }: { projectId: number; isA
     queryFn: () => projectsApi.getOne(project!.parent_project_id!),
     enabled: project?.parent_project_id != null,
   })
-
-  useEffect(() => {
-    if (project) setName(project.name)
-  }, [project])
-
-  const updateMutation = useMutation({
-    mutationFn: () => projectsApi.update(projectId, { name: name.trim() }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['projects'] })
-      qc.invalidateQueries({ queryKey: ['project', projectId] })
-      toast.success('Проект переименован')
-      setEditing(false)
-    },
-    onError: () => toast.error('Не удалось сохранить'),
-  })
-
-  const handleSave = () => {
-    if (!name.trim()) { setError('Обязательное поле'); return }
-    setError(undefined)
-    updateMutation.mutate()
-  }
-
-  const handleCancel = () => {
-    if (project) setName(project.name)
-    setError(undefined)
-    setEditing(false)
-  }
 
   if (isLoading || !project) return <DetailSkeleton />
 
@@ -102,21 +69,8 @@ function DetailContent({ projectId, isAdmin, filters }: { projectId: number; isA
             <FolderIcon className="w-6 h-6 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            {editing ? (
-              <>
-                <input
-                  value={name}
-                  onChange={(e) => { setName(e.target.value); setError(undefined) }}
-                  className={cn(
-                    'w-full font-bold text-lg text-white bg-transparent border-b outline-none placeholder:text-white/30 pb-0.5 leading-tight',
-                    error ? 'border-red-300' : 'border-white/30 focus:border-white'
-                  )}
-                />
-                {error && <p className="text-xs text-red-200 mt-0.5">{error}</p>}
-              </>
-            ) : (
-              <p className="font-bold text-lg text-white leading-tight truncate">{project.name}</p>
-            )}
+            {/* Название — только из Bitrix, здесь не редактируется (см. README-backend.md) */}
+            <p className="font-bold text-lg text-white leading-tight truncate">{project.name}</p>
             <p className="text-sm text-white/60 mt-0.5">{project.cabinets.length} шкафов · создан {formatDate(project.created_at)}</p>
             {project.parent_project_id != null && (
               <p className="text-xs text-white/50 mt-0.5">Внутри проекта: {parentProject?.name ?? '…'}</p>
@@ -162,33 +116,6 @@ function DetailContent({ projectId, isAdmin, filters }: { projectId: number; isA
         </div>
       </div>
 
-      {isAdmin && (
-        <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-2 shrink-0">
-          {!editing ? (
-            <button
-              onClick={() => setEditing(true)}
-              title="Переименовать"
-              className="w-8 h-8 rounded-lg bg-blue/15 hover:bg-blue/25 flex items-center justify-center transition-colors shrink-0 cursor-pointer"
-            >
-              <PencilIcon className="w-4 h-4 text-blue" />
-            </button>
-          ) : (
-            <>
-              <Button variant="ghost" onClick={handleCancel} disabled={updateMutation.isPending} className="cursor-pointer">
-                Отмена
-              </Button>
-              <Button
-                onClick={handleSave}
-                disabled={updateMutation.isPending}
-                className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white"
-              >
-                {updateMutation.isPending ? 'Сохранение...' : 'Сохранить'}
-              </Button>
-            </>
-          )}
-        </div>
-      )}
-
       {showQr && <ProjectQrDialog project={qrProject} onClose={() => setShowQr(false)} />}
       {subCabinetId !== null && <CabinetDetailDialog cabinetId={subCabinetId} isAdmin={isAdmin} onClose={() => setSubCabinetId(null)} />}
     </div>
@@ -226,13 +153,6 @@ function QrIcon({ className }: { className?: string }) {
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />
-    </svg>
-  )
-}
-function PencilIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
     </svg>
   )
 }

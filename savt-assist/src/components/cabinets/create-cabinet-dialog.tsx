@@ -7,20 +7,24 @@ import { cn } from '@/lib/utils'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { CabinetTypeCombobox } from '@/components/ui/cabinet-type-combobox'
+import { ProjectCombobox } from '@/components/ui/project-combobox'
 import { cabinetsApi, CreateCabinetDto } from '@/lib/api/cabinets'
+import { apiErrorMessage } from '@/lib/api/errors'
 import { LocationPicker } from '@/components/map/location-picker'
 
 interface Props {
   open: boolean
   onClose: () => void
-  // Если открыт со страницы проекта — новый ШУ сразу привязывается к нему
-  // (PATCH .../project) после создания, отдельно ходить в карточку ШУ не нужно
+  // Если открыт со страницы проекта — проект уже известен и поле не показываем.
+  // Иначе (общий список ШУ) — проект обязателен и выбирается в форме, см.
+  // README-backend.md: POST /admin/cabinets без project_id вернёт 422.
   projectId?: number
 }
 
+type FormFields = Omit<CreateCabinetDto, 'project_id'>
 type FormErrors = Partial<Record<keyof CreateCabinetDto, string>>
 
-const EMPTY: CreateCabinetDto = {
+const EMPTY: FormFields = {
   type: '',
   object_number: '',
   admin_internal_name: '',
@@ -33,8 +37,9 @@ const EMPTY: CreateCabinetDto = {
   longitude: null,
 }
 
-function validate(form: CreateCabinetDto): FormErrors {
+function validate(form: FormFields, projectId: number | null): FormErrors {
   const e: FormErrors = {}
+  if (projectId == null) e.project_id = 'Обязательное поле'
   if (!form.type.trim()) e.type = 'Обязательное поле'
   if (!form.object_number.trim()) e.object_number = 'Обязательное поле'
   // Бэкенд требует обе даты гарантии при создании ШУ (POST /admin/cabinets
@@ -52,48 +57,48 @@ function validate(form: CreateCabinetDto): FormErrors {
 
 export function CreateCabinetDialog({ open, onClose, projectId }: Props) {
   const qc = useQueryClient()
-  const [form, setForm] = useState<CreateCabinetDto>(EMPTY)
+  const [form, setForm] = useState<FormFields>(EMPTY)
   const [errors, setErrors] = useState<FormErrors>({})
+  // Если открыт не со страницы проекта — админ выбирает проект сам.
+  const [pickedProjectId, setPickedProjectId] = useState<number | null>(null)
+  const effectiveProjectId = projectId ?? pickedProjectId
 
   const clearError = (key: keyof CreateCabinetDto) =>
     setErrors(prev => ({ ...prev, [key]: undefined }))
 
   const mutation = useMutation({
-    mutationFn: async () => {
-      const cabinet = await cabinetsApi.create({
-        type: form.type,
-        object_number: form.object_number,
-        admin_internal_name: form.admin_internal_name || null,
-        description: form.description || null,
-        purpose: form.purpose || null,
-        admin_comment: form.admin_comment || null,
-        warranty_starts_at: form.warranty_starts_at
-          ? new Date(form.warranty_starts_at).toISOString()
-          : null,
-        warranty_ends_at: form.warranty_ends_at
-          ? new Date(form.warranty_ends_at).toISOString()
-          : null,
-        latitude: form.latitude ?? null,
-        longitude: form.longitude ?? null,
-      })
-      if (projectId != null) await cabinetsApi.setProject(cabinet.id, projectId)
-      return cabinet
-    },
+    mutationFn: () => cabinetsApi.create({
+      project_id: effectiveProjectId!,
+      type: form.type,
+      object_number: form.object_number,
+      admin_internal_name: form.admin_internal_name || null,
+      description: form.description || null,
+      purpose: form.purpose || null,
+      admin_comment: form.admin_comment || null,
+      warranty_starts_at: form.warranty_starts_at
+        ? new Date(form.warranty_starts_at).toISOString()
+        : null,
+      warranty_ends_at: form.warranty_ends_at
+        ? new Date(form.warranty_ends_at).toISOString()
+        : null,
+      latitude: form.latitude ?? null,
+      longitude: form.longitude ?? null,
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cabinets'] })
-      if (projectId != null) {
-        qc.invalidateQueries({ queryKey: ['project', projectId] })
-        qc.invalidateQueries({ queryKey: ['projects'] })
-      }
-      toast.success(projectId != null ? 'ШУ создан и привязан к проекту' : 'ШУ успешно создан')
+      qc.invalidateQueries({ queryKey: ['project', effectiveProjectId] })
+      qc.invalidateQueries({ queryKey: ['projects'] })
+      toast.success('ШУ создан')
       setForm(EMPTY)
+      setPickedProjectId(null)
       setErrors({})
       onClose()
     },
-    onError: () => toast.error('Не удалось создать ШУ'),
+    // 404 — выбранный проект не найден/удалён
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось создать ШУ')),
   })
 
-  const set = (key: keyof CreateCabinetDto) =>
+  const set = (key: keyof FormFields) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       setForm(prev => ({ ...prev, [key]: e.target.value }))
       clearError(key)
@@ -101,13 +106,14 @@ export function CreateCabinetDialog({ open, onClose, projectId }: Props) {
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    const errs = validate(form)
+    const errs = validate(form, effectiveProjectId)
     if (Object.keys(errs).length > 0) { setErrors(errs); return }
     mutation.mutate()
   }
 
   const handleClose = () => {
     setForm(EMPTY)
+    setPickedProjectId(null)
     setErrors({})
     onClose()
   }
@@ -139,6 +145,20 @@ export function CreateCabinetDialog({ open, onClose, projectId }: Props) {
               LocationPicker ниже) и модалка вылезает за max-h-[85vh] вместо
               внутреннего скролла (см. cabinet-detail-dialog.tsx) */}
           <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 space-y-5">
+
+            {projectId == null && (
+              <div>
+                <label className={cn('text-xs font-medium block mb-1.5', errors.project_id ? 'text-red-500' : 'text-slate-500')}>
+                  Проект <span className="text-red-500">*</span>
+                </label>
+                <ProjectCombobox
+                  value={pickedProjectId}
+                  onChange={(id) => { setPickedProjectId(id); clearError('project_id') }}
+                  placeholder="Поиск проекта по названию..."
+                />
+                {errors.project_id && <p className="text-xs text-red-500 mt-1">{errors.project_id}</p>}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>

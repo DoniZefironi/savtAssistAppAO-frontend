@@ -25,6 +25,9 @@ export interface CabinetsParams {
 }
 
 export interface CreateCabinetDto {
+  // Обязателен — ничейных ШУ больше не заводится, каждый создаётся сразу
+  // внутри проекта (см. README-backend.md, POST /admin/cabinets).
+  project_id: number
   type: string
   object_number: string
   admin_internal_name?: string | null

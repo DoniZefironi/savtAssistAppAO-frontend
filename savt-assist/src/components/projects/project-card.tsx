@@ -88,7 +88,7 @@ export function ProjectCard({ project, isAdmin, view = 'list', onOpen, onEdit, o
           </div>
           <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
             {isAdmin && onEdit && (
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-[#1B3A72] cursor-pointer" title="Переименовать" onClick={onEdit}>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-[#1B3A72] cursor-pointer" title="Родительский проект и гарантия" onClick={onEdit}>
                 <EditIcon />
               </Button>
             )}
@@ -134,7 +134,7 @@ export function ProjectCard({ project, isAdmin, view = 'list', onOpen, onEdit, o
           onClick={(e) => e.stopPropagation()}
         >
           {onEdit && (
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-[#1B3A72] cursor-pointer" title="Переименовать" onClick={onEdit}>
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-[#1B3A72] cursor-pointer" title="Родительский проект и гарантия" onClick={onEdit}>
               <EditIcon />
             </Button>
           )}

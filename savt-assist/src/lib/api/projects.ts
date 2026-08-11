@@ -80,16 +80,16 @@ export const projectsApi = {
     return data
   },
 
-  create: async (name: string, parentProjectId?: number | null): Promise<ProjectDetail> => {
-    const { data } = await apiClient.post('/admin/projects', { name, parent_project_id: parentProjectId ?? null })
-    return data
-  },
+  // Ручного создания проекта больше нет (POST /admin/projects убран) — проект
+  // заводится только сделкой Bitrix (ONCRMDEALADD/ONCRMDEALUPDATE) либо
+  // разовым импортом через CLI. См. README-backend.md, «Рут admin: projects».
 
   // Все поля опциональны на бэкенде — передавать только изменённые.
-  // Поля из Bitrix (shipment_*, company_name, production_number, contacts) этот
-  // эндпоинт не принимает: они перезаписываются при изменении сделки.
+  // `name` сюда не принимается — название только из Bitrix (title сделки),
+  // правка молча затёрлась бы на ближайшем ONCRMDEALUPDATE. Поля из Bitrix
+  // (shipment_*, company_name, production_number, contacts) тоже не принимает —
+  // перезаписываются при изменении сделки.
   update: async (id: number, patch: {
-    name?: string
     parent_project_id?: number | null
     warranty_starts_at?: string | null
     warranty_ends_at?: string | null

@@ -14,7 +14,6 @@ import { CabinetCard } from './cabinet-card'
 import { CabinetDetailDialog } from './cabinet-detail-dialog'
 import { CreateCabinetDialog } from './create-cabinet-dialog'
 import { ProjectCard } from '@/components/projects/project-card'
-import { CreateProjectDialog } from '@/components/projects/create-project-dialog'
 import { ProjectQrDialog } from '@/components/projects/project-qr-dialog'
 import { cabinetsApi } from '@/lib/api/cabinets'
 import { projectsApi, type ProjectCabinetFilters, type ProjectOwnFilters, type ProjectSortField } from '@/lib/api/projects'
@@ -174,7 +173,6 @@ export function CabinetsView({ isAdmin }: Props) {
   const [showCreate, setShowCreate] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: number; name: string } | null>(null)
   const [qrProject, setQrProject] = useState<Project | null>(null)
-  const [showCreateProject, setShowCreateProject] = useState(false)
   const [deleteProjectConfirm, setDeleteProjectConfirm] = useState<{ id: number; name: string } | null>(null)
 
   const debouncedSearch = useDebounce(search)
@@ -434,16 +432,6 @@ export function CabinetsView({ isAdmin }: Props) {
               >
                 <RefreshCw className={`w-4 h-4 ${syncAllFoldersMutation.isPending ? 'animate-spin' : ''}`} />
                 {syncAllFoldersMutation.isPending ? 'Синхронизация...' : 'Синхронизировать все'}
-              </Button>
-            )}
-            {isAdmin && !unassignedOnly && (
-              <Button
-                onClick={() => setShowCreateProject(true)}
-                variant="outline"
-                className="gap-2 cursor-pointer"
-              >
-                <PlusIcon />
-                Добавить проект
               </Button>
             )}
             {isAdmin && (
@@ -741,7 +729,6 @@ export function CabinetsView({ isAdmin }: Props) {
       <CabinetDetailDialog cabinetId={openId} isAdmin={isAdmin} initialMode={openMode} onClose={() => setOpenId(null)} />
       {isAdmin && <CreateCabinetDialog open={showCreate} onClose={() => setShowCreate(false)} />}
 
-      {isAdmin && <CreateProjectDialog open={showCreateProject} onClose={() => setShowCreateProject(false)} />}
       <ProjectQrDialog project={qrProject} onClose={() => setQrProject(null)} />
 
       {deleteConfirm && (
