@@ -593,7 +593,9 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
             </p>
             <p className="text-sm text-red-500 dark:text-red-400 mt-1 flex items-start gap-1">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-              Все связанные документы, фото и заявки также будут удалены.
+              Документы, фото и заявки на обслуживание сохранятся — удаляется только сам ШУ.
+              Единственный побочный эффект: все чаты по этому ШУ (у всех пользователей) будут
+              заархивированы — переписываться по нему станет невозможно.
             </p>
             <div className="flex justify-end gap-2 mt-4">
               <Button variant="ghost" onClick={() => setDeleteCabinetConfirm(null)} disabled={deleteCabinetMutation.isPending} className="cursor-pointer">Отмена</Button>
