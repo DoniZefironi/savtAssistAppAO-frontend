@@ -54,7 +54,7 @@ export function AdminSidebar({ mobileOpen, onMobileClose }: { mobileOpen: boolea
       />
 
       <aside className={cn(
-        'bg-[#1B3A72] flex flex-col overflow-hidden z-50',
+        'theme-accent bg-[#1B3A72] flex flex-col overflow-hidden z-50',
         'transition-[width,transform] duration-200 ease-in-out',
         'fixed top-0 left-0 h-screen w-72',
         mobileOpen ? 'translate-x-0' : '-translate-x-full',

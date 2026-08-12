@@ -176,3 +176,72 @@ input[type="password"]::-ms-clear {
 .dark * {
   scrollbar-color: #334155 transparent;
 }
+
+/* "Праздничная" тема — четвёртый пункт переключателя темы, поверх тёмной базы
+   (.dark всегда идёт вместе с .theme-festive, см. admin-header.tsx).
+   Палитра — приглушённая пастель, не кислотная радуга, и анимация медленная,
+   чтобы не резало глаз при долгой работе. */
+.theme-festive {
+  --pride-1: #df7486d5; /* роза */
+  --pride-2: #dfa872b7; /* персик */
+  --pride-3: #dbd46cb7; /* сливочно-жёлтый */
+  --pride-4: #74ce9ca9; /* мята */
+  --pride-5: #8fb6d6ab; /* небесный */
+  --pride-6: #b3a0d9; /* лаванда */
+  --pride-accent: #6d4fad;         /* замена фирменного #1B3A72 — фон/текст/бордер */
+  --pride-accent-light: #b3a0d9;   /* замена #4A8FE7 и dark:-акцентов (blue-400) */
+  --pride-accent-muted: rgb(179 160 217 / 20%); /* замена dark:bg-blue-900/* */
+}
+
+@keyframes pride-flow {
+  to { background-position: 200% 50%; }
+}
+.theme-festive .theme-accent {
+  background: linear-gradient(90deg, var(--pride-1), var(--pride-2), var(--pride-3), var(--pride-4), var(--pride-5), var(--pride-6), var(--pride-1));
+  background-size: 200% 100%;
+  animation: pride-flow 18s linear infinite;
+}
+.theme-festive .theme-accent-static {
+  background: linear-gradient(135deg, var(--pride-1), var(--pride-2), var(--pride-4), var(--pride-5), var(--pride-6));
+}
+.theme-festive header {
+  position: relative;
+}
+.theme-festive header::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--pride-1), var(--pride-2), var(--pride-3), var(--pride-4), var(--pride-5), var(--pride-6), var(--pride-1));
+  background-size: 200% 100%;
+  animation: pride-flow 18s linear infinite;
+}
+.theme-festive ::selection {
+  background: var(--pride-accent-muted);
+}
+.theme-festive ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--pride-2), var(--pride-4), var(--pride-5), var(--pride-6));
+}
+
+/* Фирменный синий (#1B3A72/#4A8FE7 и их тёмные аналоги blue-400/blue-900)
+   используется буквально везде — кнопки, ссылки, бейджи, активные вкладки,
+   фокус на инпутах, градиенты в шапках модалок: ~300 мест в полусотне файлов.
+   Переписывать каждый компонент нереально, поэтому цепляемся за литеральный
+   текст класса подстрокой — неважно, что стоит перед ним (hover:/dark:/focus:/
+   с любым модификатором прозрачности) — и переопределяем нужное CSS-свойство
+   с !important, чтобы забить конкретный (не менее специфичный) Tailwind-класс. */
+.theme-festive [class*="bg-[#1B3A72]"] { background-color: var(--pride-accent) !important; }
+.theme-festive [class*="text-[#1B3A72]"] { color: var(--pride-accent) !important; }
+.theme-festive [class*="border-[#1B3A72]"] { border-color: var(--pride-accent) !important; }
+.theme-festive [class*="bg-[#4A8FE7]"] { background-color: var(--pride-accent-light) !important; }
+.theme-festive [class*="text-[#4A8FE7]"] { color: var(--pride-accent-light) !important; }
+.theme-festive [class*="border-[#4A8FE7]"] { border-color: var(--pride-accent-light) !important; }
+.theme-festive [class*="text-blue-400"] { color: var(--pride-accent-light) !important; }
+.theme-festive [class*="border-blue-400"] { border-color: var(--pride-accent-light) !important; }
+.theme-festive [class*="bg-blue-900"] { background-color: var(--pride-accent-muted) !important; }
+
+/* Градиентные шапки модалок (from-[#4A8FE7] to-[#1B3A72]) — самый заметный
+   повторяющийся брендовый паттерн, ~15 диалогов по всему приложению. */
+.theme-festive [class*="from-[#4A8FE7]"][class*="to-[#1B3A72]"] {
+  background: linear-gradient(to right, var(--pride-5), var(--pride-accent)) !important;
+}
