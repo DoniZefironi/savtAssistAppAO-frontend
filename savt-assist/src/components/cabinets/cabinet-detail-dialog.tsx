@@ -230,6 +230,14 @@ function DetailContent({ cabinetId, initialMode }: {
             <DetailRow label="MQTT-порт" value={fields.mqtt_port} editing={editing} onChange={set('mqtt_port')} placeholder="Например, 1883" error={errors.mqtt_port} />
             <DetailRow label="MQTT-логин" value={fields.mqtt_username} editing={editing} onChange={set('mqtt_username')} placeholder="Если брокер требует аутентификацию" />
             <MqttPasswordRow value={mqttPassword} editing={editing} onChange={setMqttPassword} />
+            {editing && (!fields.mqtt_host.trim() || !fields.mqtt_port.trim() || !fields.mqtt_topic.trim()) && (
+              <div className="px-4 sm:px-6 py-2.5">
+                <p className="text-xs text-amber-600 dark:text-amber-400 flex items-start gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  Пока не заполнены MQTT-хост, порт и топик — телеметрия для этого ШУ не заработает.
+                </p>
+              </div>
+            )}
             <CabinetProjectRow cabinetId={cabinetId} cabinet={cabinet} isAdmin={isAdmin} />
           </div>
         )}
@@ -397,8 +405,11 @@ function validate(f: FormFields): FormErrors {
   if (f.warranty_start && f.warranty_end && new Date(f.warranty_end) < new Date(f.warranty_start)) {
     e.warranty_end = 'Не может быть раньше даты начала'
   }
-  if (f.mqtt_port.trim() && !/^\d+$/.test(f.mqtt_port.trim())) {
-    e.mqtt_port = 'Введите число'
+  if (f.mqtt_port.trim()) {
+    const port = Number(f.mqtt_port.trim())
+    if (!/^\d+$/.test(f.mqtt_port.trim()) || port < 1 || port > 65535) {
+      e.mqtt_port = 'Число от 1 до 65535'
+    }
   }
   return e
 }

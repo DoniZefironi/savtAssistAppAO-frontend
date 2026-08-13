@@ -60,6 +60,11 @@ export type WarrantyStatus = 'active' | 'expiring_soon' | 'expired' | 'none'
 export interface RegisterDefinition {
   id: number
   address: number
+  // null — весь регистр одно значение (напр. "Температура насоса"). 0-15 —
+  // конкретный бит 16-битного слова: так кодируются регистры-неисправности —
+  // один адрес, до 16 независимых аварий, каждая на своём бите (см.
+  // README-backend.md, «Рут admin: telemetry»).
+  bit: number | null
   name: string
   description: string | null
   created_at: string
@@ -72,6 +77,7 @@ export interface RegisterOverride {
   id: number
   cabinet_id: number
   address: number
+  bit: number | null
   name: string
   description: string | null
   created_at: string
@@ -80,10 +86,18 @@ export interface RegisterOverride {
 
 export interface TelemetryRegister {
   address: number
-  // null — адрес не описан ни в стандартной карте, ни в переопределениях
+  bit: number | null
+  // null — адрес/бит не описан ни в стандартной карте, ни в переопределениях
   // этого ШУ; в UI показывать просто по адресу.
   name: string | null
+  // Сырое значение всего регистра — у всех bit-строк одного адреса
+  // одинаковое, для отображения не нужно (разве что для отладки).
   value: number
+  // Только для bit-регистров (bit !== null) — сработала ли конкретно эта
+  // авария в этом сообщении. null для обычных (bit === null) регистров.
+  // В ленте показывать только bit-регистры с active === true — остальные
+  // определённые, но неактивные биты были бы шумом на каждое сообщение.
+  active: boolean | null
 }
 
 export interface TelemetryEntry {

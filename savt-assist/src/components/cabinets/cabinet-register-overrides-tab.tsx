@@ -21,12 +21,19 @@ export function RegisterOverridesTab({ cabinetId, isAdmin }: { cabinetId: number
   })
 
   const addMut = useMutation({
-    mutationFn: (dto: RegisterDto) => registersApi.createOverride(cabinetId, dto),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey })
-      toast.success('Регистр добавлен')
+    // Битовая маска — несколько DTO на один адрес (разные bit), отправляем
+    // по очереди одной мутацией, чтобы это была одна кнопка "Добавить" в UI.
+    mutationFn: async (dtos: RegisterDto[]) => {
+      for (const dto of dtos) await registersApi.createOverride(cabinetId, dto)
     },
-    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось добавить регистр')),
+    onSuccess: (_data, dtos) => {
+      qc.invalidateQueries({ queryKey })
+      toast.success(dtos.length > 1 ? `Добавлено регистров: ${dtos.length}` : 'Регистр добавлен')
+    },
+    onError: (e) => {
+      qc.invalidateQueries({ queryKey })
+      toast.error(apiErrorMessage(e, 'Не удалось добавить регистр'))
+    },
   })
 
   const deleteMut = useMutation({
@@ -49,7 +56,7 @@ export function RegisterOverridesTab({ cabinetId, isAdmin }: { cabinetId: number
         items={data ?? []}
         isLoading={isLoading}
         canEdit={isAdmin}
-        onAdd={(dto) => addMut.mutate(dto)}
+        onAdd={(dtos) => addMut.mutate(dtos)}
         isAdding={addMut.isPending}
         onDelete={(id) => deleteMut.mutate(id)}
         deletingId={deletingId}

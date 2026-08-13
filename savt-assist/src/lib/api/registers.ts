@@ -3,6 +3,9 @@ import type { PaginatedResponse, RegisterDefinition, RegisterOverride, Telemetry
 
 export interface RegisterDto {
   address: number
+  // Отсутствует/null — обычное значение. 0-15 — конкретный бит битовой
+  // маски (см. README-backend.md, «Рут admin: telemetry»).
+  bit?: number | null
   name: string
   description?: string | null
 }
