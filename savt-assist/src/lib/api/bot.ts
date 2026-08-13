@@ -21,6 +21,19 @@ export interface PromoSendResult extends BroadcastResult {
   message: PromoMessage
 }
 
+// Ответ reindex — только статус запуска, итоговая статистика (сколько
+// проиндексировано/пропущено) видна лишь в логах api, не в HTTP-ответе
+// (см. README-backend.md, «Рут admin: bot»).
+export interface ReindexResult {
+  status: string
+  message: string
+}
+
+export interface PruneResult {
+  status: string
+  removed: { faq: number; kb_article: number; document: number }
+}
+
 export const botApi = {
   broadcastNotification: (data: { title: string; body: string; role: string | null }): Promise<BroadcastResult> =>
     apiClient.post('/admin/notifications/broadcast', data).then(r => r.data),
@@ -34,4 +47,13 @@ export const botApi = {
     apiClient.post('/admin/notifications/promo/send', null, {
       params: { ...(promoId ? { promo_id: promoId } : {}), ...(role ? { role } : {}) },
     }).then(r => r.data),
+
+  // 202 сразу, сам подсчёт идёт в фоне — на восстановление из бэкапа/ручные
+  // правки в БД или если фоновая автоиндексация когда-то не отработала.
+  reindex: (force: boolean): Promise<ReindexResult> =>
+    apiClient.post('/admin/bot/reindex', null, { params: { force } }).then(r => r.data),
+
+  // Чистит embeddings-сироты (источник — FAQ/статья КБ/документ — уже удалён).
+  prune: (): Promise<PruneResult> =>
+    apiClient.post('/admin/bot/prune').then(r => r.data),
 }

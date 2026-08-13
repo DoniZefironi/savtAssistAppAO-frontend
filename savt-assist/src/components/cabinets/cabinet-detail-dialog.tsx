@@ -60,6 +60,12 @@ function DetailContent({ cabinetId, initialMode }: {
   const [editing, setEditing] = useState(initialMode === 'edit')
   const [fields, setFields] = useState<FormFields | null>(null)
   const [errors, setErrors] = useState<FormErrors>({})
+  // GET никогда не возвращает mqtt_password обратно (write-only) — это поле
+  // не часть FormFields/cabinetToFields, а отдельный, всегда-пустой стейт.
+  // Отправляем его в PATCH только если админ реально что-то сюда ввёл,
+  // иначе слали бы null при каждом сохранении и стирали уже сохранённый
+  // пароль (см. README-backend.md, «Ловушка с mqtt_password для фронта»).
+  const [mqttPassword, setMqttPassword] = useState('')
 
   const { data: cabinet, isLoading } = useQuery({
     queryKey: ['cabinet', cabinetId],
@@ -68,6 +74,7 @@ function DetailContent({ cabinetId, initialMode }: {
 
   useEffect(() => {
     if (cabinet) setFields(cabinetToFields(cabinet))
+    setMqttPassword('')
     setEditing(initialMode === 'edit')
   }, [cabinet, initialMode])
 
@@ -93,11 +100,14 @@ function DetailContent({ cabinetId, initialMode }: {
     const errs = validate(fields)
     if (Object.keys(errs).length > 0) { setErrors(errs); return }
     setErrors({})
-    updateMutation.mutate(fieldsToDto(fields))
+    const dto = fieldsToDto(fields)
+    if (mqttPassword.trim()) dto.mqtt_password = mqttPassword.trim()
+    updateMutation.mutate(dto)
   }
 
   const handleCancel = () => {
     if (cabinet) setFields(cabinetToFields(cabinet))
+    setMqttPassword('')
     setErrors({})
     setEditing(false)
   }
@@ -216,6 +226,10 @@ function DetailContent({ cabinetId, initialMode }: {
               onChange={(lat, lng) => setFields((p) => p ? { ...p, latitude: lat, longitude: lng } : p)}
             />
             <DetailRow label="MQTT-топик" value={fields.mqtt_topic} editing={editing} onChange={set('mqtt_topic')} placeholder="Например, 26_001/1/data" />
+            <DetailRow label="MQTT-хост" value={fields.mqtt_host} editing={editing} onChange={set('mqtt_host')} placeholder="Адрес брокера этого ШУ" />
+            <DetailRow label="MQTT-порт" value={fields.mqtt_port} editing={editing} onChange={set('mqtt_port')} placeholder="Например, 1883" error={errors.mqtt_port} />
+            <DetailRow label="MQTT-логин" value={fields.mqtt_username} editing={editing} onChange={set('mqtt_username')} placeholder="Если брокер требует аутентификацию" />
+            <MqttPasswordRow value={mqttPassword} editing={editing} onChange={setMqttPassword} />
             <CabinetProjectRow cabinetId={cabinetId} cabinet={cabinet} isAdmin={isAdmin} />
           </div>
         )}
@@ -328,6 +342,35 @@ function DateRow({ label, value, editing, onChange, error }: {
   )
 }
 
+function MqttPasswordRow({ value, editing, onChange }: {
+  value: string
+  editing: boolean
+  onChange: (v: string) => void
+}) {
+  return (
+    <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4 px-4 sm:px-6 py-3">
+      <span className="text-xs text-slate-400 sm:w-28 shrink-0 sm:pt-0.5">MQTT-пароль</span>
+      {editing ? (
+        <div className="flex-1 min-w-0">
+          <input
+            type="password"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="Оставьте пустым, чтобы не менять"
+            autoComplete="new-password"
+            className="w-full text-sm text-slate-700 dark:text-slate-400 bg-transparent border-b outline-none placeholder:text-slate-300 placeholder:italic border-slate-200 focus:border-[#4A8FE7]"
+          />
+          <p className="text-xs text-slate-400 mt-1">
+            Сервер никогда не присылает сохранённый пароль обратно — поле пустое, даже если пароль уже задан
+          </p>
+        </div>
+      ) : (
+        <span className="flex-1 text-sm text-slate-300 italic">Скрыт — виден только при вводе</span>
+      )}
+    </div>
+  )
+}
+
 interface FormFields {
   admin_internal_name: string
   object_number: string
@@ -340,6 +383,9 @@ interface FormFields {
   latitude: number | null
   longitude: number | null
   mqtt_topic: string
+  mqtt_host: string
+  mqtt_port: string
+  mqtt_username: string
 }
 
 type FormErrors = Partial<Record<keyof FormFields, string>>
@@ -350,6 +396,9 @@ function validate(f: FormFields): FormErrors {
   if (!f.type.trim()) e.type = 'Обязательное поле'
   if (f.warranty_start && f.warranty_end && new Date(f.warranty_end) < new Date(f.warranty_start)) {
     e.warranty_end = 'Не может быть раньше даты начала'
+  }
+  if (f.mqtt_port.trim() && !/^\d+$/.test(f.mqtt_port.trim())) {
+    e.mqtt_port = 'Введите число'
   }
   return e
 }
@@ -367,6 +416,9 @@ function cabinetToFields(c: Cabinet): FormFields {
     latitude: c.latitude ?? null,
     longitude: c.longitude ?? null,
     mqtt_topic: c.mqtt_topic ?? '',
+    mqtt_host: c.mqtt_host ?? '',
+    mqtt_port: c.mqtt_port != null ? String(c.mqtt_port) : '',
+    mqtt_username: c.mqtt_username ?? '',
   }
 }
 
@@ -383,6 +435,9 @@ function fieldsToDto(f: FormFields): UpdateCabinetDto {
     latitude: f.latitude,
     longitude: f.longitude,
     mqtt_topic: f.mqtt_topic || null,
+    mqtt_host: f.mqtt_host || null,
+    mqtt_port: f.mqtt_port.trim() ? Number(f.mqtt_port) : null,
+    mqtt_username: f.mqtt_username || null,
   }
 }
 

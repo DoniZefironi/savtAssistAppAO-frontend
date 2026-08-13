@@ -15,9 +15,6 @@ export interface CabinetsParams {
   // гарантией не попадал ни в один фильтр (см. README-backend.md, GET /admin/cabinets)
   warranty_status?: 'active' | 'expiring_soon' | 'expired' | 'none'
   tag_ids?: number[]
-  // false — только ШУ без привязанного проекта (см. обсуждение расширения
-  // GET /admin/cabinets в контексте раздела "Проекты ШУ")
-  has_project?: boolean
   // Шкафы конкретного проекта — используется страницей проекта вместо
   // усечённого cabinets[] из GET /admin/projects/{id}, чтобы переиспользовать
   // тот же полный Cabinet-объект и всю существующую фильтрацию/поиск/сортировку
@@ -52,6 +49,14 @@ export interface UpdateCabinetDto {
   latitude?: number | null
   longitude?: number | null
   mqtt_topic?: string | null
+  mqtt_host?: string | null
+  mqtt_port?: number | null
+  mqtt_username?: string | null
+  // Включать в тело PATCH только если админ реально ввёл новое значение —
+  // GET никогда не возвращает пароль обратно, поэтому поле в форме всегда
+  // пустое, и слать null/"" при каждом сохранении стёрло бы уже сохранённый
+  // пароль (см. README-backend.md, «Ловушка с mqtt_password для фронта»).
+  mqtt_password?: string
 }
 
 export const cabinetsApi = {

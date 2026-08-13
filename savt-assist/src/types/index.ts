@@ -42,6 +42,14 @@ export interface Cabinet {
   // telemetry-proxy сопоставляет входящие сообщения с конкретным ШУ
   // (см. README-backend.md, «Рут admin: telemetry»). Уникален среди ШУ.
   mqtt_topic?: string | null
+  // Брокер именно этого ШУ — общего на все объекты нет, у каждого свой
+  // хост/порт. telemetry-proxy подключается только когда заполнены все три:
+  // mqtt_host, mqtt_port, mqtt_topic (см. GET /webhooks/telemetry/targets).
+  mqtt_host?: string | null
+  mqtt_port?: number | null
+  mqtt_username?: string | null
+  // mqtt_password сюда не входит: он write-only (принимается в PATCH, но
+  // никогда не возвращается ни в одном ответе) — см. cabinet-detail-dialog.tsx.
   created_at: string
 }
 

@@ -38,6 +38,7 @@ export default function AdminSettingsPage() {
         <div className="max-w-xl mx-auto space-y-4">
           <BroadcastSection />
           <PromoSection />
+          <BotMaintenanceSection />
         </div>
       </div>
     </div>
@@ -237,6 +238,84 @@ function PromoSection() {
   )
 }
 
+// Итоговая статистика не приходит в HTTP-ответе (реindex считает в фоне,
+// prune отдаёт только удалённое) — см. README-backend.md, «Рут admin: bot».
+// В штатной работе не нужны: create/update уже индексируют записи сами,
+// это инструменты на случай восстановления из бэкапа или ручных правок в БД.
+function BotMaintenanceSection() {
+  const [force, setForce] = useState(false)
+
+  const reindexMut = useMutation({
+    mutationFn: () => botApi.reindex(force),
+    onSuccess: (res) => toast.success(res.message || 'Индексация запущена в фоне'),
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось запустить индексацию')),
+  })
+
+  const pruneMut = useMutation({
+    mutationFn: () => botApi.prune(),
+    onSuccess: (res) => {
+      const { faq, kb_article, document } = res.removed
+      const total = faq + kb_article + document
+      toast.success(total > 0 ? `Удалено осиротевших записей: ${total}` : 'Осиротевших записей не найдено')
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось очистить')),
+  })
+
+  return (
+    <Card
+      icon={<DatabaseIcon className="w-5 h-5 text-white" />}
+      iconBg="from-slate-500 to-slate-700"
+      title="Обслуживание базы бота"
+      subtitle="Восстановление индекса после бэкапа или ручных правок в БД"
+    >
+      <div className="space-y-5">
+        <div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Переиндексация</p>
+              <p className="text-xs text-slate-400 mt-0.5">FAQ, база знаний, документы ШУ</p>
+            </div>
+            <Button
+              onClick={() => reindexMut.mutate()}
+              disabled={reindexMut.isPending}
+              className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white shrink-0"
+            >
+              {reindexMut.isPending
+                ? <><SpinnerIcon className="w-4 h-4 mr-2 animate-spin" />Запуск...</>
+                : 'Переиндексировать'
+              }
+            </Button>
+          </div>
+          <label className="flex items-center gap-2 mt-2.5 cursor-pointer select-none">
+            <input type="checkbox" checked={force} onChange={e => setForce(e.target.checked)} className="cursor-pointer" />
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              Полная переиндексация всего (медленно) — иначе только записи без эмбеддингов
+            </span>
+          </label>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-100 dark:border-slate-700/60">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Осиротевшие эмбеддинги</p>
+            <p className="text-xs text-slate-400 mt-0.5">Чистит записи, чей источник уже удалён</p>
+          </div>
+          <Button
+            variant="ghost"
+            onClick={() => pruneMut.mutate()}
+            disabled={pruneMut.isPending}
+            className="cursor-pointer shrink-0"
+          >
+            {pruneMut.isPending
+              ? <><SpinnerIcon className="w-4 h-4 mr-2 animate-spin" />Очистка...</>
+              : 'Очистить'
+            }
+          </Button>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
 function Card({ icon, iconBg, title, subtitle, children }: {
   icon: React.ReactNode
   iconBg: string
@@ -270,6 +349,9 @@ function SendIcon({ className }: { className?: string }) {
 }
 function MegaphoneIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 110-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 01-1.44-4.282m3.102.069a18.03 18.03 0 01-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 018.835 2.535M10.34 6.66a23.847 23.847 0 008.835-2.535m0 0A23.74 23.74 0 0018.795 3m.38 1.125a23.91 23.91 0 011.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 001.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 010 3.46" /></svg>
+}
+function DatabaseIcon({ className }: { className?: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 3.375c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" /></svg>
 }
 function SpinnerIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
