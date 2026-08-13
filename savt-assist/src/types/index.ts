@@ -38,10 +38,51 @@ export interface Cabinet {
   tags?: { id: number; name: string; scope: string }[]
   project_id?: number | null
   project_name?: string | null
+  // Топик MQTT-контроллера этого ШУ (напр. "26_001/1/data") — по нему
+  // telemetry-proxy сопоставляет входящие сообщения с конкретным ШУ
+  // (см. README-backend.md, «Рут admin: telemetry»). Уникален среди ШУ.
+  mqtt_topic?: string | null
   created_at: string
 }
 
 export type WarrantyStatus = 'active' | 'expiring_soon' | 'expired' | 'none'
+
+// Стандартная карта регистров, общая для всех ШУ (см. README-backend.md,
+// «Рут admin: telemetry»).
+export interface RegisterDefinition {
+  id: number
+  address: number
+  name: string
+  description: string | null
+  created_at: string
+  updated_at: string
+}
+
+// Добавки/переопределения карты регистров для конкретного ШУ — при
+// расшифровке телеметрии проверяются раньше стандартной карты.
+export interface RegisterOverride {
+  id: number
+  cabinet_id: number
+  address: number
+  name: string
+  description: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface TelemetryRegister {
+  address: number
+  // null — адрес не описан ни в стандартной карте, ни в переопределениях
+  // этого ШУ; в UI показывать просто по адресу.
+  name: string | null
+  value: number
+}
+
+export interface TelemetryEntry {
+  id: number
+  received_at: string
+  registers: TelemetryRegister[]
+}
 
 // Контактное лицо заказчика из сделки Bitrix. Только в админских ответах —
 // в GET /projects/{id} их нет (персональные данные, а доступ к проекту по QR).

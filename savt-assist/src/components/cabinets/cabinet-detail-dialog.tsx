@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { isAxiosError } from 'axios'
 import { AlertTriangle } from 'lucide-react'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
@@ -10,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ProjectCombobox } from '@/components/ui/project-combobox'
 import { WarrantyBadge } from './warranty-badge'
 import { cabinetsApi, UpdateCabinetDto } from '@/lib/api/cabinets'
+import { apiErrorMessage } from '@/lib/api/errors'
 import { kbApi } from '@/lib/api/kb'
 import type { Tag } from '@/lib/api/tags'
 import { formatDate } from '@/lib/warranty'
@@ -21,9 +23,11 @@ import { DocsTab } from './cabinet-docs-tab'
 import { PhotosTab } from './cabinet-photos-tab'
 import { UsersTab } from './cabinet-users-tab'
 import { ServiceRequestsTab } from './cabinet-requests-tab'
+import { RegisterOverridesTab } from './cabinet-register-overrides-tab'
+import { TelemetryTab } from './cabinet-telemetry-tab'
 import { BoardIcon, PencilIcon } from './cabinet-dialog-icons'
 
-type Tab = 'info' | 'docs' | 'photos' | 'users' | 'requests'
+type Tab = 'info' | 'docs' | 'photos' | 'users' | 'requests' | 'overrides' | 'telemetry'
 
 interface Props {
   cabinetId: number | null
@@ -75,7 +79,13 @@ function DetailContent({ cabinetId, initialMode }: {
       toast.success('Изменения сохранены')
       setEditing(false)
     },
-    onError: () => toast.error('Не удалось сохранить'),
+    onError: (e) => {
+      if (isAxiosError(e) && e.response?.status === 409) {
+        toast.error('Топик уже привязан к другому ШУ')
+      } else {
+        toast.error(apiErrorMessage(e, 'Не удалось сохранить'))
+      }
+    },
   })
 
   const handleSave = () => {
@@ -113,6 +123,8 @@ function DetailContent({ cabinetId, initialMode }: {
     { id: 'photos', label: 'Фото' },
     { id: 'users', label: 'Пользователи' },
     { id: 'requests', label: 'Заявки' },
+    { id: 'overrides', label: 'Переопределения карты' },
+    { id: 'telemetry', label: 'Лента событий' },
   ]
 
   // min-w-0 ниже — Popup из @base-ui/react/dialog это display:grid, а у grid-элементов
@@ -203,6 +215,7 @@ function DetailContent({ cabinetId, initialMode }: {
               editing={editing}
               onChange={(lat, lng) => setFields((p) => p ? { ...p, latitude: lat, longitude: lng } : p)}
             />
+            <DetailRow label="MQTT-топик" value={fields.mqtt_topic} editing={editing} onChange={set('mqtt_topic')} placeholder="Например, 26_001/1/data" />
             <CabinetProjectRow cabinetId={cabinetId} cabinet={cabinet} isAdmin={isAdmin} />
           </div>
         )}
@@ -210,6 +223,8 @@ function DetailContent({ cabinetId, initialMode }: {
         {tab === 'photos' && <PhotosTab cabinetId={cabinetId} isAdmin={isAdmin} />}
         {tab === 'users' && <UsersTab projectId={cabinet.project_id ?? null} projectName={cabinet.project_name ?? null} isAdmin={isAdmin} />}
         {tab === 'requests' && <ServiceRequestsTab cabinetId={cabinetId} />}
+        {tab === 'overrides' && <RegisterOverridesTab cabinetId={cabinetId} isAdmin={isAdmin} />}
+        {tab === 'telemetry' && <TelemetryTab cabinetId={cabinetId} />}
       </div>
 
       {tab === 'info' && (
@@ -324,6 +339,7 @@ interface FormFields {
   warranty_end: string
   latitude: number | null
   longitude: number | null
+  mqtt_topic: string
 }
 
 type FormErrors = Partial<Record<keyof FormFields, string>>
@@ -350,6 +366,7 @@ function cabinetToFields(c: Cabinet): FormFields {
     warranty_end: c.warranty_ends_at?.slice(0, 10) ?? '',
     latitude: c.latitude ?? null,
     longitude: c.longitude ?? null,
+    mqtt_topic: c.mqtt_topic ?? '',
   }
 }
 
@@ -365,6 +382,7 @@ function fieldsToDto(f: FormFields): UpdateCabinetDto {
     warranty_ends_at: f.warranty_end ? new Date(f.warranty_end).toISOString() : null,
     latitude: f.latitude,
     longitude: f.longitude,
+    mqtt_topic: f.mqtt_topic || null,
   }
 }
 

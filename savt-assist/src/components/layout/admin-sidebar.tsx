@@ -29,6 +29,7 @@ export function AdminSidebar({ mobileOpen, onMobileClose }: { mobileOpen: boolea
     { href: `${base}/users`, label: 'Пользователи', icon: UsersIcon },
     { href: `${base}/kb`, label: 'База знаний', icon: BookIcon },
     { href: `${base}/faq`, label: 'ЧаВо', icon: QuestionIcon },
+    { href: `${base}/register-definitions`, label: 'Карта регистров', icon: CpuChipIcon },
     ...(!isOperator ? [{ href: `${base}/settings`, label: 'Настройки', icon: SettingsIcon }] : []),
     // Полный журнал (CUD по шкафам/проектам/пользователям и т.п.) видит только
     // суперадмин — обычным админу/оператору бэкенд и так сузил бы выдачу до
@@ -173,4 +174,7 @@ function BookIcon({ className }: { className?: string }) {
 }
 function QuestionIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" /></svg>
+}
+function CpuChipIcon({ className }: { className?: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 3v1.5M15.75 3v1.5M8.25 19.5V21M15.75 19.5V21M3 8.25h1.5M3 12h1.5M3 15.75h1.5M19.5 8.25H21M19.5 12H21M19.5 15.75H21M8.25 6.75h7.5a1.5 1.5 0 011.5 1.5v7.5a1.5 1.5 0 01-1.5 1.5h-7.5a1.5 1.5 0 01-1.5-1.5v-7.5a1.5 1.5 0 011.5-1.5z" /></svg>
 }

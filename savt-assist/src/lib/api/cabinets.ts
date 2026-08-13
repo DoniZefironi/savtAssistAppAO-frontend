@@ -51,6 +51,7 @@ export interface UpdateCabinetDto {
   warranty_ends_at?: string | null
   latitude?: number | null
   longitude?: number | null
+  mqtt_topic?: string | null
 }
 
 export const cabinetsApi = {
