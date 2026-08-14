@@ -663,6 +663,14 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
       // Ссылка приходит подписанной (?md5=…&expires=…) — отправляем как есть,
       // сервер сам снимет подпись перед обработкой (см. README-backend.md, 8.1)
       const { text: result } = await chatsApi.transcribeVoice(audioUrl)
+      // Пустой text — не ошибка HTTP (200), а честный "ничего не разобрать"
+      // (например, тишина/шум на записи) — без явной обработки кнопка "T"
+      // просто молча возвращалась бы в исходное состояние, будто её не нажимали.
+      if (!result.trim()) {
+        setTranscriptions(prev => { const next = new Map(prev); next.delete(msg.id); return next })
+        toast.error('Не удалось распознать')
+        return
+      }
       setTranscriptions(prev => new Map(prev).set(msg.id, { text: result, loading: false }))
     } catch (e) {
       setTranscriptions(prev => { const next = new Map(prev); next.delete(msg.id); return next })
