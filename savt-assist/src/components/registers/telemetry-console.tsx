@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useInfiniteQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { registersApi } from '@/lib/api/registers'
+import { useRealtimeEvents } from '@/lib/hooks/use-realtime-events'
 import { cn } from '@/lib/utils'
 import type { TelemetryRegister } from '@/types'
 
@@ -32,9 +33,11 @@ export function TelemetryConsole({ cabinetId, allowToggle = true, initialInclude
 }) {
   const [includeUnnamed, setIncludeUnnamed] = useState(initialIncludeUnnamed)
   const sentinelRef = useRef<HTMLDivElement>(null)
+  const qc = useQueryClient()
+  const queryKey = ['cabinet-telemetry', cabinetId, includeUnnamed]
 
   const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
-    queryKey: ['cabinet-telemetry', cabinetId, includeUnnamed],
+    queryKey,
     initialPageParam: 1,
     queryFn: ({ pageParam }: { pageParam: number }) =>
       registersApi.getTelemetry(cabinetId, { page: pageParam, size: PAGE_SIZE, include_unnamed: includeUnnamed }),
@@ -52,6 +55,22 @@ export function TelemetryConsole({ cabinetId, allowToggle = true, initialInclude
     return () => observer.disconnect()
   }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
+  // Событие несёт только {cabinet_id, event_id}, не сами данные (список
+  // персонален из-за include_unnamed) — по сигналу просто перезапрашиваем
+  // страницу 1 заново, глубже event не парсим (см. README-backend.md,
+  // "Рут admin: telemetry" / SSE-раздел). resetQueries, а не invalidate —
+  // иначе переподгрузило бы все уже подгруженные скроллом страницы разом.
+  const resetToFirstPage = () => qc.resetQueries({ queryKey })
+
+  // Доставка at-most-once, как у чатов — на реконнект тоже стоит перезапросить
+  // вручную, не полагаться только на поток.
+  useRealtimeEvents(
+    `/operator/events/cabinets/${cabinetId}/telemetry`,
+    ['telemetry.created'],
+    resetToFirstPage,
+    resetToFirstPage
+  )
+
   const items = data?.pages.flatMap(p => p.items) ?? []
 
   return (
@@ -62,6 +81,10 @@ export function TelemetryConsole({ cabinetId, allowToggle = true, initialInclude
           <span className="w-2.5 h-2.5 rounded-full bg-amber-500/70" />
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/70" />
           <span className="text-xs text-slate-500 font-mono ml-2">телеметрия</span>
+          <span className="flex items-center gap-1 ml-1" title="Обновляется в реальном времени">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[10px] text-emerald-500/80 font-mono">live</span>
+          </span>
         </div>
         {allowToggle && (
           <button
