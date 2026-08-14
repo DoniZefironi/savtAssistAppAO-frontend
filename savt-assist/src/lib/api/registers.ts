@@ -10,6 +10,13 @@ export interface RegisterDto {
 export interface TelemetryParams {
   page?: number
   size?: number
+  // false (по умолч.) — только именованные регистры, сообщения без единого
+  // именованного регистра пропадают из ответа целиком. true — всё как есть,
+  // включая name: null (нужно при заполнении карты регистров, чтобы видеть
+  // сырые значения). total/pages считаются по сырым событиям в БД, до этого
+  // фильтра — на "странице" реально показанных элементов может быть меньше
+  // size, вплоть до нуля, это не баг (см. README-backend.md, «Рут admin: telemetry»).
+  include_unnamed?: boolean
 }
 
 export const registersApi = {
