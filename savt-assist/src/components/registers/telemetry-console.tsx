@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { registersApi } from '@/lib/api/registers'
 import { useRealtimeEvents } from '@/lib/hooks/use-realtime-events'
@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import type { TelemetryRegister } from '@/types'
 
 const PAGE_SIZE = 20
+const NEAR_BOTTOM_PX = 80
 
 function fmtTime(d: string) {
   return new Date(d).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -18,13 +19,19 @@ function fmtTime(d: string) {
 // регистров" (форсированный include_unnamed=true, без переключателя — там
 // это инструмент подглядеть сырые значения при заполнении карты).
 //
-// Пагинация подгружается скроллом (как везде в проекте), но important: total/
-// pages бэкенд считает по сырым событиям в БД, до фильтра по имени — то есть
-// одна "подгруженная страница" может добавить в ленту меньше PAGE_SIZE строк
-// (вплоть до нуля), если почти все сырые события в ней были без единого
-// именованного регистра. hasNextPage при этом остаётся true, и
-// IntersectionObserver автоматически подтянет следующую страницу — это
-// ожидаемое поведение, не баг.
+// Растёт вниз, как настоящий tail -f: новые события — внизу, автоскролл
+// держит низ, пока пользователь сам не проскроллит вверх смотреть историю.
+// Бэкенд отдаёт page=1 самым свежим (см. README-backend.md), поэтому для
+// показа "старое сверху, новое снизу" мы переворачиваем массив на рендере,
+// а подгрузка более старых страниц триггерится сентинелом СВЕРХУ (не снизу).
+//
+// Пагинация: total/pages бэкенд считает по сырым событиям в БД, до фильтра
+// по имени — то есть одна "подгруженная страница" может добавить в ленту
+// меньше PAGE_SIZE строк (вплоть до нуля), если почти все сырые события в
+// ней были без единого именованного регистра. hasNextPage при этом остаётся
+// true, и IntersectionObserver продолжит подтягивать страницы дальше сам —
+// это ожидаемое поведение, не баг, но пока идёт этот "поиск" — не молчим и
+// не мигаем между "загрузкой" и "пусто", а держим один спокойный статус.
 export function TelemetryConsole({ cabinetId, allowToggle = true, initialIncludeUnnamed = false, compact = false }: {
   cabinetId: number
   allowToggle?: boolean
@@ -32,7 +39,12 @@ export function TelemetryConsole({ cabinetId, allowToggle = true, initialInclude
   compact?: boolean
 }) {
   const [includeUnnamed, setIncludeUnnamed] = useState(initialIncludeUnnamed)
-  const sentinelRef = useRef<HTMLDivElement>(null)
+  const [hasNewBelow, setHasNewBelow] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const topSentinelRef = useRef<HTMLDivElement>(null)
+  const prevScrollHeightRef = useRef(0)
+  const loadingOlderRef = useRef(false)
+  const firstLoadRef = useRef(true)
   const qc = useQueryClient()
   const queryKey = ['cabinet-telemetry', cabinetId, includeUnnamed]
 
@@ -44,34 +56,83 @@ export function TelemetryConsole({ cabinetId, allowToggle = true, initialInclude
     getNextPageParam: (lastPage) => lastPage.page < lastPage.pages ? lastPage.page + 1 : undefined,
   })
 
+  const isNearBottom = () => {
+    const el = containerRef.current
+    if (!el) return true
+    return el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX
+  }
+  const scrollToBottom = () => {
+    const el = containerRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }
+
+  // Подгрузка более старых страниц — сверху, пока видно верхний сентинел.
   useEffect(() => {
-    const el = sentinelRef.current
-    if (!el) return
+    const el = topSentinelRef.current
+    const container = containerRef.current
+    if (!el || !container) return
     const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) fetchNextPage() },
-      { rootMargin: '200px' }
+      ([entry]) => {
+        if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          prevScrollHeightRef.current = container.scrollHeight
+          loadingOlderRef.current = true
+          fetchNextPage()
+        }
+      },
+      { root: container, rootMargin: '200px 0px 0px 0px' }
     )
     observer.observe(el)
     return () => observer.disconnect()
   }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+
+  // После подгрузки старых событий сверху — сохраняем позицию скролла
+  // (иначе лента дёргалась бы к началу списка), при самом первом успешном
+  // ответе — сразу становимся в самый низ, как и открытая консоль/чат.
+  useLayoutEffect(() => {
+    const container = containerRef.current
+    if (!container || !data) return
+    if (loadingOlderRef.current) {
+      container.scrollTop += container.scrollHeight - prevScrollHeightRef.current
+      loadingOlderRef.current = false
+      return
+    }
+    if (firstLoadRef.current) {
+      scrollToBottom()
+      firstLoadRef.current = false
+    }
+  }, [data])
 
   // Событие несёт только {cabinet_id, event_id}, не сами данные (список
   // персонален из-за include_unnamed) — по сигналу просто перезапрашиваем
   // страницу 1 заново, глубже event не парсим (см. README-backend.md,
   // "Рут admin: telemetry" / SSE-раздел). resetQueries, а не invalidate —
   // иначе переподгрузило бы все уже подгруженные скроллом страницы разом.
-  const resetToFirstPage = () => qc.resetQueries({ queryKey })
+  // Доставка at-most-once, как у чатов — на реконнект тоже перезапрашиваем.
+  const handleRealtimeUpdate = () => {
+    const wasNearBottom = isNearBottom()
+    qc.resetQueries({ queryKey }).then(() => {
+      if (wasNearBottom) requestAnimationFrame(scrollToBottom)
+      else setHasNewBelow(true)
+    })
+  }
 
-  // Доставка at-most-once, как у чатов — на реконнект тоже стоит перезапросить
-  // вручную, не полагаться только на поток.
   useRealtimeEvents(
     `/operator/events/cabinets/${cabinetId}/telemetry`,
     ['telemetry.created'],
-    resetToFirstPage,
-    resetToFirstPage
+    handleRealtimeUpdate,
+    handleRealtimeUpdate
   )
 
-  const items = data?.pages.flatMap(p => p.items) ?? []
+  const handleScroll = () => { if (isNearBottom()) setHasNewBelow(false) }
+  const handleJumpToNew = () => { setHasNewBelow(false); scrollToBottom() }
+
+  const rawItems = data?.pages.flatMap(p => p.items) ?? []
+  const items = [...rawItems].reverse()
+
+  // Пока ничего не показано, но поиск среди сырых страниц ещё продолжается
+  // (см. комментарий про фильтр выше) — держим один статус, не мигаем.
+  const stillSearching = items.length === 0 && !isLoading && (hasNextPage || isFetchingNextPage)
+  const trulyEmpty = items.length === 0 && !isLoading && !hasNextPage && !isFetchingNextPage
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-950 overflow-hidden flex flex-col">
@@ -101,20 +162,38 @@ export function TelemetryConsole({ cabinetId, allowToggle = true, initialInclude
         )}
       </div>
 
-      <div className={cn('flex-1 overflow-y-auto px-3 py-2 font-mono text-[13px] leading-relaxed', compact ? 'h-64' : 'min-h-[220px] max-h-[60vh]')}>
-        {isLoading && <p className="text-slate-500">Загрузка…</p>}
-        {isError && <p className="text-red-400">Не удалось загрузить телеметрию</p>}
-        {!isLoading && !isError && items.length === 0 && (
-          <p className="text-slate-500">$ ожидание данных с контроллера…</p>
+      <div className="relative">
+        <div
+          ref={containerRef}
+          onScroll={handleScroll}
+          className={cn('overflow-y-auto px-3 py-2 font-mono text-[13px] leading-relaxed', compact ? 'h-64' : 'min-h-[220px] max-h-[60vh]')}
+        >
+          {isLoading && <p className="text-slate-500">Загрузка…</p>}
+          {isError && <p className="text-red-400">Не удалось загрузить телеметрию</p>}
+          {trulyEmpty && <p className="text-slate-500">$ ожидание данных с контроллера…</p>}
+          {stillSearching && <p className="text-slate-500">Поиск событий среди сырых сообщений…</p>}
+
+          <div ref={topSentinelRef} className="h-1" />
+          {isFetchingNextPage && items.length > 0 && (
+            <p className="text-slate-600 py-1 text-center">Загрузка более старых событий…</p>
+          )}
+
+          {items.map(entry => (
+            <div key={entry.id} className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5 py-0.5 border-b border-slate-900/80 last:border-0">
+              <span className="text-slate-600 shrink-0">{fmtTime(entry.received_at)}</span>
+              {entry.registers.map((r, i) => <RegisterToken key={i} r={r} />)}
+            </div>
+          ))}
+        </div>
+
+        {hasNewBelow && (
+          <button
+            onClick={handleJumpToNew}
+            className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[11px] font-mono px-2.5 py-1 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg cursor-pointer transition-colors"
+          >
+            ↓ новые события
+          </button>
         )}
-        {items.map(entry => (
-          <div key={entry.id} className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5 py-0.5 border-b border-slate-900/80 last:border-0">
-            <span className="text-slate-600 shrink-0">{fmtTime(entry.received_at)}</span>
-            {entry.registers.map((r, i) => <RegisterToken key={i} r={r} />)}
-          </div>
-        ))}
-        <div ref={sentinelRef} className="h-1" />
-        {isFetchingNextPage && <p className="text-slate-600 py-1">Загрузка…</p>}
       </div>
     </div>
   )
