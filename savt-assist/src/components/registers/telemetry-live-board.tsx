@@ -1,11 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { registersApi } from '@/lib/api/registers'
 import { useRealtimeEvents } from '@/lib/hooks/use-realtime-events'
 import { cn } from '@/lib/utils'
 import type { TelemetryRegister } from '@/types'
+
+const REFRESH_DEBOUNCE_MS = 400
 
 function fmtTime(d: string) {
   return new Date(d).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -19,15 +21,22 @@ function sortKey(r: TelemetryRegister) {
 // пагинации (GET /admin/cabinets/{id}/telemetry, см. README-backend.md,
 // «Рут admin: telemetry»). История событий постфактум — отдельный компонент,
 // TelemetryHistoryConsole (переехавший на .../telemetry/history).
-export function TelemetryLiveBoard({ cabinetId, allowToggle = true, initialIncludeUnnamed = false, compact = false }: {
+export function TelemetryLiveBoard({ cabinetId, allowToggle = true, initialIncludeUnnamed = false, compact = false, realtimeSignal }: {
   cabinetId: number
   allowToggle?: boolean
   initialIncludeUnnamed?: boolean
   compact?: boolean
+  // Если задан — своё SSE-соединение не открывается, обновление ждём по
+  // этому сигналу извне (см. cabinet-telemetry-tab.tsx: там рядом рендерится
+  // и TelemetryHistoryConsole на тот же канал — если бы оба компонента сами
+  // подписывались, на каждое реальное событие открывалось бы два SSE-
+  // соединения на один путь и удваивался бы поток инвалидаций).
+  realtimeSignal?: number
 }) {
   const [includeUnnamed, setIncludeUnnamed] = useState(initialIncludeUnnamed)
   const qc = useQueryClient()
   const queryKey = ['cabinet-telemetry-live', cabinetId, includeUnnamed]
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const { data, isLoading, isError } = useQuery({
     queryKey,
@@ -37,8 +46,26 @@ export function TelemetryLiveBoard({ cabinetId, allowToggle = true, initialInclu
   // Событие несёт только {cabinet_id, event_id}, не сами данные — по сигналу
   // просто перезапрашиваем снимок заново. Плоский список без пагинации —
   // обычный invalidate, тут (в отличие от истории) нечего "проматывать".
-  const refresh = () => qc.invalidateQueries({ queryKey })
-  useRealtimeEvents(`/operator/events/cabinets/${cabinetId}/telemetry`, ['telemetry.created'], refresh, refresh)
+  // Дебаунс — несколько событий подряд (пачка бит-переключений в одном
+  // сообщении с контроллера) схлопываются в один запрос, а не по одному на
+  // каждое.
+  const refresh = () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => qc.invalidateQueries({ queryKey }), REFRESH_DEBOUNCE_MS)
+  }
+
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current) }, [])
+
+  const isControlled = realtimeSignal !== undefined
+  useRealtimeEvents(isControlled ? null : `/operator/events/cabinets/${cabinetId}/telemetry`, ['telemetry.created'], refresh, refresh)
+
+  const isFirstSignal = useRef(true)
+  useEffect(() => {
+    if (!isControlled) return
+    if (isFirstSignal.current) { isFirstSignal.current = false; return }
+    refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [realtimeSignal])
 
   const registers = [...(data?.registers ?? [])].sort((a, b) => sortKey(a) - sortKey(b))
 

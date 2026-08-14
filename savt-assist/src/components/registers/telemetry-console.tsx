@@ -9,6 +9,7 @@ import type { TelemetryRegister } from '@/types'
 
 const PAGE_SIZE = 20
 const NEAR_BOTTOM_PX = 80
+const REFRESH_DEBOUNCE_MS = 400
 
 function fmtTime(d: string) {
   return new Date(d).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -32,11 +33,17 @@ function fmtTime(d: string) {
 // true, и IntersectionObserver продолжит подтягивать страницы дальше сам —
 // это ожидаемое поведение, не баг, но пока идёт этот "поиск" — не молчим и
 // не мигаем между "загрузкой" и "пусто", а держим один спокойный статус.
-export function TelemetryHistoryConsole({ cabinetId, allowToggle = true, initialIncludeUnnamed = false, compact = false }: {
+export function TelemetryHistoryConsole({ cabinetId, allowToggle = true, initialIncludeUnnamed = false, compact = false, realtimeSignal }: {
   cabinetId: number
   allowToggle?: boolean
   initialIncludeUnnamed?: boolean
   compact?: boolean
+  // Если задан — своё SSE-соединение не открывается, обновление ждём по
+  // этому сигналу извне (см. cabinet-telemetry-tab.tsx: рядом рендерится и
+  // TelemetryLiveBoard на тот же канал — если бы оба компонента сами
+  // подписывались, на каждое реальное событие открывалось бы два SSE-
+  // соединения на один путь и удваивался бы поток инвалидаций).
+  realtimeSignal?: number
 }) {
   const [includeUnnamed, setIncludeUnnamed] = useState(initialIncludeUnnamed)
   const [hasNewBelow, setHasNewBelow] = useState(false)
@@ -47,6 +54,7 @@ export function TelemetryHistoryConsole({ cabinetId, allowToggle = true, initial
   const firstLoadRef = useRef(true)
   const qc = useQueryClient()
   const queryKey = ['cabinet-telemetry-history', cabinetId, includeUnnamed]
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
     queryKey,
@@ -106,22 +114,39 @@ export function TelemetryHistoryConsole({ cabinetId, allowToggle = true, initial
   // персонален из-за include_unnamed) — по сигналу просто перезапрашиваем
   // страницу 1 заново, глубже event не парсим (см. README-backend.md,
   // "Рут admin: telemetry" / SSE-раздел). resetQueries, а не invalidate —
-  // иначе переподгрузило бы все уже подгруженные скроллом страницы разом.
+  // иначе переподгрузило бы все уже подгруженные скроллом страницы разом
+  // (именно поэтому дебаунс тут особенно важен — resetQueries на инфинит-
+  // запросе переспрашивает ВСЕ уже подгруженные страницы целиком, а не одну,
+  // и без дебаунса частые события умножали бы нагрузку на их число).
   // Доставка at-most-once, как у чатов — на реконнект тоже перезапрашиваем.
   const handleRealtimeUpdate = () => {
-    const wasNearBottom = isNearBottom()
-    qc.resetQueries({ queryKey }).then(() => {
-      if (wasNearBottom) requestAnimationFrame(scrollToBottom)
-      else setHasNewBelow(true)
-    })
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      const wasNearBottom = isNearBottom()
+      qc.resetQueries({ queryKey }).then(() => {
+        if (wasNearBottom) requestAnimationFrame(scrollToBottom)
+        else setHasNewBelow(true)
+      })
+    }, REFRESH_DEBOUNCE_MS)
   }
 
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current) }, [])
+
+  const isControlled = realtimeSignal !== undefined
   useRealtimeEvents(
-    `/operator/events/cabinets/${cabinetId}/telemetry`,
+    isControlled ? null : `/operator/events/cabinets/${cabinetId}/telemetry`,
     ['telemetry.created'],
     handleRealtimeUpdate,
     handleRealtimeUpdate
   )
+
+  const isFirstSignal = useRef(true)
+  useEffect(() => {
+    if (!isControlled) return
+    if (isFirstSignal.current) { isFirstSignal.current = false; return }
+    handleRealtimeUpdate()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [realtimeSignal])
 
   const handleScroll = () => { if (isNearBottom()) setHasNewBelow(false) }
   const handleJumpToNew = () => { setHasNewBelow(false); scrollToBottom() }
