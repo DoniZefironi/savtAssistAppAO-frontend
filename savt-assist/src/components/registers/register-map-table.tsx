@@ -9,14 +9,17 @@ import type { RegisterDto } from '@/lib/api/registers'
 interface RegisterRow {
   id: number
   address: number
+  bit: number
   name: string
   description: string | null
 }
 
-// Общая таблица «адрес / название / описание» — используется и для
+// Общая таблица «адрес / бит / название / описание» — используется и для
 // стандартной карты регистров (глобальной), и для переопределений на
 // конкретном ШУ (см. README-backend.md, «Рут admin: telemetry»). Разница
 // между ними — только в том, что грузит/добавляет/удаляет строки родитель.
+// Каждая строка карты — конкретный бит (0-15) конкретного адреса, оба поля
+// обязательны на бэкенде.
 export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, onDelete, deletingId, emptyLabel }: {
   items: RegisterRow[]
   isLoading: boolean
@@ -29,12 +32,14 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
 }) {
   const [showAdd, setShowAdd] = useState(false)
   const [address, setAddress] = useState('')
+  const [bit, setBit] = useState('')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   const reset = () => {
     setAddress('')
+    setBit('')
     setName('')
     setDescription('')
     setError(null)
@@ -47,12 +52,17 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
       setError('Укажите корректный адрес регистра')
       return
     }
+    const bitNum = Number(bit)
+    if (!bit.trim() || !Number.isInteger(bitNum) || bitNum < 0 || bitNum > 15) {
+      setError('Бит должен быть числом от 0 до 15')
+      return
+    }
     if (!name.trim()) {
       setError('Укажите название')
       return
     }
     setError(null)
-    onAdd({ address: addressNum, name: name.trim(), description: description.trim() || null })
+    onAdd({ address: addressNum, bit: bitNum, name: name.trim(), description: description.trim() || null })
   }
 
   if (isLoading) {
@@ -69,16 +79,18 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
         <p className="text-sm text-slate-400 italic text-center py-6">{emptyLabel}</p>
       ) : (
         <div className="border border-slate-100 dark:border-slate-700/60 rounded-xl overflow-hidden">
-          <div className="grid grid-cols-[80px_1fr_1fr_auto] gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800/60 text-xs font-medium text-slate-400 border-b border-slate-100 dark:border-slate-700/60">
+          <div className="grid grid-cols-[70px_50px_1fr_1fr_auto] gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800/60 text-xs font-medium text-slate-400 border-b border-slate-100 dark:border-slate-700/60">
             <span>Адрес</span>
+            <span>Бит</span>
             <span>Название</span>
             <span>Описание</span>
             <span className="w-7" />
           </div>
           <div className="divide-y divide-slate-50 dark:divide-slate-700/30">
             {items.map(row => (
-              <div key={row.id} className="grid grid-cols-[80px_1fr_1fr_auto] gap-2 px-3 py-2.5 items-center">
+              <div key={row.id} className="grid grid-cols-[70px_50px_1fr_1fr_auto] gap-2 px-3 py-2.5 items-center">
                 <span className="text-sm font-mono text-slate-700 dark:text-slate-200">{row.address}</span>
+                <span className="text-sm font-mono text-slate-400">{row.bit}</span>
                 <span className="text-sm text-slate-700 dark:text-slate-200 truncate">{row.name}</span>
                 <span className="text-sm text-slate-400 truncate">{row.description || '—'}</span>
                 {canEdit ? (
@@ -101,11 +113,18 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
         <div className="mt-3">
           {showAdd ? (
             <div className="border border-slate-100 dark:border-slate-700/60 rounded-xl p-3 space-y-2">
-              <div className="grid grid-cols-1 sm:grid-cols-[80px_1fr_1fr] gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-[70px_50px_1fr_1fr] gap-2">
                 <input
                   value={address}
                   onChange={e => { setAddress(e.target.value); setError(null) }}
                   placeholder="Адрес"
+                  inputMode="numeric"
+                  className="px-2 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+                />
+                <input
+                  value={bit}
+                  onChange={e => { setBit(e.target.value); setError(null) }}
+                  placeholder="Бит 0-15"
                   inputMode="numeric"
                   className="px-2 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
                 />

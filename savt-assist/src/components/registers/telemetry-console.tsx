@@ -14,10 +14,10 @@ function fmtTime(d: string) {
   return new Date(d).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
-// Лента телеметрии в виде консоли — переиспользуется и на вкладке ШУ
-// (с переключателем "только названные"/"показать все"), и на экране "Карта
-// регистров" (форсированный include_unnamed=true, без переключателя — там
-// это инструмент подглядеть сырые значения при заполнении карты).
+// Пагинированная история сырых событий (GET /admin/cabinets/{id}/telemetry/history)
+// в виде консоли — для разбора аварии постфактум. Текущее состояние карты
+// регистров прямо сейчас — отдельный компонент, TelemetryLiveBoard (тот, что
+// раньше был GET .../telemetry, теперь плоский снимок без пагинации).
 //
 // Растёт вниз, как настоящий tail -f: новые события — внизу, автоскролл
 // держит низ, пока пользователь сам не проскроллит вверх смотреть историю.
@@ -32,7 +32,7 @@ function fmtTime(d: string) {
 // true, и IntersectionObserver продолжит подтягивать страницы дальше сам —
 // это ожидаемое поведение, не баг, но пока идёт этот "поиск" — не молчим и
 // не мигаем между "загрузкой" и "пусто", а держим один спокойный статус.
-export function TelemetryConsole({ cabinetId, allowToggle = true, initialIncludeUnnamed = false, compact = false }: {
+export function TelemetryHistoryConsole({ cabinetId, allowToggle = true, initialIncludeUnnamed = false, compact = false }: {
   cabinetId: number
   allowToggle?: boolean
   initialIncludeUnnamed?: boolean
@@ -46,13 +46,13 @@ export function TelemetryConsole({ cabinetId, allowToggle = true, initialInclude
   const loadingOlderRef = useRef(false)
   const firstLoadRef = useRef(true)
   const qc = useQueryClient()
-  const queryKey = ['cabinet-telemetry', cabinetId, includeUnnamed]
+  const queryKey = ['cabinet-telemetry-history', cabinetId, includeUnnamed]
 
   const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
     queryKey,
     initialPageParam: 1,
     queryFn: ({ pageParam }: { pageParam: number }) =>
-      registersApi.getTelemetry(cabinetId, { page: pageParam, size: PAGE_SIZE, include_unnamed: includeUnnamed }),
+      registersApi.getTelemetryHistory(cabinetId, { page: pageParam, size: PAGE_SIZE, include_unnamed: includeUnnamed }),
     getNextPageParam: (lastPage) => lastPage.page < lastPage.pages ? lastPage.page + 1 : undefined,
   })
 
@@ -141,7 +141,7 @@ export function TelemetryConsole({ cabinetId, allowToggle = true, initialInclude
           <span className="w-2.5 h-2.5 rounded-full bg-red-500/70" />
           <span className="w-2.5 h-2.5 rounded-full bg-amber-500/70" />
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/70" />
-          <span className="text-xs text-slate-500 font-mono ml-2">телеметрия</span>
+          <span className="text-xs text-slate-500 font-mono ml-2">история</span>
           <span className="flex items-center gap-1 ml-1" title="Обновляется в реальном времени">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-[10px] text-emerald-500/80 font-mono">live</span>
@@ -199,18 +199,23 @@ export function TelemetryConsole({ cabinetId, allowToggle = true, initialInclude
   )
 }
 
+// value — состояние бита (0/1), а не сырое число регистра: показываем как
+// вкл/выкл, единица — ярче (это реально сработавшее состояние).
 function RegisterToken({ r }: { r: TelemetryRegister }) {
   const unknown = r.name === null
+  const active = r.value === 1
+  const label = unknown ? `Регистр ${r.address}.${r.bit}` : r.name
+
   if (unknown) {
     return (
       <span className="text-amber-400" title="Регистр не описан в карте — заведите под него запись">
-        Регистр&nbsp;{r.address}=<span className="text-amber-300">{r.value}</span>
+        {label}={active ? <span className="text-amber-300 font-semibold">1</span> : <span className="text-amber-600">0</span>}
       </span>
     )
   }
   return (
-    <span className="text-emerald-400">
-      {r.name}=<span className="text-emerald-300">{r.value}</span>
+    <span className={active ? 'text-emerald-300 font-semibold' : 'text-slate-500'}>
+      {label}={active ? '1' : '0'}
     </span>
   )
 }

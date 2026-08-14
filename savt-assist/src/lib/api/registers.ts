@@ -1,8 +1,11 @@
 import { apiClient } from './client'
-import type { PaginatedResponse, RegisterDefinition, RegisterOverride, TelemetryEntry } from '@/types'
+import type { PaginatedResponse, RegisterDefinition, RegisterOverride, TelemetryEntry, TelemetryLiveState } from '@/types'
 
 export interface RegisterDto {
   address: number
+  // Обязателен — каждая строка карты описывает конкретный бит (0-15)
+  // конкретного адреса, не весь регистр целиком.
+  bit: number
   name: string
   description?: string | null
 }
@@ -48,10 +51,19 @@ export const registersApi = {
     await apiClient.delete(`/admin/cabinets/${cabinetId}/register-overrides/${overrideId}`)
   },
 
-  // Отдельный от мобильного (GET /cabinets/{id}/telemetry) эндпоинт — без
-  // проверки членства в проекте, доступен админу/оператору для любого ШУ.
-  getTelemetry: async (cabinetId: number, params: TelemetryParams = {}): Promise<PaginatedResponse<TelemetryEntry>> => {
+  // Текущее состояние карты регистров прямо сейчас — плоский список без
+  // пагинации (см. README-backend.md, «Рут admin: telemetry»). Отдельный
+  // от мобильного (GET /cabinets/{id}/telemetry) эндпоинт — без проверки
+  // членства в проекте, доступен админу/оператору для любого ШУ.
+  getTelemetry: async (cabinetId: number, params: Pick<TelemetryParams, 'include_unnamed'> = {}): Promise<TelemetryLiveState> => {
     const { data } = await apiClient.get(`/admin/cabinets/${cabinetId}/telemetry`, { params })
+    return data
+  },
+
+  // Пагинированная лента сырых событий — переехала сюда с GET .../telemetry
+  // (для истории/разбора аварии), формат ответа не менялся.
+  getTelemetryHistory: async (cabinetId: number, params: TelemetryParams = {}): Promise<PaginatedResponse<TelemetryEntry>> => {
+    const { data } = await apiClient.get(`/admin/cabinets/${cabinetId}/telemetry/history`, { params })
     return data
   },
 }

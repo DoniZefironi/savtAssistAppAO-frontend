@@ -8,7 +8,7 @@ import { apiErrorMessage } from '@/lib/api/errors'
 import { useAuthStore } from '@/lib/store/auth'
 import { CabinetCombobox } from '@/components/ui/cabinet-combobox'
 import { RegisterMapTable } from './register-map-table'
-import { TelemetryConsole } from './telemetry-console'
+import { TelemetryLiveBoard } from './telemetry-live-board'
 
 // Стандартная карта регистров, общая для всех ШУ — просмотр доступен
 // оператору, правка только админу (см. README-backend.md, «Рут admin:
@@ -69,13 +69,13 @@ export function RegisterDefinitionsView() {
           {rawFeedOpen && (
             <div className="mt-4 space-y-2">
               <p className="text-xs text-slate-400">
-                Выберите ШУ, чтобы видеть его сырые значения (включая неописанные регистры) прямо во время заполнения карты.
+                Выберите ШУ, чтобы видеть его текущие сырые значения (включая неописанные регистры) прямо во время заполнения карты.
               </p>
               <div className="max-w-sm">
                 <CabinetCombobox value={rawFeedCabinetId} onChange={setRawFeedCabinetId} />
               </div>
               {rawFeedCabinetId != null && (
-                <TelemetryConsole cabinetId={rawFeedCabinetId} allowToggle={false} initialIncludeUnnamed compact />
+                <TelemetryLiveBoard cabinetId={rawFeedCabinetId} allowToggle={false} initialIncludeUnnamed compact />
               )}
             </div>
           )}

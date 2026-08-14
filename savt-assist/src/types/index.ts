@@ -56,10 +56,12 @@ export interface Cabinet {
 export type WarrantyStatus = 'active' | 'expiring_soon' | 'expired' | 'none'
 
 // Стандартная карта регистров, общая для всех ШУ (см. README-backend.md,
-// «Рут admin: telemetry»).
+// «Рут admin: telemetry»). Каждая строка карты — конкретный бит (0-15)
+// конкретного адреса, а не весь регистр целиком.
 export interface RegisterDefinition {
   id: number
   address: number
+  bit: number
   name: string
   description: string | null
   created_at: string
@@ -72,6 +74,7 @@ export interface RegisterOverride {
   id: number
   cabinet_id: number
   address: number
+  bit: number
   name: string
   description: string | null
   created_at: string
@@ -80,15 +83,26 @@ export interface RegisterOverride {
 
 export interface TelemetryRegister {
   address: number
-  // null — адрес не описан ни в стандартной карте, ни в переопределениях
+  bit: number
+  // null — адрес/бит не описан ни в стандартной карте, ни в переопределениях
   // этого ШУ; в UI показывать просто по адресу.
   name: string | null
+  // Состояние бита — 0/1, не сырое значение регистра.
   value: number
+  updated_at: string
 }
 
+// Пагинированная лента сырых событий/аварий — история для разбора
+// (GET /admin/cabinets/{id}/telemetry/history).
 export interface TelemetryEntry {
   id: number
   received_at: string
+  registers: TelemetryRegister[]
+}
+
+// Текущее состояние карты регистров прямо сейчас — плоский список без
+// пагинации, каждый регистр со своим updated_at (GET /admin/cabinets/{id}/telemetry).
+export interface TelemetryLiveState {
   registers: TelemetryRegister[]
 }
 
