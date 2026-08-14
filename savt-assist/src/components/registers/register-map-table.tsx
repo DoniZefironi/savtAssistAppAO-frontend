@@ -9,66 +9,37 @@ import type { RegisterDto } from '@/lib/api/registers'
 interface RegisterRow {
   id: number
   address: number
-  bit: number | null
   name: string
   description: string | null
 }
 
-interface BitRowDraft {
-  bit: string
-  name: string
-  description: string
-}
-
-function emptyBitRow(bit: number): BitRowDraft {
-  return { bit: String(bit), name: '', description: '' }
-}
-
-// Общая таблица «адрес / бит / название / описание» — используется и для
+// Общая таблица «адрес / название / описание» — используется и для
 // стандартной карты регистров (глобальной), и для переопределений на
 // конкретном ШУ (см. README-backend.md, «Рут admin: telemetry»). Разница
 // между ними — только в том, что грузит/добавляет/удаляет строки родитель.
-//
-// onAdd всегда получает массив: обычное значение — один элемент, битовая
-// маска — по одному DTO на каждый заполненный бит (один адрес, несколько
-// независимых аварий на разных битах одного 16-битного слова) — родитель
-// отправляет их последовательно одной пакетной мутацией.
 export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, onDelete, deletingId, emptyLabel }: {
   items: RegisterRow[]
   isLoading: boolean
   canEdit: boolean
-  onAdd: (dtos: RegisterDto[]) => void
+  onAdd: (dto: RegisterDto) => void
   isAdding: boolean
   onDelete: (id: number) => void
   deletingId: number | null
   emptyLabel: string
 }) {
   const [showAdd, setShowAdd] = useState(false)
-  const [mode, setMode] = useState<'value' | 'bitmask'>('value')
   const [address, setAddress] = useState('')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [bitRows, setBitRows] = useState<BitRowDraft[]>([emptyBitRow(0)])
   const [error, setError] = useState<string | null>(null)
 
   const reset = () => {
-    setMode('value')
     setAddress('')
     setName('')
     setDescription('')
-    setBitRows([emptyBitRow(0)])
     setError(null)
     setShowAdd(false)
   }
-
-  const addBitRow = () => {
-    const usedBits = bitRows.map(r => Number(r.bit)).filter(n => Number.isInteger(n))
-    const next = Math.min(15, Math.max(-1, ...usedBits) + 1)
-    setBitRows(rows => [...rows, emptyBitRow(next)])
-  }
-  const removeBitRow = (i: number) => setBitRows(rows => rows.filter((_, idx) => idx !== i))
-  const updateBitRow = (i: number, patch: Partial<BitRowDraft>) =>
-    setBitRows(rows => rows.map((r, idx) => idx === i ? { ...r, ...patch } : r))
 
   const handleAdd = () => {
     const addressNum = Number(address)
@@ -76,34 +47,12 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
       setError('Укажите корректный адрес регистра')
       return
     }
-
-    if (mode === 'value') {
-      if (!name.trim()) { setError('Укажите название'); return }
-      setError(null)
-      onAdd([{ address: addressNum, bit: null, name: name.trim(), description: description.trim() || null }])
+    if (!name.trim()) {
+      setError('Укажите название')
       return
     }
-
-    // Битовая маска: каждая строка — независимая авария на своём бите
-    // одного и того же адреса.
-    const seenBits = new Set<number>()
-    for (const row of bitRows) {
-      const bitNum = Number(row.bit)
-      if (!row.bit.trim() || !Number.isInteger(bitNum) || bitNum < 0 || bitNum > 15) {
-        setError('Бит должен быть числом от 0 до 15')
-        return
-      }
-      if (seenBits.has(bitNum)) { setError(`Бит ${bitNum} указан дважды`); return }
-      seenBits.add(bitNum)
-      if (!row.name.trim()) { setError('Укажите название для каждого бита'); return }
-    }
     setError(null)
-    onAdd(bitRows.map(row => ({
-      address: addressNum,
-      bit: Number(row.bit),
-      name: row.name.trim(),
-      description: row.description.trim() || null,
-    })))
+    onAdd({ address: addressNum, name: name.trim(), description: description.trim() || null })
   }
 
   if (isLoading) {
@@ -120,18 +69,16 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
         <p className="text-sm text-slate-400 italic text-center py-6">{emptyLabel}</p>
       ) : (
         <div className="border border-slate-100 dark:border-slate-700/60 rounded-xl overflow-hidden">
-          <div className="grid grid-cols-[70px_50px_1fr_1fr_auto] gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800/60 text-xs font-medium text-slate-400 border-b border-slate-100 dark:border-slate-700/60">
+          <div className="grid grid-cols-[80px_1fr_1fr_auto] gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800/60 text-xs font-medium text-slate-400 border-b border-slate-100 dark:border-slate-700/60">
             <span>Адрес</span>
-            <span>Бит</span>
             <span>Название</span>
             <span>Описание</span>
             <span className="w-7" />
           </div>
           <div className="divide-y divide-slate-50 dark:divide-slate-700/30">
             {items.map(row => (
-              <div key={row.id} className="grid grid-cols-[70px_50px_1fr_1fr_auto] gap-2 px-3 py-2.5 items-center">
+              <div key={row.id} className="grid grid-cols-[80px_1fr_1fr_auto] gap-2 px-3 py-2.5 items-center">
                 <span className="text-sm font-mono text-slate-700 dark:text-slate-200">{row.address}</span>
-                <span className="text-sm font-mono text-slate-400">{row.bit ?? '—'}</span>
                 <span className="text-sm text-slate-700 dark:text-slate-200 truncate">{row.name}</span>
                 <span className="text-sm text-slate-400 truncate">{row.description || '—'}</span>
                 {canEdit ? (
@@ -153,79 +100,28 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
       {canEdit && (
         <div className="mt-3">
           {showAdd ? (
-            <div className="border border-slate-100 dark:border-slate-700/60 rounded-xl p-3 space-y-3">
-              <div className="flex gap-1 p-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg w-fit">
-                <ModeButton active={mode === 'value'} onClick={() => setMode('value')}>Обычное значение</ModeButton>
-                <ModeButton active={mode === 'bitmask'} onClick={() => setMode('bitmask')}>Битовая маска</ModeButton>
+            <div className="border border-slate-100 dark:border-slate-700/60 rounded-xl p-3 space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-[80px_1fr_1fr] gap-2">
+                <input
+                  value={address}
+                  onChange={e => { setAddress(e.target.value); setError(null) }}
+                  placeholder="Адрес"
+                  inputMode="numeric"
+                  className="px-2 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+                />
+                <input
+                  value={name}
+                  onChange={e => { setName(e.target.value); setError(null) }}
+                  placeholder="Название"
+                  className="px-2 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+                />
+                <input
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  placeholder="Описание (необязательно)"
+                  className="px-2 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+                />
               </div>
-
-              <input
-                value={address}
-                onChange={e => { setAddress(e.target.value); setError(null) }}
-                placeholder="Адрес регистра"
-                inputMode="numeric"
-                className="w-full sm:w-40 px-2 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
-              />
-
-              {mode === 'value' ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <input
-                    value={name}
-                    onChange={e => { setName(e.target.value); setError(null) }}
-                    placeholder="Название"
-                    className="px-2 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
-                  />
-                  <input
-                    value={description}
-                    onChange={e => setDescription(e.target.value)}
-                    placeholder="Описание (необязательно)"
-                    className="px-2 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
-                  />
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-xs text-slate-400">Один адрес — до 16 независимых аварий, каждая на своём бите (0-15)</p>
-                  {bitRows.map((row, i) => (
-                    <div key={i} className="grid grid-cols-[56px_1fr_1fr_auto] gap-2 items-center">
-                      <input
-                        value={row.bit}
-                        onChange={e => { updateBitRow(i, { bit: e.target.value }); setError(null) }}
-                        placeholder="Бит"
-                        inputMode="numeric"
-                        className="px-2 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
-                      />
-                      <input
-                        value={row.name}
-                        onChange={e => { updateBitRow(i, { name: e.target.value }); setError(null) }}
-                        placeholder="Название аварии"
-                        className="px-2 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
-                      />
-                      <input
-                        value={row.description}
-                        onChange={e => updateBitRow(i, { description: e.target.value })}
-                        placeholder="Описание (необязательно)"
-                        className="px-2 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
-                      />
-                      <button
-                        onClick={() => removeBitRow(i)}
-                        disabled={bitRows.length <= 1}
-                        title="Убрать бит"
-                        className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400"
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    onClick={addBitRow}
-                    disabled={bitRows.length >= 16}
-                    className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <PlusIcon className="w-3.5 h-3.5" /> Добавить бит
-                  </button>
-                </div>
-              )}
-
               {error && <p className="text-xs text-red-500">{error}</p>}
               <div className="flex justify-end gap-2">
                 <Button variant="ghost" onClick={reset} disabled={isAdding} className="h-7 text-xs px-2 cursor-pointer">
@@ -249,20 +145,6 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
         </div>
       )}
     </div>
-  )
-}
-
-function ModeButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer',
-        active ? 'bg-white dark:bg-slate-700 text-[#1B3A72] dark:text-blue-400 shadow-xs' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-      )}
-    >
-      {children}
-    </button>
   )
 }
 

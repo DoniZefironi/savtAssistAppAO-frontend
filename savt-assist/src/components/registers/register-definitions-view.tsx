@@ -24,19 +24,12 @@ export function RegisterDefinitionsView() {
   })
 
   const addMut = useMutation({
-    // Битовая маска — несколько DTO на один адрес (разные bit), отправляем
-    // по очереди одной мутацией, чтобы это была одна кнопка "Добавить" в UI.
-    mutationFn: async (dtos: RegisterDto[]) => {
-      for (const dto of dtos) await registersApi.createDefinition(dto)
-    },
-    onSuccess: (_data, dtos) => {
+    mutationFn: (dto: RegisterDto) => registersApi.createDefinition(dto),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey })
-      toast.success(dtos.length > 1 ? `Добавлено регистров: ${dtos.length}` : 'Регистр добавлен')
+      toast.success('Регистр добавлен')
     },
-    onError: (e) => {
-      qc.invalidateQueries({ queryKey })
-      toast.error(apiErrorMessage(e, 'Не удалось добавить регистр'))
-    },
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось добавить регистр')),
   })
 
   const deleteMut = useMutation({
@@ -67,7 +60,7 @@ export function RegisterDefinitionsView() {
             items={data ?? []}
             isLoading={isLoading}
             canEdit={isAdmin}
-            onAdd={(dtos) => addMut.mutate(dtos)}
+            onAdd={(dto) => addMut.mutate(dto)}
             isAdding={addMut.isPending}
             onDelete={(id) => deleteMut.mutate(id)}
             deletingId={deletingId}
