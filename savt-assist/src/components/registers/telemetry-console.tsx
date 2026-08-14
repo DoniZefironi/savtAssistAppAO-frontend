@@ -56,12 +56,21 @@ export function TelemetryHistoryConsole({ cabinetId, allowToggle = true, initial
   const queryKey = ['cabinet-telemetry-history', cabinetId, includeUnnamed]
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
+  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage, isFetchNextPageError } = useInfiniteQuery({
     queryKey,
     initialPageParam: 1,
     queryFn: ({ pageParam }: { pageParam: number }) =>
       registersApi.getTelemetryHistory(cabinetId, { page: pageParam, size: PAGE_SIZE, include_unnamed: includeUnnamed }),
     getNextPageParam: (lastPage) => lastPage.page < lastPage.pages ? lastPage.page + 1 : undefined,
+  })
+  const hasNextPageRef = useRef(hasNextPage)
+  const isFetchingNextPageRef = useRef(isFetchingNextPage)
+  const isFetchNextPageErrorRef = useRef(isFetchNextPageError)
+  const isIntersectingRef = useRef(false)
+  useEffect(() => {
+    hasNextPageRef.current = hasNextPage
+    isFetchingNextPageRef.current = isFetchingNextPage
+    isFetchNextPageErrorRef.current = isFetchNextPageError
   })
 
   const isNearBottom = () => {
@@ -74,24 +83,54 @@ export function TelemetryHistoryConsole({ cabinetId, allowToggle = true, initial
     if (el) el.scrollTop = el.scrollHeight
   }
 
+  const maybeFetchOlder = () => {
+    const container = containerRef.current
+    if (!container) return
+    if (!hasNextPageRef.current || isFetchingNextPageRef.current || isFetchNextPageErrorRef.current) return
+    prevScrollHeightRef.current = container.scrollHeight
+    loadingOlderRef.current = true
+    fetchNextPage()
+  }
+
   // Подгрузка более старых страниц — сверху, пока видно верхний сентинел.
+  // Наблюдатель создаётся ОДИН раз (пустой список зависимостей), актуальные
+  // hasNextPage/isFetchingNextPage/isFetchNextPageError колбэк читает через
+  // рефы. Пересоздавать IntersectionObserver в эффекте с зависимостями
+  // [hasNextPage, isFetchingNextPage, fetchNextPage] — соблазнительно, но
+  // баг: по спецификации каждый (пере)вызов .observe() обязан один раз
+  // асинхронно отдать колбэку ТЕКУЩЕЕ состояние пересечения. Если сентинел
+  // не двигается (например, страница упала с 429 и список не вырос),
+  // isFetchingNextPage гоняется false→true→false на каждую попытку — и
+  // каждый такой переход пересоздаёт observer и тем самым эквивалентен ещё
+  // одному "срабатыванию" без единого реального скролла: та же страница
+  // долбится заново без всякой паузы, и цикл не может остановить сам себя
+  // (реальный инцидент — см. лог с 429 на этой ручке).
   useEffect(() => {
     const el = topSentinelRef.current
     const container = containerRef.current
     if (!el || !container) return
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) {
-          prevScrollHeightRef.current = container.scrollHeight
-          loadingOlderRef.current = true
-          fetchNextPage()
-        }
+        isIntersectingRef.current = entry.isIntersecting
+        if (entry.isIntersecting) maybeFetchOlder()
       },
       { root: container, rootMargin: '200px 0px 0px 0px' }
     )
     observer.observe(el)
     return () => observer.disconnect()
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // После УСПЕШНОЙ подгрузки — если сентинел всё ещё виден (пустая
+  // отфильтрованная страница не заполнила экран) — продолжаем сами, не
+  // дожидаясь скролла. На ошибке data не меняется (react-query оставляет
+  // предыдущее значение) — этот эффект не перезапустится, и цикл повторов
+  // не сможет самоподдерживаться.
+  useEffect(() => {
+    if (!data) return
+    if (isIntersectingRef.current) maybeFetchOlder()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data])
 
   // После подгрузки старых событий сверху — сохраняем позицию скролла
   // (иначе лента дёргалась бы к началу списка), при самом первом успешном
@@ -156,8 +195,8 @@ export function TelemetryHistoryConsole({ cabinetId, allowToggle = true, initial
 
   // Пока ничего не показано, но поиск среди сырых страниц ещё продолжается
   // (см. комментарий про фильтр выше) — держим один статус, не мигаем.
-  const stillSearching = items.length === 0 && !isLoading && (hasNextPage || isFetchingNextPage)
-  const trulyEmpty = items.length === 0 && !isLoading && !hasNextPage && !isFetchingNextPage
+  const stillSearching = items.length === 0 && !isLoading && !isFetchNextPageError && (hasNextPage || isFetchingNextPage)
+  const trulyEmpty = items.length === 0 && !isLoading && !isFetchNextPageError && !hasNextPage && !isFetchingNextPage
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-950 overflow-hidden flex flex-col">
@@ -201,6 +240,17 @@ export function TelemetryHistoryConsole({ cabinetId, allowToggle = true, initial
           <div ref={topSentinelRef} className="h-1" />
           {isFetchingNextPage && items.length > 0 && (
             <p className="text-slate-600 py-1 text-center">Загрузка более старых событий…</p>
+          )}
+          {isFetchNextPageError && (
+            <div className="flex items-center justify-center gap-2 py-1.5 text-center">
+              <span className="text-red-400">Не удалось подгрузить историю</span>
+              <button
+                onClick={() => fetchNextPage()}
+                className="text-[11px] font-mono px-2 py-0.5 rounded border border-slate-700 text-slate-300 hover:border-slate-500 hover:text-white transition-colors cursor-pointer"
+              >
+                Повторить
+              </button>
+            </div>
           )}
 
           {items.map(entry => (

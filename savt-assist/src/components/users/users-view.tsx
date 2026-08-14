@@ -12,6 +12,7 @@ import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
+import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel'
 import { RequestCard, StatusPill, TypePill } from '@/components/requests/request-card'
 import { UserDialog } from './user-dialog'
 import { roleLabel, fmtDate, UserIcon } from './user-shared'
@@ -113,7 +114,7 @@ export function UsersView() {
 
   const isActive = statusFilter === 'all' ? undefined : statusFilter === 'active'
 
-  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } = useInfiniteQuery({
+  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage, isFetchNextPageError, refetch } = useInfiniteQuery({
     queryKey: ['admin-users', roleTab, statusFilter, userTypeFilter, verifiedFilter, phoneVerifiedFilter, sortBy, sortOrder, search],
     initialPageParam: 1,
     queryFn: ({ pageParam }: { pageParam: number }) =>
@@ -131,18 +132,7 @@ export function UsersView() {
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
   })
 
-  useEffect(() => {
-    const el = sentinelRef.current
-    if (!el) return
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) fetchNextPage()
-      },
-      { rootMargin: '200px' }
-    )
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+  useInfiniteScrollSentinel(sentinelRef, { data, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage })
 
   const handleSortClick = (val: SortValue) => {
     if (sortBy === val) setSortOrder(o => o === 'asc' ? 'desc' : 'asc')
@@ -390,6 +380,12 @@ export function UsersView() {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
+          </div>
+        )}
+        {isFetchNextPageError && (
+          <div className="flex flex-col items-center justify-center gap-2 py-4">
+            <p className="text-sm text-slate-400">Не удалось подгрузить ещё</p>
+            <button onClick={() => fetchNextPage()} className="text-sm text-[#1B3A72] hover:underline cursor-pointer">Повторить</button>
           </div>
         )}
         {!hasNextPage && (total ?? 0) > 0 && (

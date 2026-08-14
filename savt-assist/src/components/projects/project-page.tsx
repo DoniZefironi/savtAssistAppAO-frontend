@@ -23,6 +23,7 @@ import { projectsApi } from '@/lib/api/projects'
 import { apiErrorMessage } from '@/lib/api/errors'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
+import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel'
 import { formatDate } from '@/lib/warranty'
 import { cn } from '@/lib/utils'
 import type { Project } from '@/types'
@@ -215,7 +216,7 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
     setFilters(f => ({ ...f, warranty_status: val }))
 
   const {
-    data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage, refetch,
+    data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage, isFetchNextPageError, refetch,
   } = useInfiniteQuery({
     queryKey: ['cabinets', { projectId, search: debouncedSearch, sortBy, sortOrder, filters }],
     initialPageParam: 1,
@@ -236,16 +237,7 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
     getNextPageParam: (lastPage) => lastPage.page < lastPage.pages ? lastPage.page + 1 : undefined,
   })
 
-  useEffect(() => {
-    const el = sentinelRef.current
-    if (!el) return
-    const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) fetchNextPage() },
-      { rootMargin: '200px' }
-    )
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+  useInfiniteScrollSentinel(sentinelRef, { data, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage })
 
   const deleteCabinetMutation = useMutation({
     mutationFn: (id: number) => cabinetsApi.delete(id),
@@ -568,6 +560,13 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
+          </div>
+        )}
+
+        {isFetchNextPageError && (
+          <div className="flex flex-col items-center justify-center gap-2 py-4">
+            <p className="text-sm text-slate-400">Не удалось подгрузить ещё</p>
+            <button onClick={() => fetchNextPage()} className="text-sm text-[#1B3A72] hover:underline cursor-pointer">Повторить</button>
           </div>
         )}
 

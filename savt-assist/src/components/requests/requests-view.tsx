@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CabinetCombobox } from '@/components/ui/cabinet-combobox'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
+import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel'
 import { RequestCard, ServiceCardIcon, AdditionCardIcon, StatusPill, TypePill } from './request-card'
 import { UserDialog } from '@/components/users/user-dialog'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
@@ -198,20 +199,13 @@ export function RequestsView() {
   const curQ = tab === 'service' ? svcQ : tab === 'additions' ? addQ : tab === 'projects' ? prjQ : tab === 'phone' ? phoneQ : docQ
   const total = curQ.data?.pages[0]?.total
 
-  useEffect(() => {
-    const el = sentinelRef.current
-    if (!el) return
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && curQ.hasNextPage && !curQ.isFetchingNextPage) {
-          curQ.fetchNextPage()
-        }
-      },
-      { rootMargin: '200px' }
-    )
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [curQ.hasNextPage, curQ.isFetchingNextPage, curQ.fetchNextPage, tab])
+  useInfiniteScrollSentinel(sentinelRef, {
+    data: curQ.data,
+    hasNextPage: curQ.hasNextPage,
+    isFetchingNextPage: curQ.isFetchingNextPage,
+    isFetchNextPageError: curQ.isFetchNextPageError,
+    fetchNextPage: curQ.fetchNextPage,
+  })
 
   const svcItems = svcQ.data?.pages.flatMap(p => p.items) ?? []
   const addItems = addQ.data?.pages.flatMap(p => p.items) ?? []
@@ -381,6 +375,12 @@ export function RequestsView() {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
+          </div>
+        )}
+        {curQ.isFetchNextPageError && (
+          <div className="flex flex-col items-center justify-center gap-2 py-4">
+            <p className="text-sm text-slate-400">Не удалось подгрузить ещё</p>
+            <button onClick={() => curQ.fetchNextPage()} className="text-sm text-[#1B3A72] hover:underline cursor-pointer">Повторить</button>
           </div>
         )}
         {!curQ.hasNextPage && (total ?? 0) > 0 && (

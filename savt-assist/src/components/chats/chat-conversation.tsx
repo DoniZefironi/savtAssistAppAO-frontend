@@ -188,7 +188,10 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     return () => clearTimeout(t)
   }, [searchInput])
 
-  const { data: messagesData, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage, fetchPreviousPage, hasPreviousPage, isFetchingPreviousPage } = useInfiniteQuery<ChatMessage[], Error, MsgPages, ['messages', number], PageParam>({
+  const {
+    data: messagesData, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage, isFetchNextPageError,
+    fetchPreviousPage, hasPreviousPage, isFetchingPreviousPage, isFetchPreviousPageError,
+  } = useInfiniteQuery<ChatMessage[], Error, MsgPages, ['messages', number], PageParam>({
     queryKey: ['messages', chat.id],
     initialPageParam: undefined,
     queryFn: ({ pageParam }) => chatsApi.getMessages(chat.id, pageParam?.before_id, pageParam?.after_id),
@@ -337,19 +340,51 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     el.scrollTop = el.scrollHeight - prevScrollHeightRef.current
     prevScrollHeightRef.current = null
   }, [messagesData?.pages.length])
+  // Актуальные hasNextPage/isFetchingNextPage/isFetchNextPageError колбэк
+  // читает через рефы, а не напрямую — иначе (пересоздавать observer в
+  // эффекте с этими значениями в зависимостях) каждый переход
+  // isFetchingNextPage false→true→false пересоздаёт IntersectionObserver, а
+  // по спецификации .observe() обязан сразу отдать колбэку текущее состояние
+  // пересечения. Если сентинел не сдвинулся (например, страница упала с 429),
+  // это эквивалентно ещё одному "срабатыванию" без реального скролла — та же
+  // страница долбится заново без единой паузы, и цикл не может остановиться
+  // сам (см. разбор аналогичного реального инцидента у телеметрии —
+  // telemetry-console.tsx).
+  const hasNextPageRef = useRef(hasNextPage)
+  const isFetchingNextPageRef = useRef(isFetchingNextPage)
+  const isFetchNextPageErrorRef = useRef(isFetchNextPageError)
+  const topIntersectingRef = useRef(false)
+  useEffect(() => {
+    hasNextPageRef.current = hasNextPage
+    isFetchingNextPageRef.current = isFetchingNextPage
+    isFetchNextPageErrorRef.current = isFetchNextPageError
+  })
+  const maybeFetchOlderMessages = () => {
+    const container = listRef.current
+    if (!container) return
+    if (!hasNextPageRef.current || isFetchingNextPageRef.current || isFetchNextPageErrorRef.current) return
+    prevScrollHeightRef.current = container.scrollHeight
+    fetchNextPage()
+  }
   useEffect(() => {
     const sentinel = topSentinelRef.current
     const container = listRef.current
     if (!sentinel || !container) return
     const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) {
-        prevScrollHeightRef.current = container.scrollHeight
-        fetchNextPage()
-      }
+      topIntersectingRef.current = entry.isIntersecting
+      if (entry.isIntersecting) maybeFetchOlderMessages()
     }, { root: container, rootMargin: '80px' })
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  // После успешной подгрузки — если сентинел всё ещё виден, продолжаем сами.
+  // На ошибке messagesData не меняется, эффект не перезапустится.
+  useEffect(() => {
+    if (!messagesData) return
+    if (topIntersectingRef.current) maybeFetchOlderMessages()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messagesData])
 
   useEffect(() => {
     if (chat.unread_count > 0) {
@@ -604,23 +639,47 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
+  // Тот же приём, что у верхнего сентинела выше: актуальные значения — через
+  // рефы, наблюдатель пересоздаётся только на смену jumpMode (не на каждый
+  // fetchPreviousPage-цикл), иначе на ошибке получился бы точно такой же
+  // самоподдерживающийся цикл повторов без единой паузы.
+  const hasPreviousPageRef = useRef(hasPreviousPage)
+  const isFetchingPreviousPageRef = useRef(isFetchingPreviousPage)
+  const isFetchPreviousPageErrorRef = useRef(isFetchPreviousPageError)
+  const fetchPreviousPageRef = useRef(fetchPreviousPage)
+  const exitJumpModeRef = useRef(exitJumpMode)
+  const bottomIntersectingRef = useRef(false)
+  useEffect(() => {
+    hasPreviousPageRef.current = hasPreviousPage
+    isFetchingPreviousPageRef.current = isFetchingPreviousPage
+    isFetchPreviousPageErrorRef.current = isFetchPreviousPageError
+    fetchPreviousPageRef.current = fetchPreviousPage
+    exitJumpModeRef.current = exitJumpMode
+  })
+  const maybeFetchNewerMessages = () => {
+    if (!jumpScrolledRef.current || isFetchPreviousPageErrorRef.current) return
+    if (hasPreviousPageRef.current) {
+      if (!isFetchingPreviousPageRef.current) fetchPreviousPageRef.current()
+    } else {
+      exitJumpModeRef.current()
+    }
+  }
   useEffect(() => {
     if (!jumpMode) return
     const sentinel = bottomSentinelRef.current
     const container = listRef.current
     if (!sentinel || !container) return
     const observer = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting || !jumpScrolledRef.current) return
-      if (hasPreviousPage && !isFetchingPreviousPage) {
-        fetchPreviousPage()
-      } else if (!hasPreviousPage) {
-        exitJumpMode()
-      }
+      bottomIntersectingRef.current = entry.isIntersecting
+      if (entry.isIntersecting) maybeFetchNewerMessages()
     }, { root: container, rootMargin: '80px' })
     observer.observe(sentinel)
     return () => observer.disconnect()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jumpMode, hasPreviousPage, isFetchingPreviousPage, fetchPreviousPage])
+  }, [jumpMode])
+  useEffect(() => {
+    if (!jumpMode || !messagesData) return
+    if (bottomIntersectingRef.current) maybeFetchNewerMessages()
+  }, [jumpMode, messagesData])
 
   const toggleSearch = () => { setSearchOpen(v => !v); setSearchInput(''); setSearchQuery('') }
 

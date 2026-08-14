@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { toFullUrl as fullUrl } from '@/lib/api/base-url'
 import { useAuthStore } from '@/lib/store/auth'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
+import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel'
 import { useFolderUpload } from '@/lib/hooks/use-folder-upload'
 import { validateDocFile } from '@/components/cabinets/cabinet-dialog-shared'
 
@@ -155,19 +156,13 @@ export function KbView() {
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
   })
 
-  useEffect(() => {
-    const el = sentinelRef.current
-    if (!el) return
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && articlesQ.hasNextPage && !articlesQ.isFetchingNextPage)
-          articlesQ.fetchNextPage()
-      },
-      { rootMargin: '200px' }
-    )
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [articlesQ.hasNextPage, articlesQ.isFetchingNextPage, articlesQ.fetchNextPage])
+  useInfiniteScrollSentinel(sentinelRef, {
+    data: articlesQ.data,
+    hasNextPage: articlesQ.hasNextPage,
+    isFetchingNextPage: articlesQ.isFetchingNextPage,
+    isFetchNextPageError: articlesQ.isFetchNextPageError,
+    fetchNextPage: articlesQ.fetchNextPage,
+  })
 
   const deleteCatMut = useMutation({
     mutationFn: async (id: number) => {
@@ -517,6 +512,12 @@ export function KbView() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
+              </div>
+            )}
+            {articlesQ.isFetchNextPageError && (
+              <div className="flex flex-col items-center justify-center gap-2 py-4">
+                <p className="text-sm text-slate-400">Не удалось подгрузить ещё</p>
+                <button onClick={() => articlesQ.fetchNextPage()} className="text-sm text-[#1B3A72] hover:underline cursor-pointer">Повторить</button>
               </div>
             )}
             {!articlesQ.hasNextPage && (total ?? 0) > 0 && (

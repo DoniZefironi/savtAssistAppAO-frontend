@@ -17,6 +17,7 @@ import { projectsApi, type ProjectCabinetFilters, type ProjectOwnFilters, type P
 import { apiErrorMessage } from '@/lib/api/errors'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
+import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel'
 import type { Project } from '@/types'
 
 const PAGE_SIZE = 20
@@ -248,20 +249,13 @@ export function CabinetsView({ isAdmin }: Props) {
       lastPage.page < lastPage.pages ? lastPage.page + 1 : undefined,
   })
 
-  useEffect(() => {
-    const el = sentinelRef.current
-    if (!el) return
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && prjQ.hasNextPage && !prjQ.isFetchingNextPage) {
-          prjQ.fetchNextPage()
-        }
-      },
-      { rootMargin: '200px' }
-    )
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [prjQ.hasNextPage, prjQ.isFetchingNextPage, prjQ.fetchNextPage])
+  useInfiniteScrollSentinel(sentinelRef, {
+    data: prjQ.data,
+    hasNextPage: prjQ.hasNextPage,
+    isFetchingNextPage: prjQ.isFetchingNextPage,
+    isFetchNextPageError: prjQ.isFetchNextPageError,
+    fetchNextPage: prjQ.fetchNextPage,
+  })
 
   const deleteProjectMutation = useMutation({
     mutationFn: (id: number) => projectsApi.delete(id),
@@ -611,6 +605,13 @@ export function CabinetsView({ isAdmin }: Props) {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
+          </div>
+        )}
+
+        {prjQ.isFetchNextPageError && (
+          <div className="flex flex-col items-center justify-center gap-2 py-4">
+            <p className="text-sm text-slate-400">Не удалось подгрузить ещё</p>
+            <button onClick={() => prjQ.fetchNextPage()} className="text-sm text-[#1B3A72] hover:underline cursor-pointer">Повторить</button>
           </div>
         )}
 

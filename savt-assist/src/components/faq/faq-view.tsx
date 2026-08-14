@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuthStore } from '@/lib/store/auth'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
+import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel'
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -143,19 +144,13 @@ export function FaqView() {
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
   })
 
-  useEffect(() => {
-    const el = sentinelRef.current
-    if (!el) return
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && entriesQ.hasNextPage && !entriesQ.isFetchingNextPage)
-          entriesQ.fetchNextPage()
-      },
-      { rootMargin: '200px' }
-    )
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [entriesQ.hasNextPage, entriesQ.isFetchingNextPage, entriesQ.fetchNextPage])
+  useInfiniteScrollSentinel(sentinelRef, {
+    data: entriesQ.data,
+    hasNextPage: entriesQ.hasNextPage,
+    isFetchingNextPage: entriesQ.isFetchingNextPage,
+    isFetchNextPageError: entriesQ.isFetchNextPageError,
+    fetchNextPage: entriesQ.fetchNextPage,
+  })
 
   const deleteCatMut = useMutation({
     mutationFn: async (id: number) => {
@@ -461,6 +456,12 @@ export function FaqView() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
+              </div>
+            )}
+            {entriesQ.isFetchNextPageError && (
+              <div className="flex flex-col items-center justify-center gap-2 py-4">
+                <p className="text-sm text-slate-400">Не удалось подгрузить ещё</p>
+                <button onClick={() => entriesQ.fetchNextPage()} className="text-sm text-[#1B3A72] hover:underline cursor-pointer">Повторить</button>
               </div>
             )}
             {!entriesQ.hasNextPage && (total ?? 0) > 0 && (

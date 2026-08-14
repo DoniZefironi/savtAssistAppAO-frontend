@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { X, SlidersHorizontal, ScrollText, ChevronDown, Bot, User, Shield, Settings2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
+import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel'
 import { auditApi, type AuditLog } from '@/lib/api/audit'
 
 const PAGE_SIZE = 50
@@ -94,7 +95,7 @@ export function AuditLogView() {
     setDateTo('')
   }
 
-  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } = useInfiniteQuery({
+  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage, isFetchNextPageError, refetch } = useInfiniteQuery({
     queryKey: ['audit-logs', {
       search: debouncedSearch, searchIn, actorRole, entityType: debouncedEntityType,
       action: debouncedAction, dateFrom, dateTo, sortBy, sortOrder,
@@ -117,16 +118,7 @@ export function AuditLogView() {
     getNextPageParam: (lastPage) => lastPage.page < lastPage.pages ? lastPage.page + 1 : undefined,
   })
 
-  useEffect(() => {
-    const el = sentinelRef.current
-    if (!el) return
-    const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) fetchNextPage() },
-      { rootMargin: '200px' }
-    )
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+  useInfiniteScrollSentinel(sentinelRef, { data, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage })
 
   const handleSortClick = (value: typeof SORT_OPTIONS[number]['value']) => {
     if (sortBy === value) setSortOrder(o => o === 'asc' ? 'desc' : 'asc')
@@ -294,6 +286,13 @@ export function AuditLogView() {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
+          </div>
+        )}
+
+        {isFetchNextPageError && (
+          <div className="flex flex-col items-center justify-center gap-2 py-4">
+            <p className="text-sm text-slate-400">Не удалось подгрузить ещё</p>
+            <button onClick={() => fetchNextPage()} className="text-sm text-[#1B3A72] hover:underline cursor-pointer">Повторить</button>
           </div>
         )}
 
