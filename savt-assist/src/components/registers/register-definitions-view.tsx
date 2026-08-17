@@ -83,7 +83,7 @@ export function RegisterDefinitionsView() {
               items={data ?? []}
               isLoading={isLoading}
               canEdit={isAdmin}
-              onAdd={(dtos) => addMut.mutate(dtos)}
+              onAdd={async (dtos) => (await addMut.mutateAsync(dtos)).failed === 0}
               isAdding={addMut.isPending}
               onDelete={(id) => deleteMut.mutate(id)}
               deletingId={deletingId}

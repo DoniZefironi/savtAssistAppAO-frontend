@@ -81,7 +81,11 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
   items: RegisterRow[]
   isLoading: boolean
   canEdit: boolean
-  onAdd: (dtos: RegisterDto[]) => void
+  // true — всё отправленное реально добавилось, форма очищается и остаётся
+  // открытой (готова к следующему адресу). false — были ошибки (например,
+  // 409 на дубликат адрес+бит) — оставляем как есть, чтобы можно было
+  // поправить и отправить заново, не перепечатывая всё с нуля.
+  onAdd: (dtos: RegisterDto[]) => Promise<boolean>
   isAdding: boolean
   onDelete: (id: number) => void
   deletingId: number | null
@@ -139,7 +143,7 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
     setMode('single')
   }
 
-  const handleAddSingle = () => {
+  const handleAddSingle = async () => {
     const addressNum = Number(address)
     if (!address.trim() || !Number.isInteger(addressNum) || addressNum < 0) {
       setError('Укажите корректный адрес регистра')
@@ -155,10 +159,11 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
       return
     }
     setError(null)
-    onAdd([{ address: addressNum, bit: bitNum, name: name.trim(), description: description.trim() || null }])
+    const ok = await onAdd([{ address: addressNum, bit: bitNum, name: name.trim(), description: description.trim() || null }])
+    if (ok) { setAddress(''); setBit(''); setName(''); setDescription('') }
   }
 
-  const handleAddMultiBit = () => {
+  const handleAddMultiBit = async () => {
     const addressNum = Number(mbAddress)
     if (!mbAddress.trim() || !Number.isInteger(addressNum) || addressNum < 0) {
       setError('Укажите корректный адрес регистра')
@@ -173,20 +178,22 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
       return
     }
     setError(null)
-    onAdd(dtos)
+    const ok = await onAdd(dtos)
+    if (ok) { setMbAddress(''); setMbNames(Array(16).fill('')) }
   }
 
   const parsedImport = useMemo(() => parseImportText(importText), [importText])
   const validImportRows = parsedImport.filter(r => !r.error)
   const invalidImportRows = parsedImport.filter(r => r.error)
 
-  const handleImport = () => {
+  const handleImport = async () => {
     if (validImportRows.length === 0) {
       setError('Нет ни одной корректной строки для импорта')
       return
     }
     setError(null)
-    onAdd(validImportRows.map(r => ({ address: r.address!, bit: r.bit!, name: r.name, description: r.description })))
+    const ok = await onAdd(validImportRows.map(r => ({ address: r.address!, bit: r.bit!, name: r.name, description: r.description })))
+    if (ok) setImportText('')
   }
 
   if (isLoading) {
