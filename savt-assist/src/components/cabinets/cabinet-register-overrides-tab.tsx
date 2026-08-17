@@ -21,10 +21,26 @@ export function RegisterOverridesTab({ cabinetId, isAdmin }: { cabinetId: number
   })
 
   const addMut = useMutation({
-    mutationFn: (dto: RegisterDto) => registersApi.createOverride(cabinetId, dto),
-    onSuccess: () => {
+    // См. register-definitions-view.tsx — последовательно и без остановки на
+    // первой ошибке, чтобы один дубликат не блокировал остальной импорт.
+    mutationFn: async (dtos: RegisterDto[]) => {
+      let succeeded = 0
+      let failed = 0
+      for (const dto of dtos) {
+        try {
+          await registersApi.createOverride(cabinetId, dto)
+          succeeded++
+        } catch {
+          failed++
+        }
+      }
+      return { succeeded, failed, total: dtos.length }
+    },
+    onSuccess: ({ succeeded, failed, total }) => {
       qc.invalidateQueries({ queryKey })
-      toast.success('Регистр добавлен')
+      if (failed === 0) toast.success(total > 1 ? `Добавлено регистров: ${succeeded}` : 'Регистр добавлен')
+      else if (succeeded === 0) toast.error(`Не удалось добавить ни одной записи (${failed})`)
+      else toast.error(`Добавлено ${succeeded} из ${total}, не добавлено ${failed} (дубликаты адрес+бит?)`)
     },
     onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось добавить регистр')),
   })
@@ -49,7 +65,7 @@ export function RegisterOverridesTab({ cabinetId, isAdmin }: { cabinetId: number
         items={data ?? []}
         isLoading={isLoading}
         canEdit={isAdmin}
-        onAdd={(dto) => addMut.mutate(dto)}
+        onAdd={(dtos) => addMut.mutate(dtos)}
         isAdding={addMut.isPending}
         onDelete={(id) => deleteMut.mutate(id)}
         deletingId={deletingId}

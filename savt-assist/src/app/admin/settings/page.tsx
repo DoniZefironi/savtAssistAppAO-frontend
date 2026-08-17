@@ -35,8 +35,10 @@ export default function AdminSettingsPage() {
       </div>
 
       <div className="px-3 sm:px-6 py-4 sm:py-6">
-        <div className="max-w-xl mx-auto space-y-4">
-          <BroadcastSection />
+        <div className="max-w-300 mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          <div className="lg:col-span-2">
+            <BroadcastSection />
+          </div>
           <PromoSection />
           <BotMaintenanceSection />
         </div>
@@ -80,20 +82,47 @@ function BroadcastSection() {
       title="Рассылка push-уведомлений"
       subtitle="Отправка уведомлений в мобильное приложение"
     >
-      <div className="space-y-4">
-        <div>
-          <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1.5">
-            Заголовок <span className="text-red-500">*</span>
-          </label>
-          <input
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            placeholder="Например: Новое обновление"
-            className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] placeholder:text-slate-400 transition-colors"
-          />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1.5">
+              Заголовок <span className="text-red-500">*</span>
+            </label>
+            <input
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder="Например: Новое обновление"
+              className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] placeholder:text-slate-400 transition-colors"
+            />
+          </div>
+
+          {/* На узких экранах селект получателей и кнопка не помещаются в одну строку с лейблом */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">Получатели:</span>
+            <select
+              value={role ?? ''}
+              onChange={e => setRole(e.target.value || null)}
+              className="flex-1 min-w-0 h-9 px-3 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] cursor-pointer transition-colors"
+            >
+              {ROLES.map(r => (
+                <option key={String(r.value)} value={r.value ?? ''}>{r.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <Button
+            onClick={() => sendMut.mutate()}
+            disabled={!canSend}
+            className="w-full bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white"
+          >
+            {sendMut.isPending
+              ? <><SpinnerIcon className="w-4 h-4 mr-2 animate-spin" />Отправка...</>
+              : <><SendIcon className="w-4 h-4 mr-2" />Отправить</>
+            }
+          </Button>
         </div>
 
-        <div>
+        <div className="flex flex-col">
           <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1.5">
             Сообщение <span className="text-red-500">*</span>
           </label>
@@ -101,33 +130,8 @@ function BroadcastSection() {
             value={body}
             onChange={e => setBody(e.target.value)}
             placeholder="Текст push-уведомления"
-            rows={3}
-            className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] placeholder:text-slate-400 resize-none transition-colors"
+            className="w-full flex-1 min-h-32 px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] placeholder:text-slate-400 resize-none transition-colors"
           />
-        </div>
-
-        {/* На узких экранах селект получателей и кнопка не помещаются в одну строку с лейблом */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-          <span className="text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">Получатели:</span>
-          <select
-            value={role ?? ''}
-            onChange={e => setRole(e.target.value || null)}
-            className="flex-1 min-w-0 h-9 px-3 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] cursor-pointer transition-colors"
-          >
-            {ROLES.map(r => (
-              <option key={String(r.value)} value={r.value ?? ''}>{r.label}</option>
-            ))}
-          </select>
-          <Button
-            onClick={() => sendMut.mutate()}
-            disabled={!canSend}
-            className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white shrink-0"
-          >
-            {sendMut.isPending
-              ? <><SpinnerIcon className="w-4 h-4 mr-2 animate-spin" />Отправка...</>
-              : <><SendIcon className="w-4 h-4 mr-2" />Отправить</>
-            }
-          </Button>
         </div>
       </div>
     </Card>

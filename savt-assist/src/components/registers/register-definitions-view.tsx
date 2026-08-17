@@ -18,7 +18,6 @@ export function RegisterDefinitionsView() {
   const isAdmin = useAuthStore(s => s.user?.role !== 'operator')
   const qc = useQueryClient()
   const [deletingId, setDeletingId] = useState<number | null>(null)
-  const [rawFeedOpen, setRawFeedOpen] = useState(false)
   const [rawFeedCabinetId, setRawFeedCabinetId] = useState<number | null>(null)
   const queryKey = ['register-definitions']
 
@@ -28,10 +27,29 @@ export function RegisterDefinitionsView() {
   })
 
   const addMut = useMutation({
-    mutationFn: (dto: RegisterDto) => registersApi.createDefinition(dto),
-    onSuccess: () => {
+    // Импорт из таблицы/весь адрес разом — это десятки-сотни строк одной
+    // отправкой; шлём по очереди (не параллельно — не долбить бэкенд пачкой
+    // одновременных запросов) и не прерываемся на первой же ошибке (например,
+    // дубликат адрес+бит) — иначе одна плохая строка блокировала бы импорт
+    // всех остальных, корректных.
+    mutationFn: async (dtos: RegisterDto[]) => {
+      let succeeded = 0
+      let failed = 0
+      for (const dto of dtos) {
+        try {
+          await registersApi.createDefinition(dto)
+          succeeded++
+        } catch {
+          failed++
+        }
+      }
+      return { succeeded, failed, total: dtos.length }
+    },
+    onSuccess: ({ succeeded, failed, total }) => {
       qc.invalidateQueries({ queryKey })
-      toast.success('Регистр добавлен')
+      if (failed === 0) toast.success(total > 1 ? `Добавлено регистров: ${succeeded}` : 'Регистр добавлен')
+      else if (succeeded === 0) toast.error(`Не удалось добавить ни одной записи (${failed})`)
+      else toast.error(`Добавлено ${succeeded} из ${total}, не добавлено ${failed} (дубликаты адрес+бит?)`)
     },
     onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось добавить регистр')),
   })
@@ -51,49 +69,42 @@ export function RegisterDefinitionsView() {
     <div className="flex flex-col h-full overflow-y-auto bg-slate-50 dark:bg-slate-900">
       <div className="px-3 sm:px-6 pt-4 sm:pt-6 pb-4 sm:pb-5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
         <div className="max-w-300 mx-auto w-full">
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div>
-              <h1 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100">Карта регистров</h1>
-              <p className="text-sm text-slate-400 mt-0.5">
-                Стандартная расшифровка адресов, общая для всех ШУ. Для отдельного ШУ её можно дополнить или переопределить на вкладке «Переопределения карты» в его карточке.
-              </p>
-            </div>
-            <button
-              onClick={() => setRawFeedOpen(v => !v)}
-              className="text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 hover:border-[#4A8FE7] transition-colors cursor-pointer shrink-0"
-            >
-              {rawFeedOpen ? 'Скрыть сырую телеметрию' : 'Смотреть сырую телеметрию'}
-            </button>
-          </div>
-
-          {rawFeedOpen && (
-            <div className="mt-4 space-y-2">
-              <p className="text-xs text-slate-400">
-                Выберите ШУ, чтобы видеть его текущие сырые значения (включая неописанные регистры) прямо во время заполнения карты.
-              </p>
-              <div className="max-w-sm">
-                <CabinetCombobox value={rawFeedCabinetId} onChange={setRawFeedCabinetId} />
-              </div>
-              {rawFeedCabinetId != null && (
-                <TelemetryLiveBoard cabinetId={rawFeedCabinetId} allowToggle={false} initialIncludeUnnamed compact />
-              )}
-            </div>
-          )}
+          <h1 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100">Карта регистров</h1>
+          <p className="text-sm text-slate-400 mt-0.5">
+            Стандартная расшифровка адресов, общая для всех ШУ. Для отдельного ШУ её можно дополнить или переопределить на вкладке «Переопределения карты» в его карточке.
+          </p>
         </div>
       </div>
 
-      <div className="max-w-300 mx-auto w-full">
-        <div className="bg-white dark:bg-slate-900 sm:rounded-xl sm:m-6 sm:border sm:border-slate-100 dark:sm:border-slate-700/60">
-          <RegisterMapTable
-            items={data ?? []}
-            isLoading={isLoading}
-            canEdit={isAdmin}
-            onAdd={(dto) => addMut.mutate(dto)}
-            isAdding={addMut.isPending}
-            onDelete={(id) => deleteMut.mutate(id)}
-            deletingId={deletingId}
-            emptyLabel="Карта регистров пока пуста"
-          />
+      <div className="px-3 sm:px-6 py-4 sm:py-6">
+        <div className="max-w-300 mx-auto w-full grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+          <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-700/60 overflow-hidden">
+            <RegisterMapTable
+              items={data ?? []}
+              isLoading={isLoading}
+              canEdit={isAdmin}
+              onAdd={(dtos) => addMut.mutate(dtos)}
+              isAdding={addMut.isPending}
+              onDelete={(id) => deleteMut.mutate(id)}
+              deletingId={deletingId}
+              emptyLabel="Карта регистров пока пуста"
+            />
+          </div>
+
+          <div className="lg:sticky lg:top-6 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-700/60 p-4 space-y-3">
+            <div>
+              <p className="font-semibold text-sm text-slate-800 dark:text-slate-100">Сырая телеметрия</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Выберите ШУ, чтобы видеть его текущие сырые значения (включая неописанные регистры) прямо во время заполнения карты.
+              </p>
+            </div>
+            <CabinetCombobox value={rawFeedCabinetId} onChange={setRawFeedCabinetId} />
+            {rawFeedCabinetId != null ? (
+              <TelemetryLiveBoard cabinetId={rawFeedCabinetId} allowToggle={false} initialIncludeUnnamed compact />
+            ) : (
+              <p className="text-xs text-slate-300 dark:text-slate-600 italic text-center py-8">Выберите ШУ выше</p>
+            )}
+          </div>
         </div>
       </div>
     </div>
