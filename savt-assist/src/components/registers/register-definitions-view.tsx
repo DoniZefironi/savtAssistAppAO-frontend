@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { registersApi, type RegisterDto } from '@/lib/api/registers'
+import { registersApi, type RegisterDto, type RegisterPatchDto } from '@/lib/api/registers'
 import { apiErrorMessage } from '@/lib/api/errors'
 import { useAuthStore } from '@/lib/store/auth'
 import { CabinetCombobox } from '@/components/ui/cabinet-combobox'
@@ -18,6 +18,7 @@ export function RegisterDefinitionsView() {
   const isAdmin = useAuthStore(s => s.user?.role !== 'operator')
   const qc = useQueryClient()
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [updatingId, setUpdatingId] = useState<number | null>(null)
   const [rawFeedCabinetId, setRawFeedCabinetId] = useState<number | null>(null)
   const queryKey = ['register-definitions']
 
@@ -54,6 +55,17 @@ export function RegisterDefinitionsView() {
     onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось добавить регистр')),
   })
 
+  const updateMut = useMutation({
+    mutationFn: ({ id, dto }: { id: number; dto: RegisterPatchDto }) => registersApi.updateDefinition(id, dto),
+    onMutate: ({ id }) => setUpdatingId(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey })
+      toast.success('Регистр обновлён')
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось сохранить')),
+    onSettled: () => setUpdatingId(null),
+  })
+
   const deleteMut = useMutation({
     mutationFn: (id: number) => registersApi.deleteDefinition(id),
     onMutate: (id) => setDeletingId(id),
@@ -85,6 +97,11 @@ export function RegisterDefinitionsView() {
               canEdit={isAdmin}
               onAdd={async (dtos) => (await addMut.mutateAsync(dtos)).failed === 0}
               isAdding={addMut.isPending}
+              onUpdate={async (id, dto) => {
+                try { await updateMut.mutateAsync({ id, dto }); return true }
+                catch { return false }
+              }}
+              updatingId={updatingId}
               onDelete={(id) => deleteMut.mutate(id)}
               deletingId={deletingId}
               emptyLabel="Карта регистров пока пуста"

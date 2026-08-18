@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { registersApi, type RegisterDto } from '@/lib/api/registers'
+import { registersApi, type RegisterDto, type RegisterPatchDto } from '@/lib/api/registers'
 import { apiErrorMessage } from '@/lib/api/errors'
 import { RegisterMapTable } from '@/components/registers/register-map-table'
 
@@ -13,6 +13,7 @@ import { RegisterMapTable } from '@/components/registers/register-map-table'
 export function RegisterOverridesTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: boolean }) {
   const qc = useQueryClient()
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [updatingId, setUpdatingId] = useState<number | null>(null)
   const queryKey = ['cabinet-register-overrides', cabinetId]
 
   const { data, isLoading } = useQuery({
@@ -45,6 +46,17 @@ export function RegisterOverridesTab({ cabinetId, isAdmin }: { cabinetId: number
     onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось добавить регистр')),
   })
 
+  const updateMut = useMutation({
+    mutationFn: ({ id, dto }: { id: number; dto: RegisterPatchDto }) => registersApi.updateOverride(cabinetId, id, dto),
+    onMutate: ({ id }) => setUpdatingId(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey })
+      toast.success('Регистр обновлён')
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось сохранить')),
+    onSettled: () => setUpdatingId(null),
+  })
+
   const deleteMut = useMutation({
     mutationFn: (id: number) => registersApi.deleteOverride(cabinetId, id),
     onMutate: (id) => setDeletingId(id),
@@ -67,6 +79,11 @@ export function RegisterOverridesTab({ cabinetId, isAdmin }: { cabinetId: number
         canEdit={isAdmin}
         onAdd={async (dtos) => (await addMut.mutateAsync(dtos)).failed === 0}
         isAdding={addMut.isPending}
+        onUpdate={async (id, dto) => {
+          try { await updateMut.mutateAsync({ id, dto }); return true }
+          catch { return false }
+        }}
+        updatingId={updatingId}
         onDelete={(id) => deleteMut.mutate(id)}
         deletingId={deletingId}
         emptyLabel="Для этого ШУ пока нет переопределений"

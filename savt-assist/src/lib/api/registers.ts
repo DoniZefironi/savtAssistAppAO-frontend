@@ -10,6 +10,10 @@ export interface RegisterDto {
   description?: string | null
 }
 
+// PATCH — любое подмножество полей, только для редактирования уже
+// существующей строки карты (см. README-backend.md, «Рут admin: telemetry»).
+export type RegisterPatchDto = Partial<RegisterDto>
+
 export interface TelemetryParams {
   page?: number
   size?: number
@@ -33,6 +37,11 @@ export const registersApi = {
     return data
   },
 
+  updateDefinition: async (id: number, dto: RegisterPatchDto): Promise<RegisterDefinition> => {
+    const { data } = await apiClient.patch(`/admin/register-definitions/${id}`, dto)
+    return data
+  },
+
   deleteDefinition: async (id: number): Promise<void> => {
     await apiClient.delete(`/admin/register-definitions/${id}`)
   },
@@ -44,6 +53,11 @@ export const registersApi = {
 
   createOverride: async (cabinetId: number, dto: RegisterDto): Promise<RegisterOverride> => {
     const { data } = await apiClient.post(`/admin/cabinets/${cabinetId}/register-overrides`, dto)
+    return data
+  },
+
+  updateOverride: async (cabinetId: number, overrideId: number, dto: RegisterPatchDto): Promise<RegisterOverride> => {
+    const { data } = await apiClient.patch(`/admin/cabinets/${cabinetId}/register-overrides/${overrideId}`, dto)
     return data
   },
 

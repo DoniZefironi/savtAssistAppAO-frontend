@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { RegisterDto } from '@/lib/api/registers'
+import type { RegisterDto, RegisterPatchDto } from '@/lib/api/registers'
 
 interface RegisterRow {
   id: number
@@ -77,7 +77,7 @@ function parseImportText(text: string): ParsedRow[] {
 // Excel/CSV. onAdd всегда получает массив — единичное добавление тоже
 // оборачивается в массив из одного элемента, родитель отправляет по очереди
 // одной пакетной мутацией.
-export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, onDelete, deletingId, emptyLabel }: {
+export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, onUpdate, updatingId, onDelete, deletingId, emptyLabel }: {
   items: RegisterRow[]
   isLoading: boolean
   canEdit: boolean
@@ -87,6 +87,10 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
   // поправить и отправить заново, не перепечатывая всё с нуля.
   onAdd: (dtos: RegisterDto[]) => Promise<boolean>
   isAdding: boolean
+  // true — сохранилось, редактирование строки закрывается. false — ошибка
+  // (например, увели бит в уже занятый на этом адресе) — оставляем как есть.
+  onUpdate: (id: number, dto: RegisterPatchDto) => Promise<boolean>
+  updatingId: number | null
   onDelete: (id: number) => void
   deletingId: number | null
   emptyLabel: string
@@ -117,6 +121,39 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
   const [importText, setImportText] = useState('')
 
   const [error, setError] = useState<string | null>(null)
+
+  // Редактирование существующей строки на месте (PATCH) — адрес не трогаем
+  // здесь: строка живёт внутри шапки своего адреса, смена адреса перенесла
+  // бы её в другую группу, для этого проще удалить и добавить заново.
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editBit, setEditBit] = useState('')
+  const [editName, setEditName] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editError, setEditError] = useState<string | null>(null)
+
+  const startEdit = (row: RegisterRow) => {
+    setEditingId(row.id)
+    setEditBit(String(row.bit))
+    setEditName(row.name)
+    setEditDescription(row.description ?? '')
+    setEditError(null)
+  }
+  const cancelEdit = () => { setEditingId(null); setEditError(null) }
+
+  const saveEdit = async (row: RegisterRow) => {
+    const bitNum = Number(editBit)
+    if (!editBit.trim() || !Number.isInteger(bitNum) || bitNum < 0 || bitNum > 15) {
+      setEditError('Бит должен быть числом от 0 до 15')
+      return
+    }
+    if (!editName.trim()) {
+      setEditError('Укажите название')
+      return
+    }
+    setEditError(null)
+    const ok = await onUpdate(row.id, { bit: bitNum, name: editName.trim(), description: editDescription.trim() || null })
+    if (ok) setEditingId(null)
+  }
 
   const searchLower = search.trim().toLowerCase()
   const filteredItems = searchLower
@@ -255,23 +292,80 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
                     </button>
                     {open && (
                       <div className="divide-y divide-slate-50 dark:divide-slate-700/30">
-                        {group.rows.map(row => (
-                          <div key={row.id} className="grid grid-cols-[50px_1fr_1fr_auto] gap-2 pl-9 pr-3 py-2 items-center">
-                            <span className="text-sm font-mono text-slate-400">{row.bit}</span>
-                            <span className="text-sm text-slate-700 dark:text-slate-200 truncate">{row.name}</span>
-                            <span className="text-sm text-slate-400 truncate">{row.description || '—'}</span>
-                            {canEdit ? (
-                              <button
-                                onClick={() => onDelete(row.id)}
-                                disabled={deletingId === row.id}
-                                title="Удалить"
-                                className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer disabled:opacity-50"
-                              >
-                                <TrashIcon className="w-4 h-4" />
-                              </button>
-                            ) : <span className="w-7" />}
-                          </div>
-                        ))}
+                        {group.rows.map(row => {
+                          const isRowEditing = editingId === row.id
+                          const isRowUpdating = updatingId === row.id
+                          if (isRowEditing) {
+                            return (
+                              <div key={row.id} className="grid grid-cols-[50px_1fr_1fr_auto] gap-2 pl-9 pr-3 py-2 items-center">
+                                <input
+                                  value={editBit}
+                                  onChange={e => { setEditBit(e.target.value); setEditError(null) }}
+                                  inputMode="numeric"
+                                  className="w-full px-2 py-1 text-sm font-mono rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+                                />
+                                <input
+                                  value={editName}
+                                  onChange={e => { setEditName(e.target.value); setEditError(null) }}
+                                  className="w-full px-2 py-1 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+                                />
+                                <input
+                                  value={editDescription}
+                                  onChange={e => setEditDescription(e.target.value)}
+                                  placeholder="Описание"
+                                  className="w-full px-2 py-1 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+                                />
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => saveEdit(row)}
+                                    disabled={isRowUpdating}
+                                    title="Сохранить"
+                                    className="w-7 h-7 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 flex items-center justify-center text-slate-400 hover:text-emerald-600 transition-colors cursor-pointer disabled:opacity-50"
+                                  >
+                                    <CheckIcon className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={cancelEdit}
+                                    disabled={isRowUpdating}
+                                    title="Отмена"
+                                    className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer disabled:opacity-50"
+                                  >
+                                    <XIcon className="w-4 h-4" />
+                                  </button>
+                                </div>
+                                {editError && (
+                                  <p className="col-span-4 text-xs text-red-500 -mt-1">{editError}</p>
+                                )}
+                              </div>
+                            )
+                          }
+                          return (
+                            <div key={row.id} className="grid grid-cols-[50px_1fr_1fr_auto] gap-2 pl-9 pr-3 py-2 items-center">
+                              <span className="text-sm font-mono text-slate-400">{row.bit}</span>
+                              <span className="text-sm text-slate-700 dark:text-slate-200 truncate">{row.name}</span>
+                              <span className="text-sm text-slate-400 truncate">{row.description || '—'}</span>
+                              {canEdit ? (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => startEdit(row)}
+                                    title="Редактировать"
+                                    className="w-7 h-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 transition-colors cursor-pointer"
+                                  >
+                                    <PencilIcon className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => onDelete(row.id)}
+                                    disabled={deletingId === row.id}
+                                    title="Удалить"
+                                    className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer disabled:opacity-50"
+                                  >
+                                    <TrashIcon className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ) : <span className="w-7" />}
+                            </div>
+                          )
+                        })}
                       </div>
                     )}
                   </div>
@@ -456,4 +550,13 @@ function PlusIcon({ className }: { className?: string }) {
 }
 function TrashIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+}
+function PencilIcon({ className }: { className?: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /></svg>
+}
+function CheckIcon({ className }: { className?: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+}
+function XIcon({ className }: { className?: string }) {
+  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
 }
