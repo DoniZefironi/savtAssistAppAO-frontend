@@ -47,10 +47,15 @@ export interface KbAttachment {
   created_at: string
 }
 
+// Разделены по области видимости (см. README-backend.md, «Рут tags»):
+// document — теги документов/статей КБ, cabinet — теги ШУ, cabinet_type —
+// автодополнение поля "тип" в форме ШУ.
+export type TagScope = 'document' | 'cabinet' | 'cabinet_type'
+
 export interface Tag {
   id: number
   name: string
-  scope: 'document' | 'cabinet'
+  scope: TagScope
 }
 
 async function multipartPost<T>(path: string, form: FormData): Promise<T> {
@@ -128,10 +133,10 @@ export const kbApi = {
     }
   },
 
-  listTags: (scope?: 'document' | 'cabinet'): Promise<Tag[]> =>
+  listTags: (scope?: TagScope): Promise<Tag[]> =>
     apiClient.get('/tags', { params: scope ? { scope } : undefined }).then(r => r.data),
 
-  createTag: (name: string, scope: 'document' | 'cabinet' = 'document'): Promise<Tag> =>
+  createTag: (name: string, scope: TagScope = 'document'): Promise<Tag> =>
     apiClient.post('/admin/tags', { name, scope }).then(r => r.data),
 
   deleteTag: (id: number) => apiClient.delete(`/admin/tags/${id}`),

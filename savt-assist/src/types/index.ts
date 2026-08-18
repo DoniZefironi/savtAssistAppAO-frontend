@@ -243,13 +243,6 @@ export function isLocationAttachment(a: MessageAttachment): a is MessageLocation
   return 'latitude' in a
 }
 
-export interface DashboardStats {
-  totalCabinets: number
-  openServiceRequests: number
-  pendingCabinetRequests: number
-  totalUsers: number
-}
-
 export interface ServiceRequest {
   id: number
   user_id: number

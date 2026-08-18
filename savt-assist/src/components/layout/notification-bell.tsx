@@ -3,9 +3,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { notificationsApi } from '@/lib/api/notifications'
+import { apiErrorMessage } from '@/lib/api/errors'
 import type { NotifType } from '@/lib/api/notifications'
+import { SpinnerIcon } from '@/components/ui/icons'
 
 type Tab = 'unread' | 'read'
 
@@ -44,16 +47,19 @@ export function NotificationBell() {
   const markReadMut = useMutation({
     mutationFn: notificationsApi.markRead,
     onSuccess: invalidate,
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось отметить прочитанным')),
   })
 
   const markAllMut = useMutation({
     mutationFn: notificationsApi.markAllRead,
     onSuccess: invalidate,
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось отметить все прочитанными')),
   })
 
   const clearAllMut = useMutation({
     mutationFn: notificationsApi.clearAll,
     onSuccess: invalidate,
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось очистить уведомления')),
   })
 
   useEffect(() => {
@@ -270,8 +276,4 @@ function BellIcon({ className }: { className?: string }) {
 
 function BellOffIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9.143 17.082a24.248 24.248 0 003.844.148m-3.844-.148a23.856 23.856 0 01-5.455-1.31 8.964 8.964 0 002.3-5.542m3.155 6.852a3 3 0 005.667 1.069m1.55-1.069a24.248 24.248 0 003.503-.342m-7.153 1.41A8.967 8.967 0 0018 9.75v-.7M9.143 17.082L5.636 5.636m0 0A8.955 8.955 0 0112 3c.898 0 1.766.124 2.584.357m4.78 4.78a8.955 8.955 0 01.777 4.363v.7a8.964 8.964 0 01-2.3 5.542m0 0L5.636 5.636m0 0L3 3" /></svg>
-}
-
-function SpinnerIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
 }

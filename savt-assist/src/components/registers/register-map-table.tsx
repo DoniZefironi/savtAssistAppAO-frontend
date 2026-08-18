@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { RegisterDto, RegisterPatchDto } from '@/lib/api/registers'
+import { SearchIcon } from '@/components/ui/icons'
 
 interface RegisterRow {
   id: number
@@ -152,7 +153,10 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
     }
     setEditError(null)
     const ok = await onUpdate(row.id, { bit: bitNum, name: editName.trim(), description: editDescription.trim() || null })
-    if (ok) setEditingId(null)
+    // Функциональное обновление с проверкой row.id — пока сохранение этой
+    // строки летело, могли успеть открыть редактирование другой строки
+    // (editingId уже указывает на неё); тогда закрывать чужую форму нельзя.
+    if (ok) setEditingId(current => (current === row.id ? null : current))
   }
 
   const searchLower = search.trim().toLowerCase()
@@ -539,9 +543,6 @@ function ModeButton({ active, onClick, children }: { active: boolean; onClick: (
   )
 }
 
-function SearchIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
-}
 function ChevronIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
 }

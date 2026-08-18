@@ -485,6 +485,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const botMutation = useMutation({
     mutationFn: () => chatsApi.returnToBot(chat.id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['operator-chats'] }); toast.success('Чат передан боту') },
+    onError: () => toast.error('Не удалось передать чат боту'),
   })
 
   const clearMutation = useMutation({

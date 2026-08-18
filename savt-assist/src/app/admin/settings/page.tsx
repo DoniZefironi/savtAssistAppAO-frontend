@@ -9,6 +9,7 @@ import { botApi } from '@/lib/api/bot'
 import { apiErrorMessage } from '@/lib/api/errors'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/lib/store/auth'
+import { SpinnerIcon } from '@/components/ui/icons'
 
 export default function AdminSettingsPage() {
   const user = useAuthStore((s) => s.user)
@@ -356,7 +357,4 @@ function MegaphoneIcon({ className }: { className?: string }) {
 }
 function DatabaseIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 3.375c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" /></svg>
-}
-function SpinnerIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
 }

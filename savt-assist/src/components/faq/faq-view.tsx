@@ -12,7 +12,9 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuthStore } from '@/lib/store/auth'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
+import { useDebounce } from '@/lib/hooks/use-debounce'
 import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel'
+import { SearchIcon } from '@/components/ui/icons'
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -95,15 +97,11 @@ export function FaqView() {
 
   const expandPanel = () => { setIsSnapping(true); setPanelWidth(CAT_DEFAULT); setTimeout(() => setIsSnapping(false), 200) }
 
-  const [view, setView] = useState<'list' | 'grid'>('list')
-  useEffect(() => {
-    const saved = localStorage.getItem('view-mode-faq')
-    if (saved === 'list' || saved === 'grid') setView(saved)
-  }, [])
+  const [view, setView] = usePersistentState<'list' | 'grid'>('view-mode-faq', 'list')
   const [filtersOpen, setFiltersOpen] = usePersistentState('filters-open-faq', true)
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null)
   const [searchInput, setSearchInput] = useState('')
-  const [search, setSearch] = useState('')
+  const search = useDebounce(searchInput, 300)
   const [sortBy, setSortBy] = useState<SortValue>('created_at')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [catSearch, setCatSearch] = useState('')
@@ -114,11 +112,6 @@ export function FaqView() {
   const [createCatParentId, setCreateCatParentId] = useState<number | null>(null)
   const [editCat, setEditCat] = useState<FaqCategory | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirm | null>(null)
-
-  useEffect(() => {
-    const t = setTimeout(() => setSearch(searchInput), 300)
-    return () => clearTimeout(t)
-  }, [searchInput])
 
   const handleCatSelect = (id: number | null) => setSelectedCatId(id)
 
@@ -312,8 +305,8 @@ export function FaqView() {
               Категории
             </button>
             <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-              <button onClick={() => { setView('list'); localStorage.setItem('view-mode-faq', 'list') }} title="Список" className={`p-1.5 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon className="w-4 h-4" /></button>
-              <button onClick={() => { setView('grid'); localStorage.setItem('view-mode-faq', 'grid') }} title="Сетка" className={`p-1.5 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon className="w-4 h-4" /></button>
+              <button onClick={() => setView('list')} title="Список" className={`p-1.5 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon className="w-4 h-4" /></button>
+              <button onClick={() => setView('grid')} title="Сетка" className={`p-1.5 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon className="w-4 h-4" /></button>
               <button onClick={() => setFiltersOpen(v => !v)} title={filtersOpen ? 'Скрыть поиск и фильтры' : 'Показать поиск и фильтры'} className={`p-1.5 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${filtersOpen ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><SlidersHorizontal className="w-4 h-4" /></button>
             </div>
             {!isReadOnly && (
@@ -834,9 +827,6 @@ function PencilIcon({ className }: { className?: string }) {
 }
 function TrashIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
-}
-function SearchIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
 }
 function ChevronLeftIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>

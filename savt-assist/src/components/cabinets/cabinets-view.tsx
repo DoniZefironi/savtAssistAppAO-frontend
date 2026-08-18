@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -18,6 +18,7 @@ import { apiErrorMessage } from '@/lib/api/errors'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel'
+import { SearchIcon } from '@/components/ui/icons'
 import type { Project } from '@/types'
 
 const PAGE_SIZE = 20
@@ -151,11 +152,7 @@ export function CabinetsView({ isAdmin }: Props) {
   const [filters, setFilters] = useState<CabinetFilters>(DEFAULT_FILTERS)
   const [projectFilters, setProjectFilters] = useState<ProjectFilters>(DEFAULT_PROJECT_FILTERS)
   const [filterScope, setFilterScope] = useState<FilterScope>('project')
-  const [view, setView] = useState<ViewMode>('list')
-  useEffect(() => {
-    const saved = localStorage.getItem('view-mode-cabinets')
-    if (saved === 'list' || saved === 'grid') setView(saved)
-  }, [])
+  const [view, setView] = usePersistentState<ViewMode>('view-mode-cabinets', 'list')
   const [filtersOpen, setFiltersOpen] = usePersistentState('filters-open-cabinets', true)
   const [showCreate, setShowCreate] = useState(false)
   const [qrProject, setQrProject] = useState<Project | null>(null)
@@ -309,7 +306,7 @@ export function CabinetsView({ isAdmin }: Props) {
           <div className="flex items-center gap-2">
             <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
               <button
-                onClick={() => { setView('list'); localStorage.setItem('view-mode-cabinets', 'list') }}
+                onClick={() => setView('list')}
                 title="Список"
                 className={`p-2 transition-colors cursor-pointer ${
                   view === 'list'
@@ -320,7 +317,7 @@ export function CabinetsView({ isAdmin }: Props) {
                 <ListIcon />
               </button>
               <button
-                onClick={() => { setView('grid'); localStorage.setItem('view-mode-cabinets', 'grid') }}
+                onClick={() => setView('grid')}
                 title="Сетка"
                 className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${
                   view === 'grid'
@@ -659,13 +656,6 @@ export function CabinetsView({ isAdmin }: Props) {
   )
 }
 
-function SearchIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-    </svg>
-  )
-}
 function PlusIcon() {
   return (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

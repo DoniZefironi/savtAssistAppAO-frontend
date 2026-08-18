@@ -12,7 +12,9 @@ import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
+import { useDebounce } from '@/lib/hooks/use-debounce'
 import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel'
+import { SearchIcon } from '@/components/ui/icons'
 import { RequestCard, StatusPill, TypePill } from '@/components/requests/request-card'
 import { UserDialog } from './user-dialog'
 import { roleLabel, fmtDate, UserIcon } from './user-shared'
@@ -83,12 +85,8 @@ export function UsersView() {
   const [sortBy, setSortBy] = useState<SortValue>('created_at')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [searchInput, setSearchInput] = useState('')
-  const [search, setSearch] = useState('')
-  const [view, setView] = useState<'list' | 'grid'>('list')
-  useEffect(() => {
-    const saved = localStorage.getItem('view-mode-users')
-    if (saved === 'list' || saved === 'grid') setView(saved)
-  }, [])
+  const search = useDebounce(searchInput, 300)
+  const [view, setView] = usePersistentState<'list' | 'grid'>('view-mode-users', 'list')
   const [filtersOpen, setFiltersOpen] = usePersistentState('filters-open-users', true)
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
   const [createOperatorOpen, setCreateOperatorOpen] = useState(false)
@@ -97,17 +95,11 @@ export function UsersView() {
   const sentinelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const t = setTimeout(() => setSearch(searchInput), 300)
-    return () => clearTimeout(t)
-  }, [searchInput])
-
-  useEffect(() => {
     setStatusFilter('all')
     setUserTypeFilter('all')
     setVerifiedFilter(null)
     setPhoneVerifiedFilter(null)
     setSearchInput('')
-    setSearch('')
     setSortBy('created_at')
     setSortOrder('desc')
   }, [roleTab])
@@ -161,8 +153,8 @@ export function UsersView() {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-              <button onClick={() => { setView('list'); localStorage.setItem('view-mode-users', 'list') }} title="Список" className={`p-2 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon /></button>
-              <button onClick={() => { setView('grid'); localStorage.setItem('view-mode-users', 'grid') }} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon /></button>
+              <button onClick={() => setView('list')} title="Список" className={`p-2 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon /></button>
+              <button onClick={() => setView('grid')} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon /></button>
               <button onClick={() => setFiltersOpen(v => !v)} title={filtersOpen ? 'Скрыть поиск и фильтры' : 'Показать поиск и фильтры'} className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${filtersOpen ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><SlidersHorizontal className="w-4 h-4" /></button>
             </div>
             {!isReadOnly && isSuperadmin && (
@@ -548,9 +540,6 @@ function ListIcon() {
 }
 function GridIcon() {
   return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" /></svg>
-}
-function SearchIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
 }
 function PlusIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>

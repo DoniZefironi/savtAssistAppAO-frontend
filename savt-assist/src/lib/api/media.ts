@@ -1,6 +1,7 @@
 import { apiClient, authorizedFetch } from './client'
 import { toFullUrl } from './base-url'
 import type { PaginatedResponse } from '@/types'
+import type { Tag } from './kb'
 
 export interface CabinetDocument {
   id: number
@@ -20,7 +21,7 @@ export interface CabinetDocument {
   // download и запрос доступа отвечают 404. Виден только операторам и админам.
   is_internal?: boolean
   version: number
-  tags: { id: number; name: string; scope: string }[]
+  tags: Tag[]
   created_at: string
   updated_at: string
 }

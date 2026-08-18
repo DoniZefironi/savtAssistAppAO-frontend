@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel'
+import { SearchIcon } from '@/components/ui/icons'
 import { auditApi, type AuditLog } from '@/lib/api/audit'
 
 const PAGE_SIZE = 50
@@ -343,8 +344,4 @@ function AuditLogRow({ log, expanded, onToggle }: { log: AuditLog; expanded: boo
       )}
     </div>
   )
-}
-
-function SearchIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
 }

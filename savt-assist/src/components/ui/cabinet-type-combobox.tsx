@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, Plus, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { tagsApi } from '@/lib/api/tags'
+import { kbApi } from '@/lib/api/kb'
 
 interface Props {
   value: string
@@ -20,7 +20,7 @@ export function CabinetTypeCombobox({ value, onChange, placeholder = 'Венти
 
   const { data: tags = [] } = useQuery({
     queryKey: ['tags', 'cabinet_type'],
-    queryFn: () => tagsApi.getAll('cabinet_type'),
+    queryFn: () => kbApi.listTags('cabinet_type'),
   })
 
   useEffect(() => {
