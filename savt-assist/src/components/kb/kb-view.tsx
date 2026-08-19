@@ -11,6 +11,7 @@ import type { KbArticleDetail, KbArticleList, KbAttachment, KbCategory, Tag } fr
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { CategorySelect } from '@/components/ui/category-select'
 import { toFullUrl as fullUrl } from '@/lib/api/base-url'
 import { useAuthStore } from '@/lib/store/auth'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
@@ -811,17 +812,12 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose, isReadO
                 <label className="text-xs font-medium text-slate-500 block mb-1.5">
                   Категория <span className="text-red-500">*</span>
                 </label>
-                <select
+                <CategorySelect
+                  categories={categories}
                   value={categoryId}
-                  onChange={e => setCategoryId(Number(e.target.value))}
+                  onChange={setCategoryId}
                   disabled={isReadOnly}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] disabled:opacity-60 disabled:cursor-default"
-                >
-                  <option value={0} disabled>Выберите категорию</option>
-                  {categories.map(c => (
-                    <option key={c.id} value={c.id}>{c.parent_id ? `  └ ${c.name}` : c.name}</option>
-                  ))}
-                </select>
+                />
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-500 block mb-1.5">

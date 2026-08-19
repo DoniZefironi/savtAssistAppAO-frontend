@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap, AttributionControl } from 'react-leaflet'
 import L from 'leaflet'
 
 interface LatLng {
@@ -61,11 +61,16 @@ export function LocationPickerInner({ value, onChange }: Props) {
       zoom={DEFAULT_ZOOM}
       style={{ width: '100%', height: '100%' }}
       scrollWheelZoom
+      attributionControl={false}
     >
       <TileLayer
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
       />
+      {/* prefix={false} — убирает дефолтную плашку Leaflet (флаг Украины +
+          ссылка на leafletjs.com) слева от копирайта; сам копирайт
+          OpenStreetMap оставляем — его требует лицензия данных (ODbL). */}
+      <AttributionControl position="bottomright" prefix={false} />
       <ClickHandler onChange={onChange} />
       <FlyTo position={position} />
       {position && <Marker position={position} icon={icon} />}

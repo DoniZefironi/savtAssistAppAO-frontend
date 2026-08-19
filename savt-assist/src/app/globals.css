@@ -204,7 +204,7 @@ input[type="password"]::-ms-clear {
 .theme-festive .theme-accent-static {
   background: linear-gradient(135deg, var(--pride-1), var(--pride-2), var(--pride-4), var(--pride-5), var(--pride-6));
 }
-.theme-festive header {
+.theme-festive header {     
   position: relative;
 }
 .theme-festive header::after {

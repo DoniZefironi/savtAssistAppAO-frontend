@@ -12,10 +12,10 @@ import { CabinetsMap } from '@/components/map/cabinets-map'
 function makeStatCards(base: string) {
   return [
     { key: 'unreadChats' as const,             label: 'Новых сообщений',      href: `${base}/chats`,    accent: '#1B3A72', urgentAbove: 0, icon: <ChatIcon /> },
-    { key: 'openServiceRequests' as const,      label: 'Открытых заявок',      href: `${base}/requests`, accent: '#D97706', urgentAbove: 0, icon: <WrenchIcon /> },
-    { key: 'pendingDocumentRequests' as const,  label: 'Запросов на документы',href: `${base}/requests`, accent: '#7C3AED', urgentAbove: 0, icon: <DocIcon /> },
-    { key: 'pendingProjectShareRequests' as const, label: 'Заявок на проекты', href: `${base}/requests`, accent: '#0891B2', urgentAbove: 0, icon: <KeyIcon /> },
-    { key: 'pendingAdditionRequests' as const,  label: 'Добавлений ШУ',        href: `${base}/requests`, accent: '#059669', urgentAbove: 0, icon: <PlusBoxIcon /> },
+    { key: 'openServiceRequests' as const,      label: 'Открытых заявок',      href: `${base}/requests?tab=service`,   accent: '#D97706', urgentAbove: 0, icon: <WrenchIcon /> },
+    { key: 'pendingDocumentRequests' as const,  label: 'Запросов на документы',href: `${base}/requests?tab=docs`,      accent: '#7C3AED', urgentAbove: 0, icon: <DocIcon /> },
+    { key: 'pendingProjectShareRequests' as const, label: 'Заявок на проекты', href: `${base}/requests?tab=projects`,  accent: '#0891B2', urgentAbove: 0, icon: <KeyIcon /> },
+    { key: 'pendingAdditionRequests' as const,  label: 'Добавлений ШУ',        href: `${base}/requests?tab=additions`, accent: '#059669', urgentAbove: 0, icon: <PlusBoxIcon /> },
   ] as const
 }
 

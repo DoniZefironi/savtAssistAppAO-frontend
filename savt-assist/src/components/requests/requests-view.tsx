@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { toast } from 'sonner'
@@ -127,6 +127,20 @@ export function RequestsView() {
   const [selectedDocRequest, setSelectedDocRequest] = useState<DocumentRequest | null>(null)
 
   const sentinelRef = useRef<HTMLDivElement>(null)
+
+  // Карточки на дашборде ведут сюда с ?tab=... (см. admin-dashboard.tsx) —
+  // без этого клик по «Запросов на документы»/«Заявок на проекты»/«Добавлений
+  // ШУ» всегда открывал вкладку по умолчанию (service), а не ту, что нужна.
+  // Через window.location, а не useSearchParams — иначе initial state на
+  // сервере (window ещё нет) и на клиенте (URL уже есть) разошлись бы, и
+  // React ругнулся бы на hydration mismatch; так же оба рендера сначала
+  // совпадают на дефолтной вкладке, а нужная подставляется сразу после монтирования.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t === 'service' || t === 'additions' || t === 'projects' || t === 'docs' || t === 'phone') {
+      setTab(t)
+    }
+  }, [])
 
   const handleTabChange = (t: Tab) => {
     setTab(t)
