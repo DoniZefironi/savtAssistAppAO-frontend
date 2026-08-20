@@ -197,6 +197,15 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     queryFn: ({ pageParam }) => chatsApi.getMessages(chat.id, pageParam?.before_id, pageParam?.after_id),
     getNextPageParam: (lastPage) => lastPage.length < 30 ? undefined : { before_id: lastPage[lastPage.length - 1]?.id },
     getPreviousPageParam: (firstPage) => firstPage.length < 30 ? undefined : { after_id: firstPage[0]?.id },
+    // Реальный баг: возвращаясь в чат, который уже листали (>30с назад — глобальный
+    // staleTime из providers.tsx), react-query по умолчанию считает кэш всех ранее
+    // загруженных страниц устаревшим и на маунте перезапрашивает их ВСЕ по очереди,
+    // от первой (самые старые из подгруженных) к последней. Скролл-к-низу срабатывает
+    // только один раз за маунт (scrolledRef) — пока страницы дозагружаются одна за
+    // другой, список визуально "застревает" там, где отрисовалась первая из них, то
+    // есть у начала истории вместо конца. Актуальность и так поддерживают SSE-события
+    // (handleRealtimeEvent/handleRealtimeReconnect выше) — авторефетч на маунте не нужен.
+    refetchOnMount: false,
   })
 
   // Realtime вместо поллинга сообщений — см. README-backend.md, "Realtime (SSE)

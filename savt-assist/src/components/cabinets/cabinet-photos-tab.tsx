@@ -273,6 +273,7 @@ function PhotoTile({ photo, onOpen, onDelete, onUpdate, deleting, updating }: {
       <img
         src={mediaApi.toFullUrl(photo.url)}
         alt={photo.caption ?? ''}
+        loading="lazy"
         className="w-full h-full object-cover transition-transform group-hover:scale-105"
       />
       {/* Кнопки уменьшены под мелкую плитку: на 6 колонках прежние 28px

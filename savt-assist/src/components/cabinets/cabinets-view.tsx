@@ -244,6 +244,11 @@ export function CabinetsView({ isAdmin }: Props) {
       }),
     getNextPageParam: (lastPage) =>
       lastPage.page < lastPage.pages ? lastPage.page + 1 : undefined,
+    // Без этого — возврат на экран спустя >30с (глобальный staleTime) после
+    // глубокой прокрутки списка переперезапрашивает все закэшированные
+    // страницы по очереди подряд. Своя инвалидация после мутаций уже держит
+    // список актуальным — авторефетч на маунте не нужен.
+    refetchOnMount: false,
   })
 
   useInfiniteScrollSentinel(sentinelRef, {

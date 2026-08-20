@@ -25,11 +25,11 @@ interface Props {
 
 export function ChatListPanel({ chats, selectedId, onSelect, onSelectChatId, loading, compact, searchValue, onSearchChange, onCollapse, archived, onToggleArchived }: Props) {
   const setPending = useChatNavStore((s) => s.setPending)
-  const sorted = [...chats].sort((a, b) => {
+  const sorted = useMemo(() => [...chats].sort((a, b) => {
     if (a.operator_requested && !b.operator_requested) return -1
     if (!a.operator_requested && b.operator_requested) return 1
     return new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime()
-  })
+  }), [chats])
 
   const trimmed = searchValue.trim()
 

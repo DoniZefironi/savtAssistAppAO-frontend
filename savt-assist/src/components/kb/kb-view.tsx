@@ -148,6 +148,10 @@ export function KbView() {
         size: 20,
       }),
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
+    // Без этого — возврат на экран спустя >30с после глубокой прокрутки
+    // переперезапрашивает все закэшированные страницы по очереди подряд.
+    // Своя инвалидация после мутаций уже держит список актуальным.
+    refetchOnMount: false,
   })
 
   useInfiniteScrollSentinel(sentinelRef, {

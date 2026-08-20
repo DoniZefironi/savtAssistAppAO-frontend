@@ -176,6 +176,10 @@ export function RequestsView() {
       requestsApi.getAdditions({ status: sp, search: sq, resolved_by_admin_id: resolvedByAdminId ?? undefined, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
     enabled: tab === 'additions',
+    // Без этого — возврат на вкладку спустя >30с после глубокой прокрутки
+    // переперезапрашивает все закэшированные страницы по очереди подряд.
+    // Своя инвалидация после approve/reject уже держит список актуальным.
+    refetchOnMount: false,
   })
   const prjQ = useInfiniteQuery({
     queryKey: ['project-requests', sp, sq, sortBy, sortOrder, resolvedByAdminId],
@@ -184,6 +188,10 @@ export function RequestsView() {
       requestsApi.getProjectRequests({ status: sp, search: sq, resolved_by_admin_id: resolvedByAdminId ?? undefined, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
     enabled: tab === 'projects',
+    // Без этого — возврат на вкладку спустя >30с после глубокой прокрутки
+    // переперезапрашивает все закэшированные страницы по очереди подряд.
+    // Своя инвалидация после approve/reject уже держит список актуальным.
+    refetchOnMount: false,
   })
   const docQ = useInfiniteQuery({
     queryKey: ['document-requests', sp, sq, sortBy, sortOrder, resolvedByAdminId],
@@ -192,6 +200,10 @@ export function RequestsView() {
       requestsApi.getDocumentRequests({ status: sp, search: sq, resolved_by_admin_id: resolvedByAdminId ?? undefined, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
     enabled: tab === 'docs',
+    // Без этого — возврат на вкладку спустя >30с после глубокой прокрутки
+    // переперезапрашивает все закэшированные страницы по очереди подряд.
+    // Своя инвалидация после мутаций уже держит список актуальным.
+    refetchOnMount: false,
   })
   const phoneQ = useInfiniteQuery({
     queryKey: ['phone-change-requests', sp, sq, sortBy, sortOrder, resolvedByAdminId],
@@ -200,6 +212,10 @@ export function RequestsView() {
       requestsApi.getPhoneChangeRequests({ status: sp, search: sq, resolved_by_admin_id: resolvedByAdminId ?? undefined, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
     enabled: tab === 'phone',
+    // Без этого — возврат на вкладку спустя >30с после глубокой прокрутки
+    // переперезапрашивает все закэшированные страницы по очереди подряд.
+    // Своя инвалидация после approve/reject уже держит список актуальным.
+    refetchOnMount: false,
   })
 
   const curQ = tab === 'service' ? svcQ : tab === 'additions' ? addQ : tab === 'projects' ? prjQ : tab === 'phone' ? phoneQ : docQ
