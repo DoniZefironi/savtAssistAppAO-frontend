@@ -75,6 +75,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const prevScrollHeightRef = useRef<number | null>(null)
+  const wasAtBottomBeforeOlderFetchRef = useRef(false)
   const headerMenuRef = useRef<HTMLDivElement>(null)
   const scrolledRef = useRef(false)
   const scrolledToUnreadRef = useRef(false)
@@ -354,7 +355,19 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   useEffect(() => {
     const el = listRef.current
     if (!el || prevScrollHeightRef.current === null) return
-    el.scrollTop = el.scrollHeight - prevScrollHeightRef.current
+    // Если перед автоподгрузкой старых сообщений пользователь был у низа ленты
+    // (типичный случай: только что открытый короткий чат, где первая страница
+    // ещё не заполняет высоту контейнера — сентинел вверху виден "случайно",
+    // а не потому что кто-то реально пролистал историю), сохранять "тот же
+    // относительный сдвиг от верха" неправильно: пользователя без его ведома
+    // уводит от конца переписки, а следующая автоподгрузка от сентинела снова
+    // видит его "наверху" и повторяет цикл — в итоге чат догружает всю историю
+    // целиком и остаётся у самого начала. В этом случае просто остаёмся внизу.
+    if (wasAtBottomBeforeOlderFetchRef.current) {
+      bottomRef.current?.scrollIntoView()
+    } else {
+      el.scrollTop = el.scrollHeight - prevScrollHeightRef.current
+    }
     prevScrollHeightRef.current = null
   }, [messagesData?.pages.length])
   // Актуальные hasNextPage/isFetchingNextPage/isFetchNextPageError колбэк
@@ -380,6 +393,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     const container = listRef.current
     if (!container) return
     if (!hasNextPageRef.current || isFetchingNextPageRef.current || isFetchNextPageErrorRef.current) return
+    wasAtBottomBeforeOlderFetchRef.current = isNearBottom()
     prevScrollHeightRef.current = container.scrollHeight
     fetchNextPage()
   }
