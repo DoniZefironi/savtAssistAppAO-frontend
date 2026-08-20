@@ -22,6 +22,27 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`
 }
 
+// navigator.clipboard недоступен в небезопасном контексте (http, не localhost)
+// и в некоторых встроенных webview — тогда откатываемся на execCommand.
+function copyToClipboard(text: string) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).catch(() => {})
+    return
+  }
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  try {
+    document.execCommand('copy')
+  } catch {
+    // копирование недоступно — молча игнорируем
+  }
+  document.body.removeChild(textarea)
+}
+
 interface Props {
   message: ChatMessage
   isOwn: boolean
@@ -101,7 +122,7 @@ export const MessageBubble = React.memo(function MessageBubble({
   }
 
   const copyText = () => {
-    if (message.text) navigator.clipboard.writeText(message.text).catch(() => {})
+    if (message.text) copyToClipboard(message.text)
     setCtxPos(null)
   }
 

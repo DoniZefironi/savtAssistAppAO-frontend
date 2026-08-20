@@ -761,6 +761,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   // открытии. Архивный чат read-only на бэкенде (POST .../messages -> 403).
   const isArchivedRequest = !!chat.archived_at
   const renderItems = buildRenderItems(displayMessages, currentUser?.id ?? -1, firstUnreadId)
+  const canDeleteSelected = selectedIds.size > 0 && messages.filter(m => selectedIds.has(m.id)).every(m => m.sender_id === currentUser?.id)
   const name = chatDisplayName(chat)
   const AvatarIcon = chat.chat_type === 'cabinet' ? Package : chat.chat_type === 'project' ? Folder : chat.chat_type === 'notes' ? FileText : chat.chat_type === 'service_request' ? Wrench : MessageCircle
   const avatarBg = chat.chat_type === 'cabinet' ? 'bg-[#1B3A72]' : chat.chat_type === 'project' ? 'bg-teal-600' : 'bg-slate-500'
@@ -1000,10 +1001,12 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
                 className="flex items-center gap-1.5 text-sm text-[#1B3A72] dark:text-blue-400 px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer">
                 <ForwardIcon />Переслать
               </button>
-              <button onClick={handleDeleteSelected}
-                className="flex items-center gap-1.5 text-sm text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer">
-                <TrashIcon />Удалить
-              </button>
+              {canDeleteSelected && (
+                <button onClick={handleDeleteSelected}
+                  className="flex items-center gap-1.5 text-sm text-red-500 px-3 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer">
+                  <TrashIcon />Удалить
+                </button>
+              )}
             </>
           )}
         </div>
