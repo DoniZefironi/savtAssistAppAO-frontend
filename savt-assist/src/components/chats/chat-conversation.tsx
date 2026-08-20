@@ -322,12 +322,18 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     if (messages.length === 0) return
     if (!scrolledRef.current) {
       scrolledRef.current = true
-      if (chat.unread_count > 0) {
-        const firstUnread = messages.find(m => !m.is_read)
-        if (firstUnread) {
-          setFirstUnreadId(firstUnread.id)
-          return
-        }
+      // Смотрим is_read у уже загруженных сообщений напрямую, а не chat.unread_count
+      // (это поле из отдельного, отдельно инвалидируемого запроса ['operator-chats']).
+      // Раньше сообщения из кэша ['messages', chat.id] приходили с сетевой задержкой,
+      // и за это время markRead()+invalidateQueries ниже обычно успевал обнулить
+      // unread_count в списке чатов. После refetchOnMount: false кэш отдаётся
+      // мгновенно, эта гонка стала выигрываться в другую сторону — при повторном
+      // заходе в уже прочитанный чат unread_count из пропса чата ещё не успевал
+      // обновиться, и чат ошибочно прыгал на "первое непрочитанное" вместо низа.
+      const firstUnread = messages.find(m => !m.is_read)
+      if (firstUnread) {
+        setFirstUnreadId(firstUnread.id)
+        return
       }
       bottomRef.current?.scrollIntoView()
       return
