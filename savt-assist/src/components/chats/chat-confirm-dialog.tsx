@@ -13,7 +13,7 @@ export function ChatConfirmDialog({ title, body, label, pending, onConfirm, onCa
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onCancel}>
       <div className="absolute inset-0 bg-black/50" />
-      <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 max-w-xs w-full mx-4" onClick={e => e.stopPropagation()}>
+      <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 max-w-xs w-full mx-4 animate-in fade-in-0 zoom-in-95 duration-100" onClick={e => e.stopPropagation()}>
         <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-100 mb-2">{title}</h3>
         <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">{body}</p>
         <div className="flex gap-3">

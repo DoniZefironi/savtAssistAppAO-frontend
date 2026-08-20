@@ -70,7 +70,7 @@ export function ChatAttachmentsPanel({
       <div className="absolute inset-0 bg-black/50" />
       {/* min-w-0 — карточка это flex-item родительского flex-контейнера, без min-w-0
           не сжимается ниже ширины контента и вылезает шире max-w-lg, см. cabinet-detail-dialog.tsx */}
-      <div className="relative w-full min-w-0 max-w-lg mx-4 max-h-[85vh] bg-white dark:bg-slate-900 rounded-2xl flex flex-col shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="relative w-full min-w-0 max-w-lg mx-4 max-h-[85vh] bg-white dark:bg-slate-900 rounded-2xl flex flex-col shadow-2xl overflow-hidden animate-in fade-in-0 zoom-in-95 duration-100" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 shrink-0">
           <h3 className="font-semibold text-slate-800 dark:text-slate-100">Информация о чате</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">

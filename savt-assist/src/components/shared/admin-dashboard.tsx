@@ -40,7 +40,7 @@ export function AdminDashboard() {
   const activityLoading = isLoading
 
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-900">
+    <div className="flex-1 overflow-y-auto scroll-smooth bg-slate-50 dark:bg-slate-900">
       <div className="max-w-5xl 2xl:max-w-375 mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6">
 
         <div className="flex items-center justify-between">

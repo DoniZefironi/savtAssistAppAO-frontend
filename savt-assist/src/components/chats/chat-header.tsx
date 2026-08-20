@@ -108,7 +108,7 @@ export function ChatHeader({
             <DotsVerticalIcon />
           </button>
           {headerMenuOpen && (
-            <div className="absolute top-full right-0 mt-1 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 min-w-52 z-50">
+            <div className="absolute top-full right-0 mt-1 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 min-w-52 z-50 animate-in fade-in-0 zoom-in-95 duration-100">
               {!searchOpen && (
                 <div className="sm:hidden">
                   <HeaderMenuItem icon={<SearchIcon />} onClick={onToggleSearch}>Поиск</HeaderMenuItem>

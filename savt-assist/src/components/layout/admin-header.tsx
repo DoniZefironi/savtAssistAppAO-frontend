@@ -112,7 +112,7 @@ export function AdminHeader({ onMenuClick }: { onMenuClick?: () => void }) {
           </button>
 
           {themeMenuOpen && (
-            <div className="absolute right-0 top-full mt-1.5 w-44 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 py-1.5 z-50">
+            <div className="absolute right-0 top-full mt-1.5 w-44 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 py-1.5 z-50 animate-in fade-in-0 zoom-in-95 duration-100">
               {THEME_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
@@ -147,7 +147,7 @@ export function AdminHeader({ onMenuClick }: { onMenuClick?: () => void }) {
           </button>
 
           {profileOpen && (
-            <div className="absolute right-0 top-full mt-1.5 w-56 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 py-1.5 z-50">
+            <div className="absolute right-0 top-full mt-1.5 w-56 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 py-1.5 z-50 animate-in fade-in-0 zoom-in-95 duration-100">
               {user && (
                 <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-700">
                   <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{user.full_name ?? user.login}</p>

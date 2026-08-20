@@ -86,7 +86,7 @@ export function ProjectDealInfo({ project }: { project: ProjectDetail }) {
               {contactsOpen && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setContactsOpen(false)} />
-                  <div className="absolute z-20 mt-1 left-0 w-80 max-w-[85vw] max-h-72 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg divide-y divide-slate-100 dark:divide-slate-700">
+                  <div className="absolute z-20 mt-1 left-0 w-80 max-w-[85vw] max-h-72 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg divide-y divide-slate-100 dark:divide-slate-700 animate-in fade-in-0 zoom-in-95 duration-100">
                     {contacts.map(c => (
                       <div key={c.id} className="px-3 py-2">
                         <p className="text-xs font-medium text-slate-700 dark:text-slate-200">{c.full_name}</p>

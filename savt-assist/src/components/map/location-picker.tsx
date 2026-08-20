@@ -169,7 +169,7 @@ export function LocationPicker({ value, onChange }: Props) {
         {showDropdown && results.length > 0 && (
           <div
             ref={dropRef}
-            className="absolute z-50 top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden max-h-44 overflow-y-auto"
+            className="absolute z-50 top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden max-h-44 overflow-y-auto animate-in fade-in-0 zoom-in-95 duration-100"
           >
             {results.map((r, idx) => (
               <button

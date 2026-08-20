@@ -75,7 +75,7 @@ export function CategorySelect({ categories, value, onChange, disabled, placehol
       </div>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+        <div className="absolute z-50 mt-1 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg max-h-52 overflow-y-auto animate-in fade-in-0 zoom-in-95 duration-100">
           {filtered.length === 0 ? (
             <div className="px-3 py-2 text-xs text-slate-400">Ничего не найдено</div>
           ) : (

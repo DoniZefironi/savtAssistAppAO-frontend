@@ -107,7 +107,7 @@ export function NotificationBell() {
       {open && dropPos && createPortal(
         <div
           ref={dropRef}
-          className="fixed w-96 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 overflow-hidden"
+          className="fixed w-96 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 overflow-hidden animate-in fade-in-0 zoom-in-95 duration-100"
           style={{ top: dropPos.top, right: dropPos.right, zIndex: 9999 }}
         >
           {/* Header */}

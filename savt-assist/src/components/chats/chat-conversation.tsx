@@ -129,7 +129,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     if (!el || !container) return false
     const elRect = el.getBoundingClientRect()
     const cRect = container.getBoundingClientRect()
-    container.scrollTop += elRect.top - cRect.top - cRect.height / 2 + elRect.height / 2
+    container.scrollBy({ top: elRect.top - cRect.top - cRect.height / 2 + elRect.height / 2, behavior: 'smooth' })
     el.style.transition = 'background-color 0.3s ease'
     el.style.backgroundColor = 'rgba(74,143,231,0.2)'
     setTimeout(() => { el.style.backgroundColor = '' }, 1500)
@@ -1120,7 +1120,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
       {ctxMenu && (
         <div className="fixed inset-0 z-50" onClick={() => setCtxMenu(null)} onContextMenu={(e) => { e.preventDefault(); setCtxMenu(null) }}>
           <div
-            className="absolute bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-100 dark:border-slate-700 py-1 min-w-45"
+            className="absolute bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-100 dark:border-slate-700 py-1 min-w-45 animate-in fade-in-0 zoom-in-95 duration-100"
             style={{ left: ctxMenu.x, top: ctxMenu.y }}
             onClick={(e) => e.stopPropagation()}
           >

@@ -447,8 +447,8 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
           </div>
         </div>
 
-        {filtersOpen && (
-        <>
+        <div className={cn('grid transition-[grid-template-rows] duration-150 ease-out', filtersOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
+        <div className="overflow-hidden min-h-0">
         <div className="relative">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
           <Input
@@ -504,14 +504,14 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
             </button>
           )}
         </div>
-        </>
-        )}
+        </div>
+        </div>
         </>
         )}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-3 sm:py-4">
+      <div className="flex-1 overflow-y-auto scroll-smooth px-3 sm:px-6 py-3 sm:py-4">
         <div className="max-w-425 mx-auto">
         {pageTab === 'documents' && <ProjectDocsTab projectId={projectId} isAdmin={isAdmin} />}
         {pageTab === 'photos' && <ProjectPhotosTab projectId={projectId} isAdmin={isAdmin} />}

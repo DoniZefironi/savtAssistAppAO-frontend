@@ -114,7 +114,7 @@ export function GlobalSearch() {
       {open && dropPos && createPortal(
         <div
           ref={dropRef}
-          className="fixed w-[420px] bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 overflow-hidden flex flex-col"
+          className="fixed w-[420px] bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 overflow-hidden flex flex-col animate-in fade-in-0 zoom-in-95 duration-100"
           style={{ top: dropPos.top, right: dropPos.right, zIndex: 9999, maxHeight: 480 }}
         >
           <div className="px-4 pt-3 pb-2 shrink-0">

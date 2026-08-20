@@ -70,7 +70,7 @@ export function ForwardDialog({ messages, currentChatId, onClose }: { messages: 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40 dark:bg-black/60" />
-      <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 mb-4 sm:mb-0 max-h-[60vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 mb-4 sm:mb-0 max-h-[60vh] flex flex-col animate-in fade-in-0 zoom-in-95 duration-100" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
           <p className="font-semibold text-slate-800 dark:text-slate-100">
             {messages.length > 1 ? `Переслать (${messages.length})` : 'Переслать в чат'}

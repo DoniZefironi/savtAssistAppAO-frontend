@@ -86,7 +86,7 @@ export function CabinetTypeCombobox({ value, onChange, placeholder = 'Венти
       </div>
 
       {showDropdown && (
-        <div className="absolute z-50 mt-1 w-full bg-white border dark:bg-gray-900 border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+        <div className="absolute z-50 mt-1 w-full bg-white border dark:bg-gray-900 border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto animate-in fade-in-0 zoom-in-95 duration-100">
           {filtered.map(tag => (
             <button
               key={tag.id}

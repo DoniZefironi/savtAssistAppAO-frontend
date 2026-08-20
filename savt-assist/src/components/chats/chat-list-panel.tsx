@@ -113,7 +113,7 @@ export function ChatListPanel({ chats, selectedId, onSelect, onSelectChatId, loa
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto scroll-smooth">
         {loading && (
           <div className="space-y-px pt-1">
             {[1, 2, 3, 4, 5].map((i) => (

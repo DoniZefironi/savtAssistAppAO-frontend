@@ -50,7 +50,7 @@ export function ChatComposer({
   return (
     <>
       {stickerPickerOpen && (
-        <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700/60 px-3 pt-2 pb-1 shrink-0">
+        <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700/60 px-3 pt-2 pb-1 shrink-0 animate-in fade-in-0 zoom-in-95 duration-100">
           <div className="max-w-[100rem] mx-auto">
           <div className="flex gap-1 mb-2">
             {Object.keys(STICKERS).map(cat => (

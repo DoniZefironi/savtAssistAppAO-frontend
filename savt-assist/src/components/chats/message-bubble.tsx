@@ -131,7 +131,7 @@ export const MessageBubble = React.memo(function MessageBubble({
   const ctxMenu = ctxPos && (
     <div
       ref={menuRef}
-      className="fixed z-[100] bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-100 dark:border-slate-700 py-1 min-w-[210px] overflow-hidden"
+      className="fixed z-[100] bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-100 dark:border-slate-700 py-1 min-w-[210px] overflow-hidden animate-in fade-in-0 zoom-in-95 duration-100"
       style={{ top: ctxPos.y, left: ctxPos.x }}
       onClick={e => e.stopPropagation()}
     >

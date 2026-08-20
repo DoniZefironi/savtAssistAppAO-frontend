@@ -350,8 +350,8 @@ export function KbView() {
           </div>
         </div>
 
-        {filtersOpen && (
-        <>
+        <div className={cn('grid transition-[grid-template-rows] duration-150 ease-out', filtersOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
+        <div className="overflow-hidden min-h-0">
         <div className="relative mb-3">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
           <input
@@ -410,8 +410,8 @@ export function KbView() {
             )}
           </div>
         )}
-        </>
-        )}
+        </div>
+        </div>
 
       </div>
 
@@ -468,7 +468,7 @@ export function KbView() {
         )}
 
         <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900">
-          <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-3 sm:py-4">
+          <div className="flex-1 overflow-y-auto scroll-smooth px-3 sm:px-6 py-3 sm:py-4">
             {articlesQ.isLoading && (
               <div className={view === 'grid' ? GRID_CLASSES : 'space-y-3'}>
                 {[1, 2, 3, 4].map(i => <Skeleton key={i} className={`w-full rounded-xl ${view === 'grid' ? 'h-40' : 'h-28'}`} />)}
