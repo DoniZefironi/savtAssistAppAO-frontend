@@ -330,7 +330,9 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
       // мгновенно, эта гонка стала выигрываться в другую сторону — при повторном
       // заходе в уже прочитанный чат unread_count из пропса чата ещё не успевал
       // обновиться, и чат ошибочно прыгал на "первое непрочитанное" вместо низа.
-      const firstUnread = messages.find(m => !m.is_read)
+      // is_read у СВОИХ сообщений — это "прочитано клиентом", а не "прочитано
+      // мной", поэтому в кандидаты на "первое непрочитанное" берём только чужие.
+      const firstUnread = messages.find(m => !m.is_read && m.sender_id !== currentUser?.id)
       if (firstUnread) {
         setFirstUnreadId(firstUnread.id)
         return
