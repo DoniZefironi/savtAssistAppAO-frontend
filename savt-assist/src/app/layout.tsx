@@ -1,11 +1,9 @@
 import type { Metadata } from 'next'
-import { Geist } from 'next/font/google'
+import { GeistSans } from 'geist/font/sans'
 import Script from 'next/script'
 import './globals.css'
 import 'leaflet/dist/leaflet.css'
 import { Providers } from '@/components/layout/providers'
-
-const geist = Geist({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'SavtAssist',
@@ -34,7 +32,7 @@ const THEME_INIT_SCRIPT = `
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ru" className="h-full">
-      <body className={`${geist.className} h-full antialiased`}>
+      <body className={`${GeistSans.className} h-full antialiased`}>
         <Script id="theme-init" strategy="beforeInteractive">
           {THEME_INIT_SCRIPT}
         </Script>
