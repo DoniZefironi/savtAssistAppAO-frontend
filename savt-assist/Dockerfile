@@ -10,7 +10,13 @@ COPY package.json package-lock.json ./
 # сети), из-за чего npm ci падал уже спустя 2+ минуты. Больше попыток и таймаут
 # терпимее к медленной/нестабильной сети, а audit/fund — лишние запросы, без
 # которых сборка спокойно обходится.
-RUN npm ci --no-audit --no-fund --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000 --fetch-timeout=300000
+# --mount=type=cache — кэш npm (скачанные .tgz пакетов) переживает между
+# сборками отдельно от слоёв Dockerfile: даже когда package-lock.json меняется
+# и слой с npm ci пересобирается заново, уже знакомые пакеты берутся из этого
+# кэша, а не качаются заново по той же медленной сети — качать приходится
+# только реально новые/изменившиеся пакеты.
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --no-audit --no-fund --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000 --fetch-timeout=300000
 
 FROM node:22-alpine AS builder
 WORKDIR /app

@@ -2,6 +2,12 @@ services:
   frontend:
     build:
       context: .
+      # host — на сервере множество параллельных соединений npm ci (630+
+      # пакетов разом) через Docker bridge-сеть виснет/падает ("Exit handler
+      # never called!"); через host-сеть тот же npm ci проходит за 18с.
+      # Влияет только на сборку образа, не на сеть уже запущенного контейнера
+      # (та осталась внешней `backend` ниже).
+      network: host
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://helper.savt.by}
     image: savt-assist-frontend
