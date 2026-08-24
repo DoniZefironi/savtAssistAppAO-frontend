@@ -4,7 +4,13 @@ FROM node:22-alpine AS deps
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
 COPY package.json package-lock.json ./
-RUN npm ci
+# --fetch-* и --no-audit/--no-fund — сборочный сервер иногда обрывает
+# соединение с registry.npmjs.org на новых (ещё не закэшированных) пакетах
+# ("npm error Exit handler never called!" — известный баг npm при нестабильной
+# сети), из-за чего npm ci падал уже спустя 2+ минуты. Больше попыток и таймаут
+# терпимее к медленной/нестабильной сети, а audit/fund — лишние запросы, без
+# которых сборка спокойно обходится.
+RUN npm ci --no-audit --no-fund --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000 --fetch-timeout=300000
 
 FROM node:22-alpine AS builder
 WORKDIR /app
