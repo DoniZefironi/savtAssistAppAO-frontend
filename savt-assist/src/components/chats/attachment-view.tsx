@@ -5,12 +5,22 @@ import { X, FileText, FileSpreadsheet, Video, Archive, Paperclip, Mic, Music, Ma
 import { cn } from '@/lib/utils'
 import type { ChatAttachment } from '@/types'
 
-import { toFullUrl } from '@/lib/api/base-url'
+import { API_URL, toFullUrl } from '@/lib/api/base-url'
+import { authorizedFetch } from '@/lib/api/client'
 export { toFullUrl }
 
 export async function downloadBlob(url: string, filename: string) {
   try {
-    const res = await fetch(url, { credentials: 'include' })
+    // url — уже абсолютный (toFullUrl), т.е. на другой origin (бэкенд): для
+    // <img>/<video>/<audio> src это ок, но обычный fetch(url, {credentials:
+    // 'include'}) туда либо упирается в CORS, либо просто не несёт нужный
+    // Authorization (авторизация тут не на куках — см. authorizedFetch в
+    // api/client.ts) и тихо падает в catch, а он открывает файл вместо
+    // скачивания. authorizedFetch идёт через тот же /backend-прокси
+    // (same-origin, без CORS) с правильным токеном.
+    const path = url.startsWith(API_URL) ? url.slice(API_URL.length) : url
+    const res = await authorizedFetch(path)
+    if (!res.ok) throw new Error(`Download failed: ${res.status}`)
     const blob = await res.blob()
     const blobUrl = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -266,14 +276,13 @@ function VideoAttachment({ a, isOwn }: { a: ChatAttachment; isOwn: boolean }) {
         className="rounded-xl max-w-full max-h-64 block"
         preload="metadata"
       />
-      <a
-        href={url}
-        download={name}
-        className="absolute top-2 right-2 w-7 h-7 bg-black/50 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
+      <button
+        onClick={() => downloadBlob(url, name)}
+        className="absolute top-2 right-2 w-7 h-7 bg-black/50 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
         title="Скачать"
       >
         <DownloadIcon size={14} />
-      </a>
+      </button>
     </div>
   )
 }
