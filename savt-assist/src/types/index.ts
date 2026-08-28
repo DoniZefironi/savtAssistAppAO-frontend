@@ -22,6 +22,19 @@ export interface AuthTokens {
   refresh_token: string
 }
 
+// Данные о привязанной SIM (внешний сервис — не эта же база) — см.
+// README-backend.md, «Рут admin: cabinets», поле sim у GET /admin/cabinets/{id}.
+export interface SimInfoOut {
+  id: number
+  serial_number: string | null
+  phone: string | null
+  ip: string | null
+  status: string | null
+  name: string | null
+  activation_date: string | null
+  need_ping: boolean
+}
+
 export interface Cabinet {
   id: number
   type: string | null
@@ -38,6 +51,11 @@ export interface Cabinet {
   tags?: { id: number; name: string; scope: string }[]
   project_id?: number | null
   project_name?: string | null
+  // sim_id != null && sim == null — SIM привязана, но внешний сервис с её
+  // данными сейчас недоступен. Это НЕ то же самое, что "SIM не привязана"
+  // (sim_id == null && sim == null) — см. cabinet-detail-dialog.tsx.
+  sim_id?: number | null
+  sim?: SimInfoOut | null
   // Топик MQTT-контроллера этого ШУ (напр. "26_001/1/data") — по нему
   // telemetry-proxy сопоставляет входящие сообщения с конкретным ШУ
   // (см. README-backend.md, «Рут admin: telemetry»). Уникален среди ШУ.

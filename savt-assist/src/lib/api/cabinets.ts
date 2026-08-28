@@ -57,6 +57,9 @@ export interface UpdateCabinetDto {
   // пустое, и слать null/"" при каждом сохранении стёрло бы уже сохранённый
   // пароль (см. README-backend.md, «Ловушка с mqtt_password для фронта»).
   mqtt_password?: string
+  // Как и с остальными полями PATCH — не передавать вообще, если не меняли;
+  // null отвязывает SIM. 409, если эта SIM уже привязана к другому ШУ.
+  sim_id?: number | null
 }
 
 export const cabinetsApi = {

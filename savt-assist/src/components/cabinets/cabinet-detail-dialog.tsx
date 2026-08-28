@@ -9,6 +9,7 @@ import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ProjectCombobox } from '@/components/ui/project-combobox'
+import { SimCombobox } from '@/components/ui/sim-combobox'
 import { WarrantyBadge } from './warranty-badge'
 import { cabinetsApi, UpdateCabinetDto } from '@/lib/api/cabinets'
 import { apiErrorMessage } from '@/lib/api/errors'
@@ -238,6 +239,7 @@ function DetailContent({ cabinetId, initialMode }: {
               </div>
             )}
             <CabinetProjectRow cabinetId={cabinetId} cabinet={cabinet} isAdmin={isAdmin} />
+            <SimRow cabinetId={cabinetId} cabinet={cabinet} isAdmin={isAdmin} />
           </div>
         )}
         {tab === 'docs' && <DocsTab cabinetId={cabinetId} isAdmin={isAdmin} />}
@@ -560,6 +562,106 @@ function CabinetProjectRow({ cabinetId, cabinet, isAdmin }: {
         {!editing && isAdmin && (
           <button onClick={() => setEditing(true)} className="text-xs text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 transition-colors cursor-pointer mt-0.5 block">
             + изменить проект
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function SimRow({ cabinetId, cabinet, isAdmin }: {
+  cabinetId: number
+  cabinet: Cabinet
+  isAdmin: boolean
+}) {
+  const qc = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [simId, setSimId] = useState<number | null>(cabinet.sim_id ?? null)
+
+  const mutation = useMutation({
+    mutationFn: (id: number | null) => cabinetsApi.update(cabinetId, { sim_id: id }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cabinet', cabinetId] })
+      qc.invalidateQueries({ queryKey: ['cabinets'] })
+      toast.success('SIM обновлена')
+      setEditing(false)
+    },
+    onError: (e) => {
+      if (isAxiosError(e) && e.response?.status === 409) {
+        toast.error('Эта SIM уже привязана к другому ШУ')
+      } else {
+        toast.error(apiErrorMessage(e, 'Не удалось изменить SIM'))
+      }
+    },
+  })
+
+  const cancel = () => {
+    setSimId(cabinet.sim_id ?? null)
+    setEditing(false)
+  }
+
+  // sim_id есть, а sim нет — SIM привязана, но внешний сервис с её данными
+  // сейчас недоступен. Это не то же самое, что "SIM не привязана" вообще
+  // (см. SimInfoOut в types/index.ts) — показываем это отдельно, а не молча
+  // как пустое поле.
+  const unavailable = cabinet.sim_id != null && cabinet.sim == null
+
+  return (
+    <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4 px-4 sm:px-6 py-3">
+      <span className="text-xs text-slate-400 sm:w-28 shrink-0 sm:pt-0.5">SIM</span>
+      <div className="flex-1 min-w-0">
+        {!editing ? (
+          cabinet.sim ? (
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                  {cabinet.sim.name || cabinet.sim.phone || cabinet.sim.serial_number || `SIM #${cabinet.sim.id}`}
+                </span>
+                {cabinet.sim.status && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
+                    {cabinet.sim.status}
+                  </span>
+                )}
+              </div>
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-400">
+                {cabinet.sim.phone && <span>{cabinet.sim.phone}</span>}
+                {cabinet.sim.serial_number && <span>{cabinet.sim.serial_number}</span>}
+                {cabinet.sim.ip && <span>{cabinet.sim.ip}</span>}
+                {cabinet.sim.activation_date && <span>с {formatDate(cabinet.sim.activation_date)}</span>}
+              </div>
+            </div>
+          ) : unavailable ? (
+            <p className="text-xs text-amber-600 dark:text-amber-400 flex items-start gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              SIM привязана, но данные сейчас недоступны — внешний сервис не отвечает.
+            </p>
+          ) : (
+            <span className="text-sm text-slate-300 italic">Без SIM</span>
+          )
+        ) : (
+          <div className="space-y-2">
+            <SimCombobox
+              value={simId}
+              valueLabel={cabinet.sim?.name ?? (unavailable ? `SIM #${cabinet.sim_id}` : null)}
+              onChange={setSimId}
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={cancel} disabled={mutation.isPending} className="h-7 text-xs px-2 cursor-pointer">
+                Отмена
+              </Button>
+              <Button
+                onClick={() => mutation.mutate(simId)}
+                disabled={mutation.isPending}
+                className="h-7 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white"
+              >
+                {mutation.isPending ? 'Сохранение...' : 'Сохранить'}
+              </Button>
+            </div>
+          </div>
+        )}
+        {!editing && isAdmin && (
+          <button onClick={() => setEditing(true)} className="text-xs text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 transition-colors cursor-pointer mt-1 block">
+            + изменить SIM
           </button>
         )}
       </div>
