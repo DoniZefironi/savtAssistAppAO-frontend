@@ -33,6 +33,10 @@ export interface SimInfoOut {
   name: string | null
   activation_date: string | null
   need_ping: boolean
+  // Ссылка на приложение SimApi — одна и та же для всех SIM, НЕ deep-link на
+  // конкретную запись (SimApi не отражает открытую карточку в URL). Нужную
+  // SIM там придётся искать вручную после перехода.
+  sim_url: string | null
 }
 
 export interface Cabinet {

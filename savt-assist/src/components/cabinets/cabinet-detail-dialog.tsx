@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { isAxiosError } from 'axios'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, ExternalLink } from 'lucide-react'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -632,6 +632,21 @@ function SimRow({ cabinetId, cabinet, isAdmin }: {
                   {sim.ip && <span>{sim.ip}</span>}
                   {sim.activation_date && <span>с {formatDate(sim.activation_date)}</span>}
                 </div>
+                {sim.sim_url && (
+                  // Ссылка общая на приложение SimApi, не на конкретную запись
+                  // (там нет deep-link на карточку) — искать эту SIM там придётся
+                  // вручную, отсюда явная оговорка в title и подписи.
+                  <a
+                    href={sim.sim_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Общая ссылка на SimApi — эта SIM там не откроется напрямую, искать придётся вручную"
+                    className="mt-1 inline-flex items-center gap-1 text-xs text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 transition-colors"
+                  >
+                    Открыть в SimApi
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
               </div>
             )
           })() : unavailable ? (
