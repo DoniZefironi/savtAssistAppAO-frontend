@@ -611,26 +611,30 @@ function SimRow({ cabinetId, cabinet, isAdmin }: {
       <span className="text-xs text-slate-400 sm:w-28 shrink-0 sm:pt-0.5">SIM</span>
       <div className="flex-1 min-w-0">
         {!editing ? (
-          cabinet.sim ? (
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                  {cabinet.sim.name || cabinet.sim.phone || cabinet.sim.serial_number || `SIM #${cabinet.sim.id}`}
-                </span>
-                {cabinet.sim.status && (
-                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
-                    {cabinet.sim.status}
-                  </span>
-                )}
+          cabinet.sim ? (() => {
+            const sim = cabinet.sim
+            // Заголовок берёт первое непустое из name/phone/serial_number — то,
+            // что попало в заголовок, во второй строке уже не повторяем.
+            const title = sim.name || sim.phone || sim.serial_number || `SIM #${sim.id}`
+            return (
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{title}</span>
+                  {sim.status && (
+                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
+                      {sim.status}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-400">
+                  {sim.phone && sim.phone !== title && <span>{sim.phone}</span>}
+                  {sim.serial_number && sim.serial_number !== title && <span>{sim.serial_number}</span>}
+                  {sim.ip && <span>{sim.ip}</span>}
+                  {sim.activation_date && <span>с {formatDate(sim.activation_date)}</span>}
+                </div>
               </div>
-              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-400">
-                {cabinet.sim.phone && <span>{cabinet.sim.phone}</span>}
-                {cabinet.sim.serial_number && <span>{cabinet.sim.serial_number}</span>}
-                {cabinet.sim.ip && <span>{cabinet.sim.ip}</span>}
-                {cabinet.sim.activation_date && <span>с {formatDate(cabinet.sim.activation_date)}</span>}
-              </div>
-            </div>
-          ) : unavailable ? (
+            )
+          })() : unavailable ? (
             <p className="text-xs text-amber-600 dark:text-amber-400 flex items-start gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               SIM привязана, но данные сейчас недоступны — внешний сервис не отвечает.
