@@ -1,5 +1,5 @@
 import { apiClient, authorizedFetch } from './client'
-import { toFullUrl } from './base-url'
+import { API_URL, toFullUrl } from './base-url'
 import type { PaginatedResponse } from '@/types'
 import type { Tag } from './kb'
 
@@ -99,9 +99,14 @@ export const mediaApi = {
   downloadDocument: async (fileUrl: string, filename: string) => {
     const url = toFullUrl(fileUrl)
     try {
-      const res = await fetch(url)
-      const blob = await res.blob()
-      saveBlob(blob, filename)
+      // Через authorizedFetch (same-origin прокси /backend), а не напрямую по
+      // абсолютной ссылке: там другой origin, и обычный fetch упирается в CORS,
+      // молча падая в catch — а он открывает файл вместо скачивания. Ровно
+      // тот же случай был у вложений чата, см. attachment-view.tsx.
+      const path = url.startsWith(API_URL) ? url.slice(API_URL.length) : url
+      const res = await authorizedFetch(path)
+      if (!res.ok) throw new Error(`Download failed: ${res.status}`)
+      saveBlob(await res.blob(), filename)
     } catch {
       window.open(url, '_blank')
     }

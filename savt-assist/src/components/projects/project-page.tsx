@@ -93,7 +93,9 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
   // Отдельный ключ от общего списка ШУ (cabinets-view.tsx, 'filters-open-cabinets') —
   // это разные экраны, вид на одном не должен навязываться другому.
   const [filtersOpen, setFiltersOpen] = usePersistentState('filters-open-project-cabinets', true)
-  const [pageTab, setPageTab] = useState<'cabinets' | 'documents' | 'photos'>('cabinets')
+  // Вкладка переживает перезагрузку страницы — иначе, работая с документами
+  // или фото проекта, после каждого F5 возвращало на «Шкафы».
+  const [pageTab, setPageTab] = usePersistentState<'cabinets' | 'documents' | 'photos'>('project-page-tab', 'cabinets')
   // Отдельный ключ от общего списка ШУ (cabinets-view.tsx, 'view-mode-cabinets') —
   // можно держать колонки в общем списке и строки внутри проекта, или наоборот.
   const [view, setView] = usePersistentState<'list' | 'grid'>('view-mode-project-cabinets', 'list')
