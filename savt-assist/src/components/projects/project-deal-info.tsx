@@ -107,9 +107,6 @@ export function ProjectDealInfo({ project }: { project: ProjectDetail }) {
                         )}
                       </div>
                     ))}
-                    <p className="px-3 py-1.5 text-[10px] text-slate-400 sticky bottom-0 bg-white dark:bg-slate-800">
-                      Из сделки Bitrix, только для чтения
-                    </p>
                   </div>
                 </>
               )}

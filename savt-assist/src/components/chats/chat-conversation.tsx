@@ -47,7 +47,9 @@ interface Props {
 }
 
 type MsgPages = InfiniteData<ChatMessage[]>
-type PageParam = { before_id?: number; after_id?: number } | undefined
+// around_id — только у первой страницы «окрестности» найденного сообщения
+// (см. якорный запрос ниже); дальше в обе стороны листается обычными курсорами.
+type PageParam = { before_id?: number; after_id?: number; around_id?: number } | undefined
 
 function patchPages(old: MsgPages | undefined, fn: (m: ChatMessage) => ChatMessage): MsgPages | undefined {
   if (!old) return old
@@ -60,6 +62,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const currentUser = useAuthStore((s) => s.user)
   const setUser = useAuthStore((s) => s.setUser)
   const pendingMessageId = useChatNavStore((s) => s.pendingMessageId)
+  const pendingChatId = useChatNavStore((s) => s.pendingChatId)
   const clearPendingMessage = useChatNavStore((s) => s.clearPendingMessage)
   const [subCabinetId, setSubCabinetId] = useState<number | null>(null)
   const [subUserId, setSubUserId] = useState<number | null>(null)
@@ -103,7 +106,14 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const [stickerPickerOpen, setStickerPickerOpen] = useState(false)
   const [stickerCat, setStickerCat] = useState(Object.keys(STICKERS)[0])
   const [transcriptions, setTranscriptions] = useState<Map<number, { text: string; loading: boolean }>>(new Map())
-  const [jumpMode, setJumpMode] = useState(false)
+  // id сообщения, вокруг которого сейчас смотрим переписку (переход по поиску,
+  // ответу, закреплённому). null — обычный режим, живой хвост чата.
+  // Ключевое: этот режим живёт в СВОЁМ запросе с отдельным ключом (см. ниже),
+  // а не подменой данных живого списка — иначе переход и обычная пагинация
+  // дерутся за один и тот же кэш, что и было причиной серии багов с «второй
+  // переход не работает».
+  const [anchorId, setAnchorId] = useState<number | null>(null)
+  const jumpMode = anchorId !== null
   const jumpTargetRef = useRef<number | null>(null)
   const jumpScrolledRef = useRef(false)
   const [newMessageCount, setNewMessageCount] = useState(0)
@@ -127,31 +137,44 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     const el = document.getElementById(`msg-${messageId}`)
     const container = listRef.current
     if (!el || !container) return false
-    const elRect = el.getBoundingClientRect()
-    const cRect = container.getBoundingClientRect()
-    container.scrollBy({ top: elRect.top - cRect.top - cRect.height / 2 + elRect.height / 2, behavior: 'smooth' })
-    el.style.transition = 'background-color 0.3s ease'
-    el.style.backgroundColor = 'rgba(74,143,231,0.2)'
-    setTimeout(() => { el.style.backgroundColor = '' }, 1500)
+    const centerOnEl = () => {
+      const elRect = el.getBoundingClientRect()
+      const cRect = container.getBoundingClientRect()
+      container.scrollBy({ top: elRect.top - cRect.top - cRect.height / 2 + elRect.height / 2, behavior: 'smooth' })
+    }
+    centerOnEl()
+    // Аватарки/вложения соседних сообщений в только что подставленной "окрестности"
+    // ещё могут грузиться в момент первого скролла — их подгрузка меняет высоту
+    // контента и уводит целевое сообщение уже ПОСЛЕ того, как мы отцентровали
+    // по нему. Повторяем центрирование ещё пару раз с паузой — догоняет
+    // окончательный layout без точного знания, когда именно всё догрузится.
+    setTimeout(centerOnEl, 300)
+    setTimeout(centerOnEl, 800)
+    // background-color тут почти не видно — у самого пузыря (в любом из его
+    // вариантов: обычный/медиа/удалённый) свой непрозрачный фон, который
+    // перекрывает подсветку контейнера, оставляя видной только узкую полоску
+    // в отступах вокруг аватарки. Кольцо снаружи всего сообщения, наоборот,
+    // видно всегда, независимо от того, что внутри.
+    el.style.transition = 'box-shadow 0.3s ease'
+    el.style.borderRadius = '0.75rem'
+    el.style.boxShadow = '0 0 0 3px rgba(74,143,231,0.5)'
+    setTimeout(() => {
+      el.style.boxShadow = ''
+      el.style.borderRadius = ''
+    }, 1500)
     return true
   }, [])
 
-  const handleScrollToMessage = useCallback(async (messageId: number) => {
+  // Переход к сообщению: если оно уже на экране — просто подсвечиваем, иначе
+  // переключаемся на якорный запрос (см. anchorQuery ниже). Никаких ручных
+  // fetch + setQueryData: живой список сообщений вообще не трогается, поэтому
+  // повторные переходы подряд больше не могут затереть данные друг друга.
+  const handleScrollToMessage = useCallback((messageId: number) => {
     if (highlightMessage(messageId)) return
-    try {
-      const msgs = await chatsApi.getMessagesAround(chat.id, messageId)
-      // newest-first page format (same as what the query returns)
-      const page = [...msgs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      jumpTargetRef.current = messageId
-      setJumpMode(true)
-      qc.setQueryData<MsgPages>(['messages', chat.id], {
-        pages: [page],
-        pageParams: [undefined],
-      })
-    } catch {
-      toast.error('Не удалось перейти к сообщению')
-    }
-  }, [highlightMessage, chat.id, qc])
+    jumpTargetRef.current = messageId
+    jumpScrolledRef.current = false
+    setAnchorId(messageId)
+  }, [highlightMessage])
 
   useEffect(() => {
     const obs = new MutationObserver(() =>
@@ -189,10 +212,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     return () => clearTimeout(t)
   }, [searchInput])
 
-  const {
-    data: messagesData, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage, isFetchNextPageError,
-    fetchPreviousPage, hasPreviousPage, isFetchingPreviousPage, isFetchPreviousPageError,
-  } = useInfiniteQuery<ChatMessage[], Error, MsgPages, ['messages', number], PageParam>({
+  const liveQuery = useInfiniteQuery<ChatMessage[], Error, MsgPages, ['messages', number], PageParam>({
     queryKey: ['messages', chat.id],
     initialPageParam: undefined,
     queryFn: ({ pageParam }) => chatsApi.getMessages(chat.id, pageParam?.before_id, pageParam?.after_id),
@@ -209,11 +229,49 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     refetchOnMount: false,
   })
 
+  // Якорный запрос — «окрестность» найденного сообщения, СВОЙ ключ на каждый
+  // якорь. Живой список (liveQuery) при этом остаётся нетронутым и продолжает
+  // обновляться по SSE, поэтому возврат к последним сообщениям — это просто
+  // setAnchorId(null), без перезагрузки, а два перехода подряд не могут
+  // затереть данные друг друга (у них разные ключи).
+  const anchorQuery = useInfiniteQuery<ChatMessage[], Error, MsgPages, ['messages', number, 'around', number | null], PageParam>({
+    queryKey: ['messages', chat.id, 'around', anchorId],
+    initialPageParam: anchorId != null ? { around_id: anchorId } : undefined,
+    queryFn: async ({ pageParam }) => {
+      if (pageParam?.around_id != null) {
+        const msgs = await chatsApi.getMessagesAround(chat.id, pageParam.around_id)
+        // тот же формат, что у обычных страниц: сначала самые новые
+        return [...msgs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      }
+      return chatsApi.getMessages(chat.id, pageParam?.before_id, pageParam?.after_id)
+    },
+    getNextPageParam: (lastPage) => lastPage.length < 30 ? undefined : { before_id: lastPage[lastPage.length - 1]?.id },
+    getPreviousPageParam: (firstPage) => firstPage.length < 30 ? undefined : { after_id: firstPage[0]?.id },
+    enabled: anchorId !== null,
+    refetchOnMount: false,
+  })
+
+  // Всё, что ниже, работает с «активным» запросом и не знает, живой он или
+  // якорный — поэтому остальной код (пагинация, скроллы, рендер) не меняется.
+  const activeQuery = anchorId !== null ? anchorQuery : liveQuery
+  const {
+    data: messagesData, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage, isFetchNextPageError,
+    fetchPreviousPage, hasPreviousPage, isFetchingPreviousPage, isFetchPreviousPageError,
+  } = activeQuery
+
+  // Точечная правка одного сообщения сразу во ВСЕХ запросах сообщений этого
+  // чата: ключ в фильтре работает как префикс, поэтому накрывает и живой
+  // список ['messages', id], и любую «окрестность» ['messages', id, 'around', …].
+  const patchAllMessageQueries = useCallback((fn: (m: ChatMessage) => ChatMessage) => {
+    qc.setQueriesData<MsgPages>({ queryKey: ['messages', chat.id] }, (old) => patchPages(old, fn))
+  }, [qc, chat.id])
+
   // Realtime вместо поллинга сообщений — см. README-backend.md, "Realtime (SSE)
   // для операторской панели". message.created дедуплицируется по id (своё же
-  // отправленное сообщение уже добавлено локально в sendMutation.onSuccess) и
-  // намеренно игнорируется в jumpMode — там pages[0] держит "окрестность"
-  // сообщения, к которому прыгнули, а не настоящий хвост переписки.
+  // отправленное сообщение уже добавлено локально в sendMutation.onSuccess).
+  // Живой список патчится всегда, в том числе пока смотрим «окрестность»
+  // найденного сообщения — это отдельный запрос со своим ключом, и к возврату
+  // по кнопке «Последние ↓» живой список уже полностью актуален.
   //
   // Проверено вживую (curl -N по реальному каналу): data у message.created/updated —
   // полный MessageOut, а у message.deleted/reaction_changed/pinned/unpinned — только
@@ -224,9 +282,11 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const handleRealtimeEvent = useCallback((envelope: RealtimeEnvelope) => {
     switch (envelope.type) {
       case 'message.created': {
-        if (jumpMode) return
         const msg = envelope.data as ChatMessage
-        const wasAtBottom = isNearBottom()
+        // В режиме перехода на экране не живой хвост, поэтому «был ли внизу»
+        // и счётчик новых сообщений там смысла не имеют — но сам кэш живого
+        // списка ниже обновляем в любом случае.
+        const wasAtBottom = jumpMode || isNearBottom()
         let appended = false
         qc.setQueryData<MsgPages>(['messages', chat.id], (old) => {
           if (!old) return old
@@ -246,13 +306,17 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
       }
       case 'message.updated': {
         const msg = envelope.data as ChatMessage
-        qc.setQueryData<MsgPages>(['messages', chat.id], (old) => patchPages(old, m => m.id === msg.id ? { ...m, ...msg } : m))
+        // setQueriesData, а не setQueryData: ключ здесь работает как префикс и
+        // накрывает и живой список, и «окрестность» найденного сообщения
+        // (['messages', id, 'around', anchorId]) — иначе правка сообщения не
+        // была бы видна, пока смотришь его через переход по поиску.
+        patchAllMessageQueries(m => m.id === msg.id ? { ...m, ...msg } : m)
         return
       }
       case 'message.deleted': {
         const { id } = envelope.data as { id: number }
         const deleted_at = new Date().toISOString()
-        qc.setQueryData<MsgPages>(['messages', chat.id], (old) => patchPages(old, m => m.id === id ? { ...m, deleted_at } : m))
+        patchAllMessageQueries(m => m.id === id ? { ...m, deleted_at } : m)
         // Вложения удалённого сообщения уходят из панели вместе с ним
         qc.invalidateQueries({ queryKey: ['chat-attachments', chat.id] })
         return
@@ -271,10 +335,10 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         // прочитанными без релоада — см. ReadReceiptIcon в message-bubble.tsx.
         const { message_ids } = envelope.data as { message_ids: number[]; reader_id: number }
         const idSet = new Set(message_ids)
-        qc.setQueryData<MsgPages>(['messages', chat.id], (old) => patchPages(old, m => idSet.has(m.id) ? { ...m, is_read: true } : m))
+        patchAllMessageQueries(m => idSet.has(m.id) ? { ...m, is_read: true } : m)
       }
     }
-  }, [qc, chat.id, jumpMode, isNearBottom])
+  }, [qc, chat.id, jumpMode, isNearBottom, patchAllMessageQueries])
 
   const handleRealtimeReconnect = useCallback(() => {
     qc.invalidateQueries({ queryKey: ['messages', chat.id] })
@@ -305,7 +369,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     scrolledToUnreadRef.current = false
     jumpScrolledRef.current = false
     setFirstUnreadId(undefined)
-    setJumpMode(false)
+    setAnchorId(null)
     jumpTargetRef.current = null
     setNewMessageCount(0)
     setFirstNewMessageId(null)
@@ -315,14 +379,30 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
 
   useEffect(() => {
     if (!pendingMessageId || messages.length === 0) return
+    // Сигнал перехода адресный: пока открыт ПРЕДЫДУЩИЙ чат, он тоже видит
+    // новый pendingMessageId. Без этой проверки он считал переход своим,
+    // искал чужое сообщение у себя (естественно, не находил) и — главное —
+    // гасил сигнал clearPendingMessage(); к моменту, когда открывался нужный
+    // чат, переходить было уже нечему, и он просто показывал последние
+    // сообщения. Отсюда и «первый раз находит, потом нет»: первый клик обычно
+    // был по сообщению уже открытого чата.
+    if (pendingChatId !== null && pendingChatId !== chat.id) return
     clearPendingMessage()
     handleScrollToMessage(pendingMessageId)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingMessageId, messages.length === 0])
+  }, [pendingMessageId, pendingChatId, chat.id, messages.length === 0])
   useEffect(() => {
     if (messages.length === 0) return
     if (!scrolledRef.current) {
       scrolledRef.current = true
+      // Переход к конкретному сообщению (поиск/ответ/закреп) уже в процессе —
+      // эффект чуть выше synchronously запускает handleScrollToMessage раньше
+      // этого эффекта в том же коммите, но pendingMessageId в замыкании этого
+      // рендера ещё отражает "прыжок ожидается". Без этой проверки первый же
+      // рендер чата уводил вниз/на непрочитанное ДО того, как прыжок успевал
+      // подгрузить нужную страницу — и итоговая позиция оставалась там, а не
+      // на найденном сообщении.
+      if (pendingMessageId) return
       // Смотрим is_read у уже загруженных сообщений напрямую, а не chat.unread_count
       // (это поле из отдельного, отдельно инвалидируемого запроса ['operator-chats']).
       // Раньше сообщения из кэша ['messages', chat.id] приходили с сетевой задержкой,
@@ -383,11 +463,16 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const hasNextPageRef = useRef(hasNextPage)
   const isFetchingNextPageRef = useRef(isFetchingNextPage)
   const isFetchNextPageErrorRef = useRef(isFetchNextPageError)
+  // fetchNextPage тоже через реф: активный запрос переключается между живым и
+  // якорным, а наблюдатель ниже создаётся один раз — без рефа он бы навсегда
+  // остался с fetchNextPage живого запроса и в режиме перехода листал бы не тот.
+  const fetchNextPageRef = useRef(fetchNextPage)
   const topIntersectingRef = useRef(false)
   useEffect(() => {
     hasNextPageRef.current = hasNextPage
     isFetchingNextPageRef.current = isFetchingNextPage
     isFetchNextPageErrorRef.current = isFetchNextPageError
+    fetchNextPageRef.current = fetchNextPage
   })
   const maybeFetchOlderMessages = () => {
     const container = listRef.current
@@ -395,7 +480,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     if (!hasNextPageRef.current || isFetchingNextPageRef.current || isFetchNextPageErrorRef.current) return
     wasAtBottomBeforeOlderFetchRef.current = isNearBottom()
     prevScrollHeightRef.current = container.scrollHeight
-    fetchNextPage()
+    fetchNextPageRef.current()
   }
   useEffect(() => {
     const sentinel = topSentinelRef.current
@@ -470,6 +555,12 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
       if (textareaRef.current) textareaRef.current.style.height = 'auto'
       setNewMessageCount(0)
       setFirstNewMessageId(null)
+      // Отправили сообщение, пока смотрели «окрестность» найденного, — логично
+      // вернуть к последним, иначе своё же новое сообщение не видно (оно ушло
+      // в живой список, а на экране остаётся старая часть переписки).
+      setAnchorId(null)
+      jumpTargetRef.current = null
+      jumpScrolledRef.current = false
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
     },
     onError: () => toast.error('Не удалось отправить'),
@@ -479,7 +570,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     mutationFn: ({ messageId, newText }: { messageId: number; newText: string }) =>
       chatsApi.editMessage(chat.id, messageId, newText),
     onSuccess: (updated) => {
-      qc.setQueryData<MsgPages>(['messages', chat.id], (old) => patchPages(old, m => m.id === updated.id ? updated : m))
+      patchAllMessageQueries(m => m.id === updated.id ? updated : m)
       setText(''); setEditingMessage(null)
       if (textareaRef.current) textareaRef.current.style.height = 'auto'
     },
@@ -490,7 +581,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     mutationFn: (messageId: number) => chatsApi.deleteMessage(chat.id, messageId),
     onSuccess: (_, messageId) => {
       const deleted_at = new Date().toISOString()
-      qc.setQueryData<MsgPages>(['messages', chat.id], (old) => patchPages(old, m => m.id === messageId ? { ...m, deleted_at } : m))
+      patchAllMessageQueries(m => m.id === messageId ? { ...m, deleted_at } : m)
     },
     onError: () => toast.error('Не удалось удалить сообщение'),
   })
@@ -502,7 +593,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     onSuccess: ({ deleted_ids }) => {
       const deleted_at = new Date().toISOString()
       const ids = new Set(deleted_ids)
-      qc.setQueryData<MsgPages>(['messages', chat.id], (old) => patchPages(old, m => ids.has(m.id) ? { ...m, deleted_at } : m))
+      patchAllMessageQueries(m => ids.has(m.id) ? { ...m, deleted_at } : m)
     },
     onError: () => toast.error('Не удалось удалить сообщения'),
   })
@@ -661,14 +752,16 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
     }, 0)
   }, [])
 
-  const exitJumpMode = async () => {
-    setJumpMode(false)
+  // Возврат к последним сообщениям — просто переключение обратно на живой
+  // запрос. Никакого resetQueries: живой список всё это время лежал в своём
+  // кэше и обновлялся по SSE, перезагружать его нечего.
+  const exitJumpMode = () => {
+    setAnchorId(null)
     jumpTargetRef.current = null
     jumpScrolledRef.current = false
     setNewMessageCount(0)
     setFirstNewMessageId(null)
-    await qc.resetQueries({ queryKey: ['messages', chat.id] })
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    requestAnimationFrame(() => bottomRef.current?.scrollIntoView())
   }
 
   // Тот же приём, что у верхнего сентинела выше: актуальные значения — через
@@ -679,22 +772,23 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const isFetchingPreviousPageRef = useRef(isFetchingPreviousPage)
   const isFetchPreviousPageErrorRef = useRef(isFetchPreviousPageError)
   const fetchPreviousPageRef = useRef(fetchPreviousPage)
-  const exitJumpModeRef = useRef(exitJumpMode)
   const bottomIntersectingRef = useRef(false)
   useEffect(() => {
     hasPreviousPageRef.current = hasPreviousPage
     isFetchingPreviousPageRef.current = isFetchingPreviousPage
     isFetchPreviousPageErrorRef.current = isFetchPreviousPageError
     fetchPreviousPageRef.current = fetchPreviousPage
-    exitJumpModeRef.current = exitJumpMode
   })
+  // Долистали вниз в режиме перехода — подгружаем более новые сообщения.
+  // Автовыхода отсюда больше нет: раньше «страниц дальше нет» трактовалось как
+  // «пользователь долистал до живого хвоста» и режим перехода сбрасывался сам.
+  // Но у короткой «окрестности» это условие выполняется сразу при приземлении,
+  // из-за чего переход отменялся, толком не начавшись. Выйти можно явно —
+  // кнопкой «Последние ↓».
   const maybeFetchNewerMessages = () => {
     if (!jumpScrolledRef.current || isFetchPreviousPageErrorRef.current) return
-    if (hasPreviousPageRef.current) {
-      if (!isFetchingPreviousPageRef.current) fetchPreviousPageRef.current()
-    } else {
-      exitJumpModeRef.current()
-    }
+    if (!hasPreviousPageRef.current || isFetchingPreviousPageRef.current) return
+    fetchPreviousPageRef.current()
   }
   useEffect(() => {
     if (!jumpMode) return
