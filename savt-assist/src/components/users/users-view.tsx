@@ -77,7 +77,17 @@ export function UsersView() {
   const isSuperadmin = isSuperadminRole(currentUser?.role)
   const isReadOnly = currentUser?.role === 'operator'
 
-  const [roleTab, setRoleTab] = useState<RoleTab>('user')
+  // Вкладка роли переживает перезагрузку — иначе после F5 всегда возвращало
+  // на «Пользователей», даже если работали с операторами или админами.
+  const [storedRoleTab, setRoleTab] = usePersistentState<RoleTab>('users-role-tab', 'user')
+  // Сохранённая вкладка может быть недоступна текущей роли (например, вкладку
+  // «Администраторы» сохранил суперадмин, а зашёл обычный админ, или оператор
+  // открыл панель) — в этом случае откатываемся на «Пользователей», иначе
+  // запрос ушёл бы к недоступному списку, а ни одна вкладка не подсвечивалась.
+  const roleTab: RoleTab =
+    storedRoleTab === 'operator' && isReadOnly ? 'user'
+      : storedRoleTab === 'admin' && !isSuperadmin ? 'user'
+        : storedRoleTab
   const [statusFilter, setStatusFilter] = useState('all')
   const [userTypeFilter, setUserTypeFilter] = useState<'all' | 'individual' | 'organization'>('all')
   const [verifiedFilter, setVerifiedFilter] = useState<boolean | null>(null)
