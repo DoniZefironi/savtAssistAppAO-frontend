@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { MessageCircle } from 'lucide-react'
 import { ChatListPanel } from './chat-list-panel'
@@ -11,6 +11,7 @@ import { cabinetsApi } from '@/lib/api/cabinets'
 import { useChatNavStore } from '@/lib/store/chat-nav'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import { useRealtimeEvents } from '@/lib/hooks/use-realtime-events'
+import { attachmentPreviewLabel } from './attachment-view'
 import type { Chat, ChatMessage } from '@/types'
 
 const CHAT_LIST_EVENT_TYPES = ['chat.created', 'chat.updated']
@@ -128,8 +129,16 @@ export function ChatsPage() {
         ...chat,
         cabinet_name: chat.cabinet_id ? (cabinetNameMap.get(chat.cabinet_id) ?? chat.cabinet_name) : chat.cabinet_name,
         last_message_text: chat.last_message_text ?? (() => {
-          const cached = qc.getQueryData<ChatMessage[]>(['messages', chat.id])
-          return cached?.[0]?.text ?? cached?.[0]?.attachments?.[0]?.file_name ?? null
+          // Кэш useInfiniteQuery — это {pages, pageParams}, а не плоский массив;
+          // самое новое сообщение — pages[0][0] (см. chat-conversation.tsx).
+          // Работает только для чатов, которые уже открывали в этой сессии —
+          // GET /operator/chats сам по себе типа вложения не отдаёт.
+          const cached = qc.getQueryData<InfiniteData<ChatMessage[]>>(['messages', chat.id])
+          const last = cached?.pages?.[0]?.[0]
+          if (!last) return null
+          if (last.text) return last.text
+          const att = last.attachments?.[0]
+          return att ? attachmentPreviewLabel(att) : null
         })(),
         user_name: chat.user_name ?? chat.user_full_name ?? getUserNameFromCache(qc, chat.id),
       }))

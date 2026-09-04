@@ -9,6 +9,19 @@ import { API_URL, toFullUrl } from '@/lib/api/base-url'
 import { authorizedFetch } from '@/lib/api/client'
 export { toFullUrl }
 
+// Подпись вложения без текста — для превью последнего сообщения в списке
+// чатов (chats-page.tsx, chat-conversation.tsx). По mime_type, а не
+// attachment_type: тот содержательно размечает только location, для
+// фото/видео/аудио источник истины здесь — как и в AttachmentView ниже.
+export function attachmentPreviewLabel(a: Pick<ChatAttachment, 'mime_type' | 'attachment_type'>): string {
+  if (a.attachment_type === 'location') return 'Геолокация'
+  const mime = a.mime_type ?? ''
+  if (mime.startsWith('image/')) return 'Фото'
+  if (mime.startsWith('audio/')) return 'Голосовое сообщение'
+  if (mime.startsWith('video/')) return 'Видео'
+  return 'Вложение'
+}
+
 export async function downloadBlob(url: string, filename: string) {
   try {
     // url — уже абсолютный (toFullUrl), т.е. на другой origin (бэкенд): для

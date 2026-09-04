@@ -11,7 +11,7 @@ import {
 import { cn } from '@/lib/utils'
 import { MessageBubble, DateSeparator } from './message-bubble'
 import { chatDisplayName } from './chat-list-panel'
-import { ImageLightbox } from './attachment-view'
+import { ImageLightbox, attachmentPreviewLabel } from './attachment-view'
 import { chatsApi } from '@/lib/api/chats'
 import { authApi } from '@/lib/api/auth'
 import { useAuthStore } from '@/lib/store/auth'
@@ -545,7 +545,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
       })
       qc.setQueriesData<Chat[]>({ queryKey: ['operator-chats'] }, (prev) =>
         prev?.map((c) => c.id === chat.id
-          ? { ...c, last_message_text: msg.text || msg.attachments?.[0]?.file_name || c.last_message_text, last_message_at: msg.created_at, unread_count: 0 }
+          ? { ...c, last_message_text: msg.text || (msg.attachments?.[0] ? attachmentPreviewLabel(msg.attachments[0]) : c.last_message_text), last_message_at: msg.created_at, unread_count: 0 }
           : c) ?? prev
       )
       // Панель вложений кэшируется на 60с — без сброса только что отправленный
