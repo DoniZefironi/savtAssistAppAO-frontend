@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import { Paperclip, Image as ImageIcon, MapPin, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SendIcon, PaperclipIcon, MicIcon, StickerIcon } from './chat-icons'
@@ -47,10 +48,37 @@ export function ChatComposer({
   fileInputRef, onFileChange, onShareLocation, locating, voice, canSend, uploadingFile,
   text, onTextChange, onKeyDown, inputDisabled, textareaRef, onSend,
 }: Props) {
+  const stickerPanelRef = useRef<HTMLDivElement>(null)
+  const stickerButtonRef = useRef<HTMLButtonElement>(null)
+
+  // Колбэк приходит инлайн-стрелкой, т.е. новой ссылкой на каждый рендер чата
+  // (а он перерисовывается часто — SSE, ввод текста). Через реф подписка ниже
+  // зависит только от факта открытия панели и не переподписывается впустую.
+  const toggleStickerPickerRef = useRef(onToggleStickerPicker)
+  useEffect(() => { toggleStickerPickerRef.current = onToggleStickerPicker })
+
+  // Закрытие панели стикеров кликом мимо неё. Клик по самой кнопке исключён:
+  // иначе панель закрылась бы здесь (на mousedown) и тут же открылась обратно
+  // собственным onClick кнопки, то есть кнопка перестала бы закрывать панель.
+  useEffect(() => {
+    if (!stickerPickerOpen) return
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (stickerPanelRef.current?.contains(target)) return
+      if (stickerButtonRef.current?.contains(target)) return
+      toggleStickerPickerRef.current()
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [stickerPickerOpen])
+
   return (
     <>
       {stickerPickerOpen && (
-        <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700/60 px-3 pt-2 pb-1 shrink-0 animate-in fade-in-0 zoom-in-95 duration-100">
+        <div
+          ref={stickerPanelRef}
+          className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700/60 px-3 pt-2 pb-1 shrink-0 animate-in fade-in-0 zoom-in-95 duration-100"
+        >
           <div className="max-w-[100rem] mx-auto">
           <div className="flex gap-1 mb-2">
             {Object.keys(STICKERS).map(cat => (
@@ -139,6 +167,7 @@ export function ChatComposer({
               {locating ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <MapPin className="w-4 h-4" />}
             </button>
             <button
+              ref={stickerButtonRef}
               onClick={onToggleStickerPicker}
               className={cn('w-9 h-9 rounded-full flex items-center justify-center transition-colors shrink-0 cursor-pointer',
                 stickerPickerOpen ? 'bg-[#1B3A72] text-white' : 'text-slate-400 hover:text-[#1B3A72] dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800')}>

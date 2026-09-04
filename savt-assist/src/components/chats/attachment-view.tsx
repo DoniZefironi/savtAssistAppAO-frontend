@@ -157,6 +157,10 @@ function AudioAttachment({ a, isOwn, transcription, transcribing, onTranscribe }
   const [playing, setPlaying] = useState(false)
   const [progress, setProgress] = useState(0)
   const [elapsed, setElapsed] = useState(0)
+  // Распознанный текст бывает длинным и раздувает пузырь — его можно свернуть
+  // той же кнопкой «T», которой он запрашивался. По умолчанию показан, чтобы
+  // сразу увидеть результат распознавания.
+  const [showTranscription, setShowTranscription] = useState(true)
   const audioRef = useRef<HTMLAudioElement>(null)
   const url = toFullUrl(a.file_url ?? '')
   const name = a.file_name ?? ''
@@ -228,16 +232,22 @@ function AudioAttachment({ a, isOwn, transcription, transcribing, onTranscribe }
               {displayTime || '0:00'}
             </span>
             <div className="flex items-center gap-1.5">
-              {onTranscribe && !transcription && (
+              {onTranscribe && (
                 <button
-                  onClick={onTranscribe}
+                  onClick={transcription ? () => setShowTranscription(v => !v) : onTranscribe}
                   disabled={transcribing}
-                  title="Распознать текст"
+                  title={transcription
+                    ? (showTranscription ? 'Скрыть распознанный текст' : 'Показать распознанный текст')
+                    : 'Распознать текст'}
                   className={cn(
-                    'w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold cursor-pointer transition-colors',
-                    isOwn
-                      ? 'bg-white/20 hover:bg-white/30 text-white disabled:opacity-50'
-                      : 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 text-slate-600 dark:text-slate-300 disabled:opacity-50'
+                    'w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold cursor-pointer transition-colors disabled:opacity-50',
+                    // Подсвечена, когда текст сейчас развёрнут — иначе непонятно,
+                    // что кнопка вообще что-то переключает.
+                    transcription && showTranscription
+                      ? (isOwn ? 'bg-white/40 text-white' : 'bg-[#1B3A72] text-white dark:bg-blue-600')
+                      : isOwn
+                        ? 'bg-white/20 hover:bg-white/30 text-white'
+                        : 'bg-slate-200 hover:bg-slate-300 dark:bg-slate-600 dark:hover:bg-slate-500 text-slate-600 dark:text-slate-300'
                   )}
                 >
                   {transcribing ? <div className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin" /> : 'T'}
@@ -255,8 +265,8 @@ function AudioAttachment({ a, isOwn, transcription, transcribing, onTranscribe }
         </div>
       </div>
 
-      {transcription && (
-        <p className={cn('text-xs px-2.5 pb-2.5 leading-relaxed border-t', isOwn ? 'border-white/15 text-white/80' : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300')}>
+      {transcription && showTranscription && (
+        <p className={cn('text-xs px-2.5 pb-2.5 leading-relaxed border-t animate-in fade-in-0 duration-100', isOwn ? 'border-white/15 text-white/80' : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300')}>
           {transcription}
         </p>
       )}
