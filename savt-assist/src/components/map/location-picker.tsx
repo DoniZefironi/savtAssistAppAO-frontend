@@ -61,15 +61,38 @@ async function geocode(query: string): Promise<NominatimResult[]> {
   }
 }
 
+// Обратное геокодирование — для клика по карте: координата есть, а адрес для
+// поля выше нужно ещё узнать (в отличие от обычного поиска, где всё наоборот).
+async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  const params = new URLSearchParams({
+    lat: String(lat),
+    lon: String(lng),
+    format: 'json',
+    'accept-language': 'ru',
+  })
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?${params}`, {
+      headers: { 'User-Agent': 'savt-assist-admin/1.0' },
+    })
+    if (!res.ok) return null
+    const data: { display_name?: string } = await res.json()
+    return data.display_name ?? null
+  } catch {
+    return null
+  }
+}
+
 export function LocationPicker({ value, onChange }: Props) {
   const [address, setAddress] = useState('')
   const [results, setResults] = useState<NominatimResult[]>([])
   const [searching, setSearching] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
   const [activeIdx, setActiveIdx] = useState(-1)
+  const [reverseGeocoding, setReverseGeocoding] = useState(false)
   const dropRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const onChangeRef = useRef(onChange)
+  const reverseGenRef = useRef(0)
   useEffect(() => { onChangeRef.current = onChange })
 
   const debouncedAddress = useDebounce(address, 500)
@@ -118,6 +141,21 @@ export function LocationPicker({ value, onChange }: Props) {
     setResults([])
   }
 
+  // Клик по карте: координата уже есть, а текст адреса — узнаём обратным
+  // геокодированием и подставляем в поле выше.
+  const handleMapChange = (val: LatLng) => {
+    onChange(val)
+    setShowDropdown(false)
+    const gen = ++reverseGenRef.current
+    setReverseGeocoding(true)
+    reverseGeocode(val.lat, val.lng).then(name => {
+      if (reverseGenRef.current !== gen) return
+      if (name) setAddress(name.split(',').slice(0, 3).join(',').trim())
+    }).finally(() => {
+      if (reverseGenRef.current === gen) setReverseGeocoding(false)
+    })
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!showDropdown || results.length === 0) return
     if (e.key === 'ArrowDown') {
@@ -148,7 +186,7 @@ export function LocationPicker({ value, onChange }: Props) {
               placeholder="Минск, ул. Независимости 1..."
               className="w-full text-sm px-3 py-2 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] placeholder:text-slate-300"
             />
-            {searching && (
+            {(searching || reverseGeocoding) && (
               <span className="absolute right-2.5 top-1/2 -translate-y-1/2">
                 <SpinIcon className="w-3.5 h-3.5 text-slate-400 animate-spin" />
               </span>
@@ -157,7 +195,7 @@ export function LocationPicker({ value, onChange }: Props) {
           {value && (
             <button
               type="button"
-              onClick={() => { onChange(null); setAddress('') }}
+              onClick={() => { reverseGenRef.current++; setReverseGeocoding(false); onChange(null); setAddress('') }}
               className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-500 text-sm hover:text-red-500 hover:border-red-300 transition-colors cursor-pointer shrink-0"
               title="Очистить"
             >
@@ -189,7 +227,7 @@ export function LocationPicker({ value, onChange }: Props) {
       </div>
 
       <div className="h-52 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-600 relative">
-        <LocationPickerInner value={value} onChange={onChange} />
+        <LocationPickerInner value={value} onChange={handleMapChange} />
         <div className="absolute bottom-2 left-2 right-2 z-1000 pointer-events-none">
           <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center">
             Кликните на карту или введите адрес выше

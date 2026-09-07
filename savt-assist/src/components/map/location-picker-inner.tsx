@@ -59,6 +59,12 @@ export function LocationPickerInner({ value, onChange }: Props) {
     <MapContainer
       center={position ?? DEFAULT_CENTER}
       zoom={DEFAULT_ZOOM}
+      // Та же граница, что и на карте расположения ШУ (cabinets-map-inner.tsx) —
+      // без неё карту можно утащить за полюса (пустота) или в повторную "копию
+      // мира" по долготе. Viscosity=1 — жёсткий предел, не пружинка.
+      maxBounds={[[-85, -180], [85, 180]]}
+      maxBoundsViscosity={1.0}
+      minZoom={2}
       style={{ width: '100%', height: '100%' }}
       scrollWheelZoom
       attributionControl={false}

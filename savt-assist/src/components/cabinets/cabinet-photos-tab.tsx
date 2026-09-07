@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import { mediaApi } from '@/lib/api/media'
 import type { CabinetPhoto } from '@/lib/api/media'
 import { fmtSize, validatePhotoFile } from './cabinet-dialog-shared'
@@ -31,6 +32,7 @@ function PhotosTabCore({ owner, isAdmin }: { owner: PhotoOwner; isAdmin: boolean
   const [caption, setCaption] = useState('')
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<CabinetPhoto | null>(null)
+  const [isDragOver, setIsDragOver] = useState(false)
 
   const isProject = owner.kind === 'project'
   const queryKey = [isProject ? 'project-photos' : 'cabinet-photos', owner.id]
@@ -85,6 +87,7 @@ function PhotosTabCore({ owner, isAdmin }: { owner: PhotoOwner; isAdmin: boolean
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
+    setIsDragOver(false)
     if (!isAdmin || pendingFile) return
     const file = e.dataTransfer.files?.[0]
     if (!file) return
@@ -99,7 +102,17 @@ function PhotosTabCore({ owner, isAdmin }: { owner: PhotoOwner; isAdmin: boolean
   const photos = data?.items ?? []
 
   return (
-    <div onDragOver={e => e.preventDefault()} onDrop={handleDrop}>
+    <div
+      onDragOver={e => { e.preventDefault(); if (isAdmin) setIsDragOver(true) }}
+      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false) }}
+      onDrop={handleDrop}
+      className={cn('relative transition-colors', isDragOver && 'bg-blue-50/60 dark:bg-blue-900/10')}
+    >
+      {isDragOver && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none border-2 border-dashed border-[#4A8FE7] rounded-lg m-2">
+          <p className="text-sm font-medium text-[#1B3A72] dark:text-blue-400">Отпустите фото для загрузки</p>
+        </div>
+      )}
       {isAdmin && (
         <div className="px-6 py-3 border-b border-slate-50 dark:border-slate-700/30">
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />

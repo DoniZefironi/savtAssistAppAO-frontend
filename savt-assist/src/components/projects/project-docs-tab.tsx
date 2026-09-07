@@ -7,6 +7,7 @@ import { FolderUp } from 'lucide-react'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import { mediaApi } from '@/lib/api/media'
 import { apiErrorMessage } from '@/lib/api/errors'
 import type { CabinetDocument } from '@/lib/api/media'
@@ -23,6 +24,7 @@ export function ProjectDocsTab({ projectId, isAdmin }: { projectId: number; isAd
   const fileRef = useRef<HTMLInputElement>(null)
   const [pending, setPending] = useState<{ file: File; title: string; requiresApproval: boolean; isInternal: boolean } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; title: string } | null>(null)
+  const [isDragOver, setIsDragOver] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['project-docs', projectId],
@@ -74,6 +76,7 @@ export function ProjectDocsTab({ projectId, isAdmin }: { projectId: number; isAd
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
+    setIsDragOver(false)
     if (!isAdmin || pending) return
     const file = e.dataTransfer.files?.[0]
     if (!file) return
@@ -85,7 +88,17 @@ export function ProjectDocsTab({ projectId, isAdmin }: { projectId: number; isAd
   const docs = data?.items ?? []
 
   return (
-    <div onDragOver={e => e.preventDefault()} onDrop={handleDrop}>
+    <div
+      onDragOver={e => { e.preventDefault(); if (isAdmin) setIsDragOver(true) }}
+      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false) }}
+      onDrop={handleDrop}
+      className={cn('relative transition-colors', isDragOver && 'bg-blue-50/60 dark:bg-blue-900/10')}
+    >
+      {isDragOver && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none border-2 border-dashed border-[#4A8FE7] rounded-lg m-2">
+          <p className="text-sm font-medium text-[#1B3A72] dark:text-blue-400">Отпустите файл для загрузки</p>
+        </div>
+      )}
       {isAdmin && (
         <div className="px-1 py-3 border-b border-slate-50 dark:border-slate-700/30">
           <input ref={fileRef} type="file" accept={DOC_ACCEPT} className="hidden" onChange={handleFileSelect} />
