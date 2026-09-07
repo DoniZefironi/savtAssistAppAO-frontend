@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { isAxiosError } from 'axios'
 import { toast } from 'sonner'
 import { X, CheckCircle2, XCircle, Smartphone, PhoneOff, Users, SlidersHorizontal } from 'lucide-react'
 import { cn, isSuperadminRole } from '@/lib/utils'
@@ -99,6 +100,7 @@ export function UsersView() {
   const [view, setView] = usePersistentState<'list' | 'grid'>('view-mode-users', 'list')
   const [filtersOpen, setFiltersOpen] = usePersistentState('filters-open-users', true)
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
+  const [createUserOpen, setCreateUserOpen] = useState(false)
   const [createOperatorOpen, setCreateOperatorOpen] = useState(false)
   const [createAdminOpen, setCreateAdminOpen] = useState(false)
 
@@ -176,6 +178,12 @@ export function UsersView() {
               <Button onClick={() => setCreateAdminOpen(true)} className="bg-purple-600 hover:bg-purple-700 cursor-pointer dark:text-white">
                 <PlusIcon className="w-4 h-4 mr-1.5" />
                 Создать администратора
+              </Button>
+            )}
+            {!isReadOnly && (
+              <Button onClick={() => setCreateUserOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 cursor-pointer dark:text-white">
+                <PlusIcon className="w-4 h-4 mr-1.5" />
+                Добавить пользователя
               </Button>
             )}
             {!isReadOnly && (
@@ -406,9 +414,103 @@ export function UsersView() {
       {selectedUser && (
         <UserDialog userId={selectedUser.id} role={selectedUser.role} onClose={() => setSelectedUser(null)} />
       )}
+      {createUserOpen && <CreateUserModal onClose={() => setCreateUserOpen(false)} />}
       {createOperatorOpen && <CreateOperatorModal onClose={() => setCreateOperatorOpen(false)} />}
       {createAdminOpen && <CreateStaffModal onClose={() => setCreateAdminOpen(false)} />}
     </div>
+  )
+}
+
+function CreateUserModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient()
+  const [phone, setPhone] = useState('')
+  const [password, setPassword] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [userType, setUserType] = useState<'individual' | 'organization'>('individual')
+  const [organizationName, setOrganizationName] = useState('')
+  const [contactPhone, setContactPhone] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+
+  const createMut = useMutation({
+    mutationFn: () => usersApi.createUser({
+      phone: phone.trim(),
+      password,
+      full_name: fullName.trim(),
+      user_type: userType,
+      organization_name: userType === 'organization' ? organizationName.trim() : null,
+      contact_phone: contactPhone.trim() || null,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-users'] })
+      toast.success('Пользователь создан')
+      onClose()
+    },
+    // 409 — телефон уже зарегистрирован (см. README-backend.md, POST /admin/users)
+    onError: (e) => {
+      if (isAxiosError(e) && e.response?.status === 409) toast.error('Этот телефон уже зарегистрирован')
+      else toast.error('Не удалось создать пользователя')
+    },
+  })
+
+  const phoneValid = /^\+\d{9,15}$/.test(phone.trim())
+  const passwordValid = password.length >= 8
+  const fullNameValid = fullName.trim().length > 0
+  const orgValid = userType !== 'organization' || organizationName.trim().length > 0
+  const canSave = phoneValid && passwordValid && fullNameValid && orgValid && !createMut.isPending
+
+  return (
+    <AppModal open onClose={onClose}>
+      <div className="flex flex-col">
+        <div className="bg-linear-to-r from-emerald-500 to-emerald-700 px-4 sm:px-6 py-4 sm:py-5 shrink-0">
+          <div className="flex items-start gap-3 sm:gap-4 pr-8">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0"><UserIcon /></div>
+            <div>
+              <p className="font-bold text-lg text-white">Новый пользователь</p>
+              <p className="text-sm text-white/60 mt-0.5">Создание аккаунта клиента напрямую, минуя заявку</p>
+            </div>
+          </div>
+        </div>
+        <div className="px-4 sm:px-6 py-4 space-y-4">
+          <StaffField label="Телефон" hint="логин, формат +375291234567" value={phone} onChange={setPhone}
+            error={phone && !phoneValid ? 'Формат: + и от 9 до 15 цифр' : ''} placeholder="+375291234567" />
+          <PasswordField label="Пароль" hint="мин. 8 символов" value={password} onChange={setPassword}
+            show={showPassword} onToggle={() => setShowPassword(v => !v)}
+            error={password && !passwordValid ? 'Минимум 8 символов' : ''} />
+          <StaffField label="ФИО" value={fullName} onChange={setFullName} placeholder="Иванов Иван Иванович" />
+          <div>
+            <label className="text-xs font-medium text-slate-500 block mb-1.5">Тип</label>
+            <div className="flex gap-2">
+              {(['individual', 'organization'] as const).map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setUserType(t)}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors cursor-pointer',
+                    userType === t
+                      ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
+                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                  )}
+                >
+                  {t === 'individual' ? 'Физ. лицо' : 'Организация'}
+                </button>
+              ))}
+            </div>
+          </div>
+          {userType === 'organization' && (
+            <StaffField label="Организация" value={organizationName} onChange={setOrganizationName}
+              error={!orgValid ? 'Обязательно для организации' : ''}
+              placeholder="ООО «Ромашка»" />
+          )}
+          <StaffField label="Контактный телефон" hint="необязательно" value={contactPhone} onChange={setContactPhone} placeholder="+375291234567" />
+        </div>
+        <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end shrink-0">
+          <Button onClick={() => createMut.mutate()} disabled={!canSave} className="bg-emerald-600 hover:bg-emerald-700 cursor-pointer dark:text-white">
+            {createMut.isPending ? 'Создание...' : 'Создать'}
+          </Button>
+        </div>
+      </div>
+    </AppModal>
   )
 }
 

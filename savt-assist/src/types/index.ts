@@ -377,3 +377,43 @@ export interface ProjectRequest {
   created_at: string
   resolved_at: string | null
 }
+
+// Заявка на регистрацию — аккаунта ещё не существует (в отличие от прочих
+// заявок), поэтому вместо user_id/user_phone/... — сырые данные заявителя.
+// После approve заводится аккаунт, id которого попадает в created_user_id.
+export interface RegistrationRequest {
+  id: number
+  phone: string
+  full_name: string
+  user_type: 'individual' | 'organization'
+  organization_name: string | null
+  contact_phone: string | null
+  user_comment: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  admin_response: string | null
+  resolved_by_admin_id: number | null
+  created_user_id: number | null
+  created_at: string
+  resolved_at: string | null
+}
+
+// Заявка на сброс пароля — в отличие от регистрации аккаунт уже существует,
+// поэтому решение приходит пользователю push-уведомлением в приложении (как
+// при смене номера), а не только вне системы. Approve применяет новый пароль
+// и отзывает все текущие сессии пользователя.
+export interface PasswordResetRequest {
+  id: number
+  user_id: number
+  user_full_name: string | null
+  user_phone: string | null
+  user_type: 'individual' | 'organization' | null
+  organization_name: string | null
+  user_is_verified: boolean
+  user_registered_at: string | null
+  user_comment: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  admin_response: string | null
+  resolved_by_admin_id: number | null
+  created_at: string
+  resolved_at: string | null
+}

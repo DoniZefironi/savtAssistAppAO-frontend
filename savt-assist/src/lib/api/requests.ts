@@ -1,7 +1,7 @@
 import { apiClient } from './client'
-import type { ServiceRequest, AdditionRequest, DocumentRequest, ProjectRequest, PhoneChangeRequest, PaginatedResponse } from '@/types'
+import type { ServiceRequest, AdditionRequest, DocumentRequest, ProjectRequest, PhoneChangeRequest, RegistrationRequest, PasswordResetRequest, PaginatedResponse } from '@/types'
 
-export type { ServiceRequest, AdditionRequest, DocumentRequest, ProjectRequest, PhoneChangeRequest }
+export type { ServiceRequest, AdditionRequest, DocumentRequest, ProjectRequest, PhoneChangeRequest, RegistrationRequest, PasswordResetRequest }
 
 interface ListParams {
   status?: string
@@ -87,6 +87,39 @@ export const requestsApi = {
 
   rejectDocumentRequest: async (id: number, admin_response: string) => {
     const { data } = await apiClient.post(`/admin/document-requests/${id}/reject`, { admin_response })
+    return data
+  },
+
+  // Заявки на регистрацию — аккаунта ещё нет, approve сам его заводит.
+  getRegistrationRequests: async (params?: ListParams) => {
+    const { data } = await apiClient.get<PaginatedResponse<RegistrationRequest>>('/admin/registration-requests', { params })
+    return data
+  },
+
+  approveRegistrationRequest: async (id: number, admin_response: string | null) => {
+    const { data } = await apiClient.post(`/admin/registration-requests/${id}/approve`, { admin_response })
+    return data
+  },
+
+  rejectRegistrationRequest: async (id: number, admin_response: string) => {
+    const { data } = await apiClient.post(`/admin/registration-requests/${id}/reject`, { admin_response })
+    return data
+  },
+
+  // Сброс пароля — аккаунт уже есть, approve применяет новый пароль и
+  // отзывает все текущие сессии пользователя; решение приходит ему push'ем.
+  getPasswordResetRequests: async (params?: ListParams) => {
+    const { data } = await apiClient.get<PaginatedResponse<PasswordResetRequest>>('/admin/password-reset-requests', { params })
+    return data
+  },
+
+  approvePasswordResetRequest: async (id: number, admin_response: string | null) => {
+    const { data } = await apiClient.post(`/admin/password-reset-requests/${id}/approve`, { admin_response })
+    return data
+  },
+
+  rejectPasswordResetRequest: async (id: number, admin_response: string) => {
+    const { data } = await apiClient.post(`/admin/password-reset-requests/${id}/reject`, { admin_response })
     return data
   },
 }

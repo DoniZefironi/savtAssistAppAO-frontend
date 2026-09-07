@@ -4,11 +4,11 @@ import { useState, useRef, useEffect } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { toast } from 'sonner'
-import { X, ClipboardList, SlidersHorizontal, AlertTriangle, Phone } from 'lucide-react'
+import { X, ClipboardList, SlidersHorizontal, AlertTriangle, Phone, KeyRound } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toFullUrl } from '@/lib/api/base-url'
 import { requestsApi } from '@/lib/api/requests'
-import type { ServiceRequest, AdditionRequest, DocumentRequest, ProjectRequest, PhoneChangeRequest } from '@/lib/api/requests'
+import type { ServiceRequest, AdditionRequest, DocumentRequest, ProjectRequest, PhoneChangeRequest, RegistrationRequest, PasswordResetRequest } from '@/lib/api/requests'
 import { usersApi } from '@/lib/api/users'
 import { useAuthStore } from '@/lib/store/auth'
 import { AppModal } from '@/components/ui/app-modal'
@@ -19,7 +19,7 @@ import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel'
 import { SearchIcon } from '@/components/ui/icons'
-import { RequestCard, ServiceCardIcon, AdditionCardIcon, StatusPill, TypePill } from './request-card'
+import { RequestCard, ServiceCardIcon, AdditionCardIcon, RegistrationCardIcon, StatusPill, TypePill } from './request-card'
 import { UserDialog } from '@/components/users/user-dialog'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
 import { ProjectDetailDialog } from '@/components/projects/project-detail-dialog'
@@ -30,7 +30,7 @@ import {
   userTypeLabel, fmtDate,
 } from './request-shared'
 
-type Tab = 'service' | 'additions' | 'projects' | 'docs' | 'phone'
+type Tab = 'service' | 'additions' | 'projects' | 'docs' | 'phone' | 'registration' | 'password'
 
 // Сетка карточек заявок: 1 колонка на самых узких, до 4 на широких мониторах
 const GRID_CLASSES = 'grid grid-cols-1 min-[640px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3'
@@ -41,6 +41,8 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'projects', label: 'Проекты' },
   { id: 'docs', label: 'Документы' },
   { id: 'phone', label: 'Смена номера' },
+  { id: 'password', label: 'Смена пароля' },
+  { id: 'registration', label: 'Регистрация' },
 ]
 
 const SVC_FILTERS = [
@@ -93,6 +95,18 @@ const PHONE_SORT = [
   { value: 'status', label: 'По статусу' },
   { value: 'user_full_name', label: 'По имени' },
 ]
+const REGISTRATION_SORT = [
+  { value: 'created_at', label: 'По дате' },
+  { value: 'resolved_at', label: 'По рассмотрению' },
+  { value: 'status', label: 'По статусу' },
+  { value: 'full_name', label: 'По имени' },
+]
+const PASSWORD_SORT = [
+  { value: 'created_at', label: 'По дате' },
+  { value: 'resolved_at', label: 'По рассмотрению' },
+  { value: 'status', label: 'По статусу' },
+  { value: 'user_full_name', label: 'По имени' },
+]
 
 const REQUEST_TYPE_FILTERS = [
   { value: 'all', label: 'Все типы' },
@@ -107,7 +121,8 @@ type ViewMode = 'list' | 'grid'
 
 export function RequestsView() {
   const currentUser = useAuthStore(s => s.user)
-  const [tab, setTab] = useState<Tab>('service')
+  // Переживает перезагрузку — иначе после F5 вкладку всегда сбрасывало на «Сервисные».
+  const [tab, setTab] = usePersistentState<Tab>('requests-tab', 'service')
   const [statusFilter, setStatusFilter] = useState('all')
   const [requestTypeFilter, setRequestTypeFilter] = useState('all')
   const [resolvedByAdminId, setResolvedByAdminId] = useState<number | null>(null)
@@ -125,6 +140,8 @@ export function RequestsView() {
   const [selectedProjectRequest, setSelectedProjectRequest] = useState<ProjectRequest | null>(null)
   const [selectedPhoneRequest, setSelectedPhoneRequest] = useState<PhoneChangeRequest | null>(null)
   const [selectedDocRequest, setSelectedDocRequest] = useState<DocumentRequest | null>(null)
+  const [selectedRegistrationRequest, setSelectedRegistrationRequest] = useState<RegistrationRequest | null>(null)
+  const [selectedPasswordResetRequest, setSelectedPasswordResetRequest] = useState<PasswordResetRequest | null>(null)
 
   const sentinelRef = useRef<HTMLDivElement>(null)
 
@@ -137,10 +154,10 @@ export function RequestsView() {
   // совпадают на дефолтной вкладке, а нужная подставляется сразу после монтирования.
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tab')
-    if (t === 'service' || t === 'additions' || t === 'projects' || t === 'docs' || t === 'phone') {
+    if (t === 'service' || t === 'additions' || t === 'projects' || t === 'docs' || t === 'phone' || t === 'registration' || t === 'password') {
       setTab(t)
     }
-  }, [])
+  }, [setTab])
 
   const handleTabChange = (t: Tab) => {
     setTab(t)
@@ -218,7 +235,33 @@ export function RequestsView() {
     refetchOnMount: false,
   })
 
-  const curQ = tab === 'service' ? svcQ : tab === 'additions' ? addQ : tab === 'projects' ? prjQ : tab === 'phone' ? phoneQ : docQ
+  const regQ = useInfiniteQuery({
+    queryKey: ['registration-requests', sp, sq, sortBy, sortOrder],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }: { pageParam: number }) =>
+      requestsApi.getRegistrationRequests({ status: sp, search: sq, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
+    getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
+    enabled: tab === 'registration',
+    // Без этого — возврат на вкладку спустя >30с после глубокой прокрутки
+    // переперезапрашивает все закэшированные страницы по очереди подряд.
+    // Своя инвалидация после approve/reject уже держит список актуальным.
+    refetchOnMount: false,
+  })
+
+  const pwQ = useInfiniteQuery({
+    queryKey: ['password-reset-requests', sp, sq, sortBy, sortOrder, resolvedByAdminId],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }: { pageParam: number }) =>
+      requestsApi.getPasswordResetRequests({ status: sp, search: sq, resolved_by_admin_id: resolvedByAdminId ?? undefined, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
+    getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
+    enabled: tab === 'password',
+    // Без этого — возврат на вкладку спустя >30с после глубокой прокрутки
+    // переперезапрашивает все закэшированные страницы по очереди подряд.
+    // Своя инвалидация после approve/reject уже держит список актуальным.
+    refetchOnMount: false,
+  })
+
+  const curQ = tab === 'service' ? svcQ : tab === 'additions' ? addQ : tab === 'projects' ? prjQ : tab === 'phone' ? phoneQ : tab === 'registration' ? regQ : tab === 'password' ? pwQ : docQ
   const total = curQ.data?.pages[0]?.total
 
   useInfiniteScrollSentinel(sentinelRef, {
@@ -234,6 +277,8 @@ export function RequestsView() {
   const prjItems = prjQ.data?.pages.flatMap(p => p.items) ?? []
   const docItems = docQ.data?.pages.flatMap(p => p.items) ?? []
   const phoneItems = phoneQ.data?.pages.flatMap(p => p.items) ?? []
+  const regItems = regQ.data?.pages.flatMap(p => p.items) ?? []
+  const pwItems = pwQ.data?.pages.flatMap(p => p.items) ?? []
 
   const filters = tab === 'service' ? SVC_FILTERS : tab === 'phone' ? PHONE_FILTERS : REQ_FILTERS
   const sortOptions =
@@ -241,6 +286,8 @@ export function RequestsView() {
     tab === 'additions' ? ADDITIONS_SORT :
     tab === 'projects' ? PROJECTS_SORT :
     tab === 'phone' ? PHONE_SORT :
+    tab === 'registration' ? REGISTRATION_SORT :
+    tab === 'password' ? PASSWORD_SORT :
     DOC_SORT
 
   return (
@@ -389,6 +436,12 @@ export function RequestsView() {
         {tab === 'phone' && !phoneQ.isLoading && !phoneQ.isError && (
           <PhoneChangeList items={phoneItems} onSelect={setSelectedPhoneRequest} view={view} />
         )}
+        {tab === 'registration' && !regQ.isLoading && !regQ.isError && (
+          <RegistrationList items={regItems} onSelect={setSelectedRegistrationRequest} view={view} />
+        )}
+        {tab === 'password' && !pwQ.isLoading && !pwQ.isError && (
+          <PasswordResetList items={pwItems} onSelect={setSelectedPasswordResetRequest} view={view} />
+        )}
 
         <div ref={sentinelRef} className="h-1 mt-2" />
         {curQ.isFetchingNextPage && (
@@ -418,6 +471,8 @@ export function RequestsView() {
       {selectedProjectRequest && <ProjectRequestDialog request={selectedProjectRequest} onClose={() => setSelectedProjectRequest(null)} />}
       {selectedDocRequest && <DocumentRequestDialog request={selectedDocRequest} onClose={() => setSelectedDocRequest(null)} />}
       {selectedPhoneRequest && <PhoneChangeDialog request={selectedPhoneRequest} onClose={() => setSelectedPhoneRequest(null)} />}
+      {selectedRegistrationRequest && <RegistrationRequestDialog request={selectedRegistrationRequest} onClose={() => setSelectedRegistrationRequest(null)} />}
+      {selectedPasswordResetRequest && <PasswordResetRequestDialog request={selectedPasswordResetRequest} onClose={() => setSelectedPasswordResetRequest(null)} />}
     </div>
   )
 }
@@ -499,6 +554,52 @@ function PhoneChangeList({ items, onSelect, view }: { items: PhoneChangeRequest[
               ? <TypePill label={item.organization_name} cls="bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400" />
               : undefined
           }
+          statusBadge={<StatusPill label={reqStatusLabel(item.status)} cls={reqStatusCls(item.status)} />}
+          date={fmtDate(item.created_at)}
+          onClick={() => onSelect(item)}
+        />
+      ))}
+    </div>
+  )
+}
+
+function RegistrationList({ items, onSelect, view }: { items: RegistrationRequest[]; onSelect: (r: RegistrationRequest) => void; view: ViewMode }) {
+  if (!items.length) return <Empty text="Нет заявок на регистрацию" />
+  return (
+    <div className={gridCls(view)}>
+      {items.map(item => (
+        <RequestCard
+          key={item.id}
+          view={view}
+          icon={<RegistrationCardIcon />}
+          title={item.full_name}
+          subtitle={item.phone}
+          meta={item.organization_name
+            ? <TypePill label={item.organization_name} cls="bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400" />
+            : undefined}
+          statusBadge={<StatusPill label={reqStatusLabel(item.status)} cls={reqStatusCls(item.status)} />}
+          date={fmtDate(item.created_at)}
+          onClick={() => onSelect(item)}
+        />
+      ))}
+    </div>
+  )
+}
+
+function PasswordResetList({ items, onSelect, view }: { items: PasswordResetRequest[]; onSelect: (r: PasswordResetRequest) => void; view: ViewMode }) {
+  if (!items.length) return <Empty text="Нет заявок на смену пароля" />
+  return (
+    <div className={gridCls(view)}>
+      {items.map(item => (
+        <RequestCard
+          key={item.id}
+          view={view}
+          icon={<PasswordResetCardIcon />}
+          title={item.user_full_name ?? '—'}
+          subtitle={item.user_phone ?? '—'}
+          meta={item.organization_name
+            ? <TypePill label={item.organization_name} cls="bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400" />
+            : undefined}
           statusBadge={<StatusPill label={reqStatusLabel(item.status)} cls={reqStatusCls(item.status)} />}
           date={fmtDate(item.created_at)}
           onClick={() => onSelect(item)}
@@ -857,6 +958,262 @@ function ProjectRequestDialog({ request, onClose }: { request: ProjectRequest; o
   )
 }
 
+function RegistrationRequestDialog({ request, onClose }: { request: RegistrationRequest; onClose: () => void }) {
+  const qc = useQueryClient()
+  const [action, setAction] = useState<'approve' | 'reject' | null>(null)
+  const [approveNote, setApproveNote] = useState('')
+  const [rejectNote, setRejectNote] = useState('')
+  const [subUserId, setSubUserId] = useState<number | null>(null)
+  const resolvedByName = useAdminDisplayName(request.resolved_by_admin_id)
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['registration-requests'] })
+    qc.invalidateQueries({ queryKey: ['admin-users'] })
+    qc.invalidateQueries({ queryKey: ['dashboard'] })
+  }
+
+  const approveMut = useMutation({
+    mutationFn: () => requestsApi.approveRegistrationRequest(request.id, approveNote || null),
+    onSuccess: () => { invalidate(); toast.success('Заявка одобрена, аккаунт создан'); onClose() },
+    // 409 — заявка уже обработана, либо телефон успел занять кто-то другой к моменту одобрения
+    onError: (e) => {
+      if (isAxiosError(e) && e.response?.status === 409) {
+        invalidate()
+        toast.error('Заявка уже обработана или телефон уже занят — одобрение невозможно')
+      } else toast.error('Ошибка при одобрении')
+    },
+  })
+  const rejectMut = useMutation({
+    mutationFn: () => requestsApi.rejectRegistrationRequest(request.id, rejectNote),
+    onSuccess: () => { invalidate(); toast.success('Заявка отклонена'); onClose() },
+    onError: (e) => {
+      if (isAxiosError(e) && e.response?.status === 409) {
+        invalidate()
+        toast.error('Заявка уже обработана')
+      } else toast.error('Ошибка при отклонении')
+    },
+  })
+
+  const isPending = request.status === 'pending'
+
+  return (
+    <AppModal open onClose={onClose}>
+      {/* min-w-0 — без него grid-item (Popup — display:grid) не сжимается ниже
+          ширины контента и вылезает шире модалки, см. cabinet-detail-dialog.tsx */}
+      <div className="flex flex-col max-h-[85vh] min-w-0">
+      <DialogHeader
+        icon={<RegistrationCardIcon />}
+        title={`Заявка на регистрацию #${request.id}`}
+        subtitle={request.full_name}
+        badge={
+          <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white">
+            {reqStatusLabel(request.status)}
+          </span>
+        }
+      />
+      {/* min-h-0 — иначе flex-1 не сжимается ниже контента и модалка вылезает
+          за max-h-[85vh] вместо внутреннего скролла (см. cabinet-detail-dialog.tsx) */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
+        <DRow label="ФИО" value={request.full_name} />
+        <DRow label="Телефон" value={request.phone} />
+        <DRow label="Тип" value={userTypeLabel(request.user_type)} />
+        {request.organization_name && <DRow label="Организация" value={request.organization_name} />}
+        {request.contact_phone && <DRow label="Контактный телефон" value={request.contact_phone} />}
+        <DRow label="Заявка создана" value={fmtDate(request.created_at)} />
+        {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
+        {request.resolved_by_admin_id != null && <DRow label="Обработал" value={resolvedByName} />}
+        {request.created_user_id != null && (
+          <DRowLink label="Созданный аккаунт" value={`#${request.created_user_id}`} onClick={() => setSubUserId(request.created_user_id!)} />
+        )}
+        {request.user_comment && (
+          <DRow label="Комментарий" value={
+            <span className="font-normal text-slate-600 dark:text-slate-300">{request.user_comment}</span>
+          } />
+        )}
+        {request.admin_response && (
+          <DRow label="Ответ" value={
+            <span className="font-normal text-slate-600 dark:text-slate-300">{request.admin_response}</span>
+          } />
+        )}
+      </div>
+      </div>
+
+      <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700">
+        {!isPending ? null : action === null ? (
+          <div className="flex gap-2 justify-end">
+            <Button onClick={() => setAction('reject')} className="bg-red-500 hover:bg-red-600 cursor-pointer">Отклонить</Button>
+            <Button onClick={() => setAction('approve')} className="bg-green-600 hover:bg-green-700 cursor-pointer">Одобрить</Button>
+          </div>
+        ) : action === 'approve' ? (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium text-slate-500 block mb-1">Комментарий</label>
+              <ModalTextarea value={approveNote} onChange={setApproveNote} placeholder="Необязательно" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setAction(null)} className="cursor-pointer">Назад</Button>
+              <Button
+                onClick={() => approveMut.mutate()}
+                disabled={approveMut.isPending}
+                className="bg-green-600 hover:bg-green-700 cursor-pointer"
+              >
+                {approveMut.isPending ? 'Обработка...' : 'Подтвердить'}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium text-slate-500 block mb-1">
+                Причина отклонения <span className="text-red-500">*</span>
+              </label>
+              <ModalTextarea value={rejectNote} onChange={setRejectNote} placeholder="Обязательно укажите причину" rows={3} />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setAction(null)} className="cursor-pointer">Назад</Button>
+              <Button
+                onClick={() => rejectMut.mutate()}
+                disabled={!rejectNote.trim() || rejectMut.isPending}
+                className="bg-red-500 hover:bg-red-600 cursor-pointer"
+              >
+                {rejectMut.isPending ? 'Обработка...' : 'Подтвердить'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+      </div>
+      {subUserId !== null && <UserDialog userId={subUserId} role="user" onClose={() => setSubUserId(null)} />}
+    </AppModal>
+  )
+}
+
+function PasswordResetRequestDialog({ request, onClose }: { request: PasswordResetRequest; onClose: () => void }) {
+  const qc = useQueryClient()
+  const currentUser = useAuthStore(s => s.user)
+  // Как и смена номера — решение по сбросу пароля доступно только админу,
+  // оператор видит заявку, но не решает (см. README-backend.md).
+  const canDecide = currentUser?.role !== 'operator'
+  const [action, setAction] = useState<'approve' | 'reject' | null>(null)
+  const [approveNote, setApproveNote] = useState('')
+  const [rejectNote, setRejectNote] = useState('')
+  const [subUserId, setSubUserId] = useState<number | null>(null)
+  const resolvedByName = useAdminDisplayName(request.resolved_by_admin_id)
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['password-reset-requests'] })
+
+  const approveMut = useMutation({
+    mutationFn: () => requestsApi.approvePasswordResetRequest(request.id, approveNote || null),
+    onSuccess: () => { invalidate(); toast.success('Пароль сброшен, сессии пользователя завершены'); onClose() },
+    onError: (e) => {
+      if (isAxiosError(e) && e.response?.status === 409) {
+        invalidate()
+        toast.error('Заявка уже обработана')
+      } else toast.error('Ошибка при одобрении')
+    },
+  })
+  const rejectMut = useMutation({
+    mutationFn: () => requestsApi.rejectPasswordResetRequest(request.id, rejectNote),
+    onSuccess: () => { invalidate(); toast.success('Заявка отклонена'); onClose() },
+    onError: (e) => {
+      if (isAxiosError(e) && e.response?.status === 409) {
+        invalidate()
+        toast.error('Заявка уже обработана')
+      } else toast.error('Ошибка при отклонении')
+    },
+  })
+
+  const isPending = request.status === 'pending'
+
+  return (
+    <AppModal open onClose={onClose}>
+      <div className="flex flex-col max-h-[85vh] min-w-0">
+      <DialogHeader
+        icon={<PasswordResetModalIcon />}
+        title={`Смена пароля #${request.id}`}
+        subtitle={request.user_full_name ?? '—'}
+        badge={
+          <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white">
+            {reqStatusLabel(request.status)}
+          </span>
+        }
+      />
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
+          <DRowLink label="Пользователь" value={request.user_full_name ?? `#${request.user_id}`} onClick={() => setSubUserId(request.user_id)} />
+          <DRow label="Телефон" value={request.user_phone ?? '—'} />
+          <DRow label="Тип" value={userTypeLabel(request.user_type)} />
+          {request.organization_name && <DRow label="Организация" value={request.organization_name} />}
+          <DRow label="Статус аккаунта" value={<VerifiedBadge verified={request.user_is_verified} />} />
+          {request.user_registered_at && <DRow label="Зарегистрирован" value={fmtDate(request.user_registered_at)} />}
+          <DRow label="Заявка создана" value={fmtDate(request.created_at)} />
+          {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
+          {request.resolved_by_admin_id != null && <DRow label="Обработал" value={resolvedByName} />}
+          {request.user_comment && (
+            <DRow label="Комментарий" value={
+              <span className="font-normal text-slate-600 dark:text-slate-300">{request.user_comment}</span>
+            } />
+          )}
+          {request.admin_response && (
+            <DRow label="Ответ" value={
+              <span className="font-normal text-slate-600 dark:text-slate-300">{request.admin_response}</span>
+            } />
+          )}
+        </div>
+      </div>
+
+      {isPending && canDecide && (
+        <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700">
+          {action === null ? (
+            <>
+              <p className="text-xs text-amber-600 dark:text-amber-400 mb-3 flex items-start gap-1">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                Одобрение сразу применит новый пароль и завершит все текущие сессии
+                пользователя — он получит push-уведомление о решении в приложении.
+              </p>
+              <div className="flex gap-2 justify-end">
+                <Button onClick={() => setAction('reject')} className="bg-red-500 hover:bg-red-600 cursor-pointer">Отклонить</Button>
+                <Button onClick={() => setAction('approve')} className="bg-green-600 hover:bg-green-700 cursor-pointer">Одобрить</Button>
+              </div>
+            </>
+          ) : action === 'approve' ? (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-slate-500 block mb-1">Комментарий</label>
+                <ModalTextarea value={approveNote} onChange={setApproveNote} placeholder="Необязательно" />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setAction(null)} className="cursor-pointer">Назад</Button>
+                <Button onClick={() => approveMut.mutate()} disabled={approveMut.isPending} className="bg-green-600 hover:bg-green-700 cursor-pointer">
+                  {approveMut.isPending ? 'Обработка...' : 'Подтвердить'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-slate-500 block mb-1">
+                  Причина отклонения <span className="text-red-500">*</span>
+                </label>
+                <ModalTextarea value={rejectNote} onChange={setRejectNote} placeholder="Обязательно укажите причину" rows={3} />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setAction(null)} className="cursor-pointer">Назад</Button>
+                <Button onClick={() => rejectMut.mutate()} disabled={!rejectNote.trim() || rejectMut.isPending} className="bg-red-500 hover:bg-red-600 cursor-pointer">
+                  {rejectMut.isPending ? 'Обработка...' : 'Подтвердить'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      </div>
+      {subUserId !== null && <UserDialog userId={subUserId} role="user" onClose={() => setSubUserId(null)} />}
+    </AppModal>
+  )
+}
+
 function PhoneChangeDialog({ request, onClose }: { request: PhoneChangeRequest; onClose: () => void }) {
   const qc = useQueryClient()
   const currentUser = useAuthStore(s => s.user)
@@ -1152,6 +1509,12 @@ function PhoneChangeModalIcon() {
 }
 function PhoneChangeCardIcon() {
   return <Phone className="w-6 h-6 text-white" strokeWidth={1.5} />
+}
+function PasswordResetModalIcon() {
+  return <KeyRound className="w-6 h-6 text-white" strokeWidth={1.5} />
+}
+function PasswordResetCardIcon() {
+  return <KeyRound className="w-6 h-6 text-white" strokeWidth={1.5} />
 }
 function ProjectRequestModalIcon() {
   return <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 00-1.883 2.542l.857 6a2.25 2.25 0 002.227 1.932H19.05a2.25 2.25 0 002.227-1.932l.857-6a2.25 2.25 0 00-1.883-2.542m-16.5 0V6A2.25 2.25 0 015.25 3.75h5.379a1.5 1.5 0 011.06.44l2.122 2.12a1.5 1.5 0 001.06.44H18.75A2.25 2.25 0 0121 9v.776" /></svg>

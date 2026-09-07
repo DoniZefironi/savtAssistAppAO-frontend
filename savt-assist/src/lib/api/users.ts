@@ -72,6 +72,18 @@ export const usersApi = {
   getAdminOne: (id: number): Promise<AdminUserDetail> =>
     apiClient.get(`/admin/admins/${id}`).then(r => r.data),
 
+  // Прямое создание пользователя-клиента (минуя заявку на регистрацию), см.
+  // README-backend.md POST /admin/users. 409 — телефон уже зарегистрирован.
+  createUser: (data: {
+    phone: string
+    password: string
+    full_name: string
+    user_type: 'individual' | 'organization'
+    organization_name?: string | null
+    contact_phone?: string | null
+  }): Promise<AdminUser> =>
+    apiClient.post('/admin/users', data).then(r => r.data),
+
   createOperator: (data: { login: string; password: string; full_name?: string | null }): Promise<AdminUser> =>
     apiClient.post('/admin/users/operators', data).then(r => r.data),
 
