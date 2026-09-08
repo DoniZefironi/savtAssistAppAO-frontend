@@ -50,8 +50,22 @@ export const botApi = {
 
   // 202 сразу, сам подсчёт идёт в фоне — на восстановление из бэкапа/ручные
   // правки в БД или если фоновая автоиндексация когда-то не отработала.
-  reindex: (force: boolean): Promise<ReindexResult> =>
-    apiClient.post('/admin/bot/reindex', null, { params: { force } }).then(r => r.data),
+  // scope сужает переиндексацию до одного источника; project_id имеет эффект
+  // только при scope='document' — фильтрует документы этого проекта (и его
+  // дочерних проектов, и всех ШУ внутри них), т.е. ровно то, что видит бот
+  // в чате проекта.
+  reindex: (params: {
+    force: boolean
+    scope?: 'all' | 'faq' | 'kb_article' | 'document'
+    project_id?: number | null
+  }): Promise<ReindexResult> =>
+    apiClient.post('/admin/bot/reindex', null, {
+      params: {
+        force: params.force,
+        scope: params.scope ?? 'all',
+        ...(params.project_id != null ? { project_id: params.project_id } : {}),
+      },
+    }).then(r => r.data),
 
   // Чистит embeddings-сироты (источник — FAQ/статья КБ/документ — уже удалён).
   prune: (): Promise<PruneResult> =>

@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { botApi } from '@/lib/api/bot'
 import { apiErrorMessage } from '@/lib/api/errors'
 import { Button } from '@/components/ui/button'
+import { ProjectCombobox } from '@/components/ui/project-combobox'
 import { useAuthStore } from '@/lib/store/auth'
 import { SpinnerIcon } from '@/components/ui/icons'
 
@@ -247,11 +248,22 @@ function PromoSection() {
 // prune отдаёт только удалённое) — см. README-backend.md, «Рут admin: bot».
 // В штатной работе не нужны: create/update уже индексируют записи сами,
 // это инструменты на случай восстановления из бэкапа или ручных правок в БД.
+type ReindexScope = 'all' | 'faq' | 'kb_article' | 'document'
+
+const SCOPE_OPTIONS: { value: ReindexScope; label: string }[] = [
+  { value: 'all', label: 'Всё' },
+  { value: 'faq', label: 'Только FAQ' },
+  { value: 'kb_article', label: 'Только база знаний' },
+  { value: 'document', label: 'Документы проекта' },
+]
+
 function BotMaintenanceSection() {
   const [force, setForce] = useState(false)
+  const [scope, setScope] = useState<ReindexScope>('all')
+  const [projectId, setProjectId] = useState<number | null>(null)
 
   const reindexMut = useMutation({
-    mutationFn: () => botApi.reindex(force),
+    mutationFn: () => botApi.reindex({ force, scope, project_id: scope === 'document' ? projectId : null }),
     onSuccess: (res) => toast.success(res.message || 'Индексация запущена в фоне'),
     onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось запустить индексацию')),
   })
@@ -291,6 +303,35 @@ function BotMaintenanceSection() {
               }
             </Button>
           </div>
+
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            {SCOPE_OPTIONS.map(o => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => { setScope(o.value); if (o.value !== 'document') setProjectId(null) }}
+                className={cn(
+                  'px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
+                  scope === o.value
+                    ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                )}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+
+          {scope === 'document' && (
+            <div className="mt-2.5">
+              <ProjectCombobox value={projectId} onChange={setProjectId} placeholder="Все проекты (необязательно)" />
+              <p className="text-xs text-slate-400 mt-1.5">
+                Переиндексирует документы этого проекта, его дочерних проектов и всех ШУ внутри них —
+                ровно то, что видит бот в чате проекта. Без выбора — документы всех проектов.
+              </p>
+            </div>
+          )}
+
           <label className="flex items-center gap-2 mt-2.5 cursor-pointer select-none">
             <input type="checkbox" checked={force} onChange={e => setForce(e.target.checked)} className="cursor-pointer" />
             <span className="text-xs text-slate-500 dark:text-slate-400">
