@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { AppModal } from '@/components/ui/app-modal'
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { CabinetTypeCombobox } from '@/components/ui/cabinet-type-combobox'
 import { ProjectCombobox } from '@/components/ui/project-combobox'
 import { cabinetsApi, CreateCabinetDto } from '@/lib/api/cabinets'
+import { projectsApi } from '@/lib/api/projects'
 import { apiErrorMessage } from '@/lib/api/errors'
 import { LocationPicker } from '@/components/map/location-picker'
 
@@ -37,11 +38,14 @@ const EMPTY: FormFields = {
   longitude: null,
 }
 
-function validate(form: FormFields, projectId: number | null): FormErrors {
+function validate(form: FormFields, projectId: number | null, productionNumber: string | null): FormErrors {
   const e: FormErrors = {}
   if (projectId == null) e.project_id = 'Обязательное поле'
   if (!form.type.trim()) e.type = 'Обязательное поле'
   if (!form.object_number.trim()) e.object_number = 'Обязательное поле'
+  // Если известен номер проекта, номер ШУ не может быть равен ровно ему —
+  // это значит, что после префикса ничего не дописали.
+  else if (productionNumber && form.object_number === productionNumber) e.object_number = 'Допишите номер после префикса'
   // Бэкенд требует обе даты гарантии при создании ШУ (POST /admin/cabinets
   // отклоняет null 422-й ошибкой datetime_type) — в отличие от PATCH при
   // редактировании, где они необязательны.
@@ -62,6 +66,26 @@ export function CreateCabinetDialog({ open, onClose, projectId }: Props) {
   // Если открыт не со страницы проекта — админ выбирает проект сам.
   const [pickedProjectId, setPickedProjectId] = useState<number | null>(null)
   const effectiveProjectId = projectId ?? pickedProjectId
+
+  // Номера ШУ всегда начинаются с производственного номера проекта (см.
+  // README-backend.md, Project.production_number) — тянем его сюда, чтобы
+  // не заставлять админа набирать префикс руками. Тот же ['project', id],
+  // что и в project-page.tsx — если модалка открыта со страницы проекта,
+  // кэш уже тёплый и лишнего запроса не будет.
+  const { data: project } = useQuery({
+    queryKey: ['project', effectiveProjectId],
+    queryFn: () => projectsApi.getOne(effectiveProjectId!),
+    enabled: effectiveProjectId != null,
+  })
+  const productionNumber = project?.production_number || null
+
+  // Проект — свежевыбранный или ещё не вернул production_number — подставляем
+  // префикс как только он появится/меняется, если поле ещё не начинается с
+  // него (иначе затирали бы то, что админ уже дописал после префикса).
+  useEffect(() => {
+    if (productionNumber == null) return
+    setForm(prev => prev.object_number.startsWith(productionNumber) ? prev : { ...prev, object_number: productionNumber })
+  }, [productionNumber])
 
   const clearError = (key: keyof CreateCabinetDto) =>
     setErrors(prev => ({ ...prev, [key]: undefined }))
@@ -106,7 +130,7 @@ export function CreateCabinetDialog({ open, onClose, projectId }: Props) {
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    const errs = validate(form, effectiveProjectId)
+    const errs = validate(form, effectiveProjectId, productionNumber)
     if (Object.keys(errs).length > 0) { setErrors(errs); return }
     mutation.mutate()
   }
@@ -172,11 +196,10 @@ export function CreateCabinetDialog({ open, onClose, projectId }: Props) {
                 />
                 {errors.type && <p className="text-xs text-red-500 mt-1">{errors.type}</p>}
               </div>
-              <Field
-                label="Номер объекта *"
+              <ObjectNumberField
                 value={form.object_number}
-                onChange={set('object_number')}
-                placeholder="29_099"
+                productionNumber={productionNumber}
+                onChange={(v) => { setForm(prev => ({ ...prev, object_number: v })); clearError('object_number') }}
                 error={errors.object_number}
               />
             </div>
@@ -261,6 +284,54 @@ export function CreateCabinetDialog({ open, onClose, projectId }: Props) {
 
       </div>
     </AppModal>
+  )
+}
+
+// Номер ШУ всегда начинается с производственного номера проекта — если он
+// известен, показываем его неизменяемым префиксом и даём набрать только
+// хвост; без него (проект не выбран или заведён вручную, без номера из
+// Bitrix) — обычное свободное поле, как раньше.
+function ObjectNumberField({
+  value, productionNumber, onChange, error,
+}: {
+  value: string
+  productionNumber: string | null
+  onChange: (v: string) => void
+  error?: string
+}) {
+  const base = cn(
+    'text-sm border rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none placeholder:text-slate-400',
+    error
+      ? 'border-red-400 focus:border-red-500 dark:border-red-500'
+      : 'border-slate-200 dark:border-slate-600 focus:border-[#4A8FE7]'
+  )
+  return (
+    <div>
+      <label className={cn('text-xs font-medium block mb-1.5', error ? 'text-red-500' : 'text-slate-500')}>
+        Номер ШУ <span className="text-red-500">*</span>
+      </label>
+      {productionNumber ? (
+        <div className={cn('flex items-stretch w-full overflow-hidden', base)}>
+          <span className="px-3 py-2 bg-slate-50 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 shrink-0 border-r border-slate-200 dark:border-slate-600">
+            {productionNumber}
+          </span>
+          <input
+            value={value.startsWith(productionNumber) ? value.slice(productionNumber.length) : value}
+            onChange={e => onChange(productionNumber + e.target.value)}
+            placeholder="-1"
+            className="flex-1 min-w-0 px-3 py-2 bg-transparent focus:outline-none"
+          />
+        </div>
+      ) : (
+        <input
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder="29_099"
+          className={cn(base, 'w-full px-3 py-2')}
+        />
+      )}
+      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+    </div>
   )
 }
 
