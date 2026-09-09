@@ -309,6 +309,7 @@ export interface AdditionRequest {
   project_name: string | null
   admin_response: string | null
   resolved_by_admin_id: number | null
+  resolved_by_admin_name: string | null
   created_at: string
   resolved_at: string | null
 }
@@ -330,6 +331,7 @@ export interface DocumentRequest {
   user_message: string | null
   admin_response: string | null
   resolved_by_admin_id: number | null
+  resolved_by_admin_name: string | null
   created_at: string
   resolved_at: string | null
 }
@@ -347,6 +349,7 @@ export interface PhoneChangeRequest {
   status: 'pending' | 'approved' | 'rejected' | 'cancelled'
   admin_response: string | null
   resolved_by_admin_id: number | null
+  resolved_by_admin_name: string | null
   created_at: string
   resolved_at: string | null
   user_full_name: string | null
@@ -374,6 +377,7 @@ export interface ProjectRequest {
   status: 'pending' | 'approved' | 'rejected'
   admin_response: string | null
   resolved_by_admin_id: number | null
+  resolved_by_admin_name: string | null
   created_at: string
   resolved_at: string | null
 }
@@ -392,6 +396,7 @@ export interface RegistrationRequest {
   status: 'pending' | 'approved' | 'rejected'
   admin_response: string | null
   resolved_by_admin_id: number | null
+  resolved_by_admin_name: string | null
   created_user_id: number | null
   created_at: string
   resolved_at: string | null
@@ -414,6 +419,7 @@ export interface PasswordResetRequest {
   status: 'pending' | 'approved' | 'rejected'
   admin_response: string | null
   resolved_by_admin_id: number | null
+  resolved_by_admin_name: string | null
   created_at: string
   resolved_at: string | null
 }

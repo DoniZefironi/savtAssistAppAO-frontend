@@ -9,6 +9,8 @@ interface ListParams {
   cabinet_id?: number
   project_id?: number
   request_type?: string
+  // Только у сервисных заявок — гарантийная заявка или платная.
+  is_under_warranty?: boolean
   resolved_by_admin_id?: number
   sort_by?: string
   sort_order?: 'asc' | 'desc'

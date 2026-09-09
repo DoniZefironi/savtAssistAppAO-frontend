@@ -9,16 +9,37 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { CabinetsMap } from '@/components/map/cabinets-map'
 
-function makeStatCards(base: string) {
+// Раньше все восемь счётчиков лежали плоским рядом одинаковых плиток — с
+// ростом их числа (номер/пароль/регистрация добавились позже) ряд стал
+// нечитаемым. Группируем по смыслу: чаты и сервисные заявки — по одному
+// счётчику как раньше, «по проектам» и «по аккаунтам» — по нескольку строк
+// внутри одной карточки-категории.
+function makeStatCategories(base: string) {
   return [
-    { key: 'unreadChats' as const,             label: 'Новых сообщений',      href: `${base}/chats`,    accent: '#1B3A72', urgentAbove: 0, icon: <ChatIcon /> },
-    { key: 'openServiceRequests' as const,      label: 'Открытых заявок',      href: `${base}/requests?tab=service`,   accent: '#D97706', urgentAbove: 0, icon: <WrenchIcon /> },
-    { key: 'pendingDocumentRequests' as const,  label: 'Запросов на документы',href: `${base}/requests?tab=docs`,      accent: '#7C3AED', urgentAbove: 0, icon: <DocIcon /> },
-    { key: 'pendingProjectShareRequests' as const, label: 'Заявок на проекты', href: `${base}/requests?tab=projects`,  accent: '#0891B2', urgentAbove: 0, icon: <KeyIcon /> },
-    { key: 'pendingAdditionRequests' as const,  label: 'Добавлений ШУ',        href: `${base}/requests?tab=additions`, accent: '#059669', urgentAbove: 0, icon: <PlusBoxIcon /> },
-    { key: 'pendingPhoneChangeRequests' as const,   label: 'Смена номера',  href: `${base}/requests?tab=phone`,        accent: '#DB2777', urgentAbove: 0, icon: <PhoneChangeIcon /> },
-    { key: 'pendingPasswordResetRequests' as const, label: 'Смена пароля',  href: `${base}/requests?tab=password`,     accent: '#DC2626', urgentAbove: 0, icon: <PasswordResetIcon /> },
-    { key: 'pendingRegistrationRequests' as const,  label: 'Регистрация',   href: `${base}/requests?tab=registration`, accent: '#4F46E5', urgentAbove: 0, icon: <RegistrationIcon /> },
+    {
+      key: 'chats', title: 'Чаты', cards: [
+        { key: 'unreadChats' as const, label: 'Новых сообщений', href: `${base}/chats`, accent: '#1B3A72', urgentAbove: 0, icon: <ChatIcon /> },
+      ],
+    },
+    {
+      key: 'service', title: 'Сервисные заявки', cards: [
+        { key: 'openServiceRequests' as const, label: 'Открытых заявок', href: `${base}/requests?tab=service`, accent: '#D97706', urgentAbove: 0, icon: <WrenchIcon /> },
+      ],
+    },
+    {
+      key: 'projects', title: 'Заявки по проектам', cards: [
+        { key: 'pendingDocumentRequests' as const, label: 'Документы', href: `${base}/requests?tab=docs`, accent: '#7C3AED', urgentAbove: 0, icon: <DocIcon /> },
+        { key: 'pendingProjectShareRequests' as const, label: 'Доступ к проекту', href: `${base}/requests?tab=projects`, accent: '#0891B2', urgentAbove: 0, icon: <KeyIcon /> },
+        { key: 'pendingAdditionRequests' as const, label: 'Добавление ШУ', href: `${base}/requests?tab=additions`, accent: '#059669', urgentAbove: 0, icon: <PlusBoxIcon /> },
+      ],
+    },
+    {
+      key: 'account', title: 'Заявки по аккаунтам', cards: [
+        { key: 'pendingPhoneChangeRequests' as const, label: 'Смена номера', href: `${base}/requests?tab=phone`, accent: '#DB2777', urgentAbove: 0, icon: <PhoneChangeIcon /> },
+        { key: 'pendingPasswordResetRequests' as const, label: 'Смена пароля', href: `${base}/requests?tab=password`, accent: '#DC2626', urgentAbove: 0, icon: <PasswordResetIcon /> },
+        { key: 'pendingRegistrationRequests' as const, label: 'Регистрация', href: `${base}/requests?tab=registration`, accent: '#4F46E5', urgentAbove: 0, icon: <RegistrationIcon /> },
+      ],
+    },
   ] as const
 }
 
@@ -28,7 +49,7 @@ export function AdminDashboard() {
   const isOperator = user?.role === 'operator'
   const base = isOperator ? '/operator' : '/admin'
   const displayName = user?.full_name ?? user?.login ?? (isOperator ? 'Оператор' : 'Администратор')
-  const statCards = makeStatCards(base)
+  const statCategories = makeStatCategories(base)
 
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard'],
@@ -52,31 +73,40 @@ export function AdminDashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2 sm:gap-2.5 2xl:gap-4">
-          {statCards.map((s) => {
-            const value = stats?.[s.key]
-            const urgent = typeof value === 'number' && value > s.urgentAbove
-            return (
-              <Link key={s.key} href={s.href} className="block group">
-                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3 2xl:p-4 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-sm transition-all">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="w-6 h-6 rounded-md flex items-center justify-center text-white" style={{ backgroundColor: s.accent }}>
-                      <span className="scale-75">{s.icon}</span>
-                    </div>
-                    {urgent && <span className="w-1.5 h-1.5 rounded-full bg-red-500" />}
-                  </div>
-                  {statsLoading ? (
-                    <Skeleton className="h-6 w-10 mb-1" />
-                  ) : (
-                    <p className={cn('text-xl 2xl:text-2xl font-extrabold leading-none', urgent ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500')}>
-                      {Number.isFinite(value) ? value : '—'}
-                    </p>
-                  )}
-                  <p className="text-[11px] 2xl:text-xs text-slate-500 dark:text-slate-400 mt-1 leading-tight">{s.label}</p>
-                </div>
-              </Link>
-            )
-          })}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
+          {statCategories.map((cat) => (
+            <div key={cat.key} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b border-slate-100 dark:border-slate-700/60">
+                <span className="font-semibold text-sm text-slate-800 dark:text-slate-100">{cat.title}</span>
+              </div>
+              <div className="divide-y divide-slate-50 dark:divide-slate-700/40">
+                {cat.cards.map((s) => {
+                  const value = stats?.[s.key]
+                  const urgent = typeof value === 'number' && value > s.urgentAbove
+                  return (
+                    <Link
+                      key={s.key}
+                      href={s.href}
+                      className="flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/20 transition-colors"
+                    >
+                      <div className="w-7 h-7 rounded-md flex items-center justify-center text-white shrink-0" style={{ backgroundColor: s.accent }}>
+                        <span className="scale-75">{s.icon}</span>
+                      </div>
+                      <span className="flex-1 min-w-0 text-sm text-slate-600 dark:text-slate-300 truncate">{s.label}</span>
+                      {urgent && <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />}
+                      {statsLoading ? (
+                        <Skeleton className="h-5 w-6 shrink-0" />
+                      ) : (
+                        <span className={cn('text-base font-bold shrink-0', urgent ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500')}>
+                          {Number.isFinite(value) ? value : '—'}
+                        </span>
+                      )}
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </div>
 
         <div className={cn('grid grid-cols-1 gap-4 sm:gap-6 2xl:items-start', !isOperator && '2xl:grid-cols-5')}>

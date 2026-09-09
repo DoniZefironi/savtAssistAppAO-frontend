@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { toast } from 'sonner'
 import { ClipboardList, AlertTriangle, Phone, KeyRound } from 'lucide-react'
@@ -9,7 +9,6 @@ import { cn } from '@/lib/utils'
 import { toFullUrl } from '@/lib/api/base-url'
 import { requestsApi } from '@/lib/api/requests'
 import type { ServiceRequest, AdditionRequest, DocumentRequest, ProjectRequest, PhoneChangeRequest, RegistrationRequest, PasswordResetRequest } from '@/lib/api/requests'
-import { usersApi } from '@/lib/api/users'
 import { useAuthStore } from '@/lib/store/auth'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
@@ -118,20 +117,26 @@ const REQUEST_TYPE_FILTERS = [
   { value: 'other', label: 'Другое' },
 ]
 
+const WARRANTY_FILTERS = [
+  { value: 'all' as const, label: 'Все' },
+  { value: 'yes' as const, label: 'Гарантийная' },
+  { value: 'no' as const, label: 'Платная' },
+]
+
 export function RequestsView() {
   const currentUser = useAuthStore(s => s.user)
   // Переживает перезагрузку — иначе после F5 вкладку всегда сбрасывало на «Сервисные».
   const [tab, setTab] = usePersistentState<Tab>('requests-tab', 'service')
   const [statusFilter, setStatusFilter] = useState('all')
   const [requestTypeFilter, setRequestTypeFilter] = useState('all')
+  // Только для вкладки «Сервисные» — гарантийная заявка или платная.
+  const [warrantyFilter, setWarrantyFilter] = useState<'all' | 'yes' | 'no'>('all')
   const [resolvedByAdminId, setResolvedByAdminId] = useState<number | null>(null)
   const [searchInput, setSearchInput] = useState('')
   const search = useDebounce(searchInput, 300)
   const [sortBy, setSortBy] = useState('created_at')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
-  // Список админов для дропдауна "Обработал" — доступен только суперадмину
-  // (GET /admin/admins), поэтому для остальных ролей используется числовой ID.
   const [view, setView] = usePersistentState<ViewMode>('view-mode-requests', 'list')
   const [filtersOpen, setFiltersOpen] = usePersistentState('filters-open-requests', true)
   const [selectedService, setSelectedService] = useState<ServiceRequest | null>(null)
@@ -162,6 +167,7 @@ export function RequestsView() {
     setTab(t)
     setStatusFilter('all')
     setRequestTypeFilter('all')
+    setWarrantyFilter('all')
     setResolvedByAdminId(null)
     setSearchInput('')
     setSortBy('created_at')
@@ -176,12 +182,13 @@ export function RequestsView() {
   const sp = statusFilter === 'all' ? undefined : statusFilter
   const sq = search || undefined
   const rtp = requestTypeFilter === 'all' ? undefined : requestTypeFilter
+  const iuw = warrantyFilter === 'all' ? undefined : warrantyFilter === 'yes'
 
   const svcQ = useInfiniteQuery({
-    queryKey: ['service-requests', sp, sq, sortBy, sortOrder, rtp],
+    queryKey: ['service-requests', sp, sq, sortBy, sortOrder, rtp, iuw],
     initialPageParam: 1,
     queryFn: ({ pageParam }: { pageParam: number }) =>
-      requestsApi.getServiceRequests({ status: sp, search: sq, request_type: rtp, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
+      requestsApi.getServiceRequests({ status: sp, search: sq, request_type: rtp, is_under_warranty: iuw, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
     enabled: tab === 'service',
   })
@@ -346,6 +353,16 @@ export function RequestsView() {
             <span className="text-xs text-slate-400 font-medium mr-0.5">Тип:</span>
             {REQUEST_TYPE_FILTERS.map(f => (
               <PillButton key={f.value} active={requestTypeFilter === f.value} onClick={() => setRequestTypeFilter(f.value)}>
+                {f.label}
+              </PillButton>
+            ))}
+          </div>
+        )}
+        {tab === 'service' && (
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            <span className="text-xs text-slate-400 font-medium mr-0.5">Гарантия:</span>
+            {WARRANTY_FILTERS.map(f => (
+              <PillButton key={f.value} active={warrantyFilter === f.value} onClick={() => setWarrantyFilter(f.value)}>
                 {f.label}
               </PillButton>
             ))}
@@ -609,24 +626,6 @@ function DocumentRequestList({ items, onSelect, view }: { items: DocumentRequest
   )
 }
 
-// Резолв ID администратора в имя/логин. GET /admin/admins доступен только
-// суперадмину, поэтому: своё имя видно всегда, для остальных — резолв по
-// списку админов (только суперадмин), иначе fallback на "Администратор #ID".
-function useAdminDisplayName(adminId: number | null): string {
-  const currentUser = useAuthStore(s => s.user)
-  const isSuperadmin = currentUser?.role === 'superadmin'
-  const adminsQ = useQuery({
-    queryKey: ['admins-for-filter'],
-    queryFn: () => usersApi.getAdminList({ size: 100 }),
-    enabled: isSuperadmin,
-    staleTime: 60_000,
-  })
-  if (adminId == null) return ''
-  if (adminId === currentUser?.id) return currentUser?.full_name ?? currentUser?.login ?? `Администратор #${adminId}`
-  const found = adminsQ.data?.items.find(a => a.id === adminId)
-  return found ? (found.full_name ?? found.login ?? `Администратор #${adminId}`) : `Администратор #${adminId}`
-}
-
 function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClose: () => void }) {
   const qc = useQueryClient()
   const [action, setAction] = useState<'approve' | 'reject' | null>(null)
@@ -636,8 +635,6 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
   const [subUserId, setSubUserId] = useState<number | null>(null)
   const [subCabinetId, setSubCabinetId] = useState<number | null>(null)
   const [subProjectId, setSubProjectId] = useState<number | null>(null)
-  const resolvedByName = useAdminDisplayName(request.resolved_by_admin_id)
-
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['addition-requests'] })
     qc.invalidateQueries({ queryKey: ['dashboard'] })
@@ -689,7 +686,7 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
         {request.project_name && <DRowLink label="Проект" value={request.project_name} onClick={() => setSubProjectId(request.project_id!)} />}
         <DRow label="Заявка создана" value={fmtDate(request.created_at)} />
         {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
-        {request.resolved_by_admin_id != null && <DRow label="Обработал" value={resolvedByName} />}
+        {request.resolved_by_admin_name && <DRow label="Обработал" value={request.resolved_by_admin_name} />}
         {request.cabinet_id && <DRowLink label="Связанный ШУ" value={`ШУ #${request.cabinet_id}`} onClick={() => setSubCabinetId(request.cabinet_id!)} />}
         {request.user_comment && (
           <DRow label="Комментарий" value={
@@ -790,8 +787,6 @@ function ProjectRequestDialog({ request, onClose }: { request: ProjectRequest; o
   const [rejectNote, setRejectNote] = useState('')
   const [subUserId, setSubUserId] = useState<number | null>(null)
   const [subProjectId, setSubProjectId] = useState<number | null>(null)
-  const resolvedByName = useAdminDisplayName(request.resolved_by_admin_id)
-
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['project-requests'] })
     qc.invalidateQueries({ queryKey: ['dashboard'] })
@@ -844,7 +839,7 @@ function ProjectRequestDialog({ request, onClose }: { request: ProjectRequest; o
         <DRowLink label="Проект" value={request.project_name} onClick={() => setSubProjectId(request.project_id)} />
         <DRow label="Заявка создана" value={fmtDate(request.created_at)} />
         {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
-        {request.resolved_by_admin_id != null && <DRow label="Обработал" value={resolvedByName} />}
+        {request.resolved_by_admin_name && <DRow label="Обработал" value={request.resolved_by_admin_name} />}
         {request.user_comment && (
           <DRow label="Комментарий" value={
             <span className="font-normal text-slate-600 dark:text-slate-300">{request.user_comment}</span>
@@ -915,8 +910,6 @@ function RegistrationRequestDialog({ request, onClose }: { request: Registration
   const [approveNote, setApproveNote] = useState('')
   const [rejectNote, setRejectNote] = useState('')
   const [subUserId, setSubUserId] = useState<number | null>(null)
-  const resolvedByName = useAdminDisplayName(request.resolved_by_admin_id)
-
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['registration-requests'] })
     qc.invalidateQueries({ queryKey: ['admin-users'] })
@@ -973,7 +966,7 @@ function RegistrationRequestDialog({ request, onClose }: { request: Registration
         {request.contact_phone && <DRow label="Контактный телефон" value={request.contact_phone} />}
         <DRow label="Заявка создана" value={fmtDate(request.created_at)} />
         {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
-        {request.resolved_by_admin_id != null && <DRow label="Обработал" value={resolvedByName} />}
+        {request.resolved_by_admin_name && <DRow label="Обработал" value={request.resolved_by_admin_name} />}
         {request.created_user_id != null && (
           <DRowLink label="Созданный аккаунт" value={`#${request.created_user_id}`} onClick={() => setSubUserId(request.created_user_id!)} />
         )}
@@ -1050,8 +1043,6 @@ function PasswordResetRequestDialog({ request, onClose }: { request: PasswordRes
   const [approveNote, setApproveNote] = useState('')
   const [rejectNote, setRejectNote] = useState('')
   const [subUserId, setSubUserId] = useState<number | null>(null)
-  const resolvedByName = useAdminDisplayName(request.resolved_by_admin_id)
-
   const invalidate = () => qc.invalidateQueries({ queryKey: ['password-reset-requests'] })
 
   const approveMut = useMutation({
@@ -1100,7 +1091,7 @@ function PasswordResetRequestDialog({ request, onClose }: { request: PasswordRes
           {request.user_registered_at && <DRow label="Зарегистрирован" value={fmtDate(request.user_registered_at)} />}
           <DRow label="Заявка создана" value={fmtDate(request.created_at)} />
           {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
-          {request.resolved_by_admin_id != null && <DRow label="Обработал" value={resolvedByName} />}
+          {request.resolved_by_admin_name && <DRow label="Обработал" value={request.resolved_by_admin_name} />}
           {request.user_comment && (
             <DRow label="Комментарий" value={
               <span className="font-normal text-slate-600 dark:text-slate-300">{request.user_comment}</span>
@@ -1174,8 +1165,6 @@ function PhoneChangeDialog({ request, onClose }: { request: PhoneChangeRequest; 
   const [approveNote, setApproveNote] = useState('')
   const [rejectNote, setRejectNote] = useState('')
   const [subUserId, setSubUserId] = useState<number | null>(null)
-  const resolvedByName = useAdminDisplayName(request.resolved_by_admin_id)
-
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['phone-change-requests'] })
     qc.invalidateQueries({ queryKey: ['admin-users'] })
@@ -1242,7 +1231,7 @@ function PhoneChangeDialog({ request, onClose }: { request: PhoneChangeRequest; 
           {request.user_registered_at && <DRow label="Зарегистрирован" value={fmtDate(request.user_registered_at)} />}
           <DRow label="Заявка создана" value={fmtDate(request.created_at)} />
           {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
-          {request.resolved_by_admin_id != null && <DRow label="Обработал" value={resolvedByName} />}
+          {request.resolved_by_admin_name && <DRow label="Обработал" value={request.resolved_by_admin_name} />}
           {request.user_comment && (
             <DRow label="Обоснование" value={
               <span className="font-normal text-slate-600 dark:text-slate-300">{request.user_comment}</span>
@@ -1317,8 +1306,6 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
   const [subUserId, setSubUserId] = useState<number | null>(null)
   const [subCabinetId, setSubCabinetId] = useState<number | null>(null)
   const [subProjectId, setSubProjectId] = useState<number | null>(null)
-  const resolvedByName = useAdminDisplayName(request.resolved_by_admin_id)
-
   const invalidate = () => qc.invalidateQueries({ queryKey: ['document-requests'] })
 
   const approveMut = useMutation({
@@ -1375,7 +1362,7 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
         {request.project_id && <DRowLink label="Проект" value={`Проект #${request.project_id}`} onClick={() => setSubProjectId(request.project_id!)} />}
         <DRow label="Создана" value={fmtDate(request.created_at)} />
         {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
-        {request.resolved_by_admin_id != null && <DRow label="Обработал" value={resolvedByName} />}
+        {request.resolved_by_admin_name && <DRow label="Обработал" value={request.resolved_by_admin_name} />}
         {request.user_message && (
           <DRow label="Сообщение" value={
             <span className="font-normal text-slate-600 dark:text-slate-300">{request.user_message}</span>
