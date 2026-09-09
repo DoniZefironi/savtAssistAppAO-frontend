@@ -1317,6 +1317,7 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
   const [subUserId, setSubUserId] = useState<number | null>(null)
   const [subCabinetId, setSubCabinetId] = useState<number | null>(null)
   const [subProjectId, setSubProjectId] = useState<number | null>(null)
+  const resolvedByName = useAdminDisplayName(request.resolved_by_admin_id)
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['document-requests'] })
 
@@ -1374,7 +1375,7 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
         {request.project_id && <DRowLink label="Проект" value={`Проект #${request.project_id}`} onClick={() => setSubProjectId(request.project_id!)} />}
         <DRow label="Создана" value={fmtDate(request.created_at)} />
         {request.resolved_at && <DRow label="Рассмотрена" value={fmtDate(request.resolved_at)} />}
-        {request.resolved_by_admin_id != null && <DRow label="Обработал" value={`Администратор #${request.resolved_by_admin_id}`} />}
+        {request.resolved_by_admin_id != null && <DRow label="Обработал" value={resolvedByName} />}
         {request.user_message && (
           <DRow label="Сообщение" value={
             <span className="font-normal text-slate-600 dark:text-slate-300">{request.user_message}</span>
