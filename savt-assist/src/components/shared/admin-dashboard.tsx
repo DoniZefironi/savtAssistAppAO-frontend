@@ -16,6 +16,9 @@ function makeStatCards(base: string) {
     { key: 'pendingDocumentRequests' as const,  label: 'Запросов на документы',href: `${base}/requests?tab=docs`,      accent: '#7C3AED', urgentAbove: 0, icon: <DocIcon /> },
     { key: 'pendingProjectShareRequests' as const, label: 'Заявок на проекты', href: `${base}/requests?tab=projects`,  accent: '#0891B2', urgentAbove: 0, icon: <KeyIcon /> },
     { key: 'pendingAdditionRequests' as const,  label: 'Добавлений ШУ',        href: `${base}/requests?tab=additions`, accent: '#059669', urgentAbove: 0, icon: <PlusBoxIcon /> },
+    { key: 'pendingPhoneChangeRequests' as const,   label: 'Смена номера',  href: `${base}/requests?tab=phone`,        accent: '#DB2777', urgentAbove: 0, icon: <PhoneChangeIcon /> },
+    { key: 'pendingPasswordResetRequests' as const, label: 'Смена пароля',  href: `${base}/requests?tab=password`,     accent: '#DC2626', urgentAbove: 0, icon: <PasswordResetIcon /> },
+    { key: 'pendingRegistrationRequests' as const,  label: 'Регистрация',   href: `${base}/requests?tab=registration`, accent: '#4F46E5', urgentAbove: 0, icon: <RegistrationIcon /> },
   ] as const
 }
 
@@ -49,7 +52,7 @@ export function AdminDashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2.5 2xl:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2 sm:gap-2.5 2xl:gap-4">
           {statCards.map((s) => {
             const value = stats?.[s.key]
             const urgent = typeof value === 'number' && value > s.urgentAbove
@@ -128,10 +131,13 @@ export function AdminDashboard() {
 }
 
 const TYPE_META: Record<ActivityItem['type'], { label: string; color: string; icon: React.ReactNode }> = {
-  service:   { label: 'Сервисная заявка',   color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',  icon: <WrenchIcon /> },
-  document:  { label: 'Запрос на документ', color: 'bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400', icon: <DocIcon /> },
-  share:     { label: 'Доступ к ШУ',        color: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400',      icon: <KeyIcon /> },
-  addition:  { label: 'Добавление ШУ',      color: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400', icon: <PlusBoxIcon /> },
+  service:        { label: 'Сервисная заявка',   color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',  icon: <WrenchIcon /> },
+  document:       { label: 'Запрос на документ', color: 'bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400', icon: <DocIcon /> },
+  share:          { label: 'Доступ к ШУ',        color: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400',      icon: <KeyIcon /> },
+  addition:       { label: 'Добавление ШУ',      color: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400', icon: <PlusBoxIcon /> },
+  phone_change:   { label: 'Смена номера',       color: 'bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400',      icon: <PhoneChangeIcon /> },
+  password_reset: { label: 'Смена пароля',       color: 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400',         icon: <PasswordResetIcon /> },
+  registration:   { label: 'Регистрация',        color: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400', icon: <RegistrationIcon /> },
 }
 
 const STATUS_STYLE: Record<string, string> = {
@@ -204,6 +210,15 @@ function KeyIcon() {
 }
 function PlusBoxIcon() {
   return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+}
+function PhoneChangeIcon() {
+  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" /></svg>
+}
+function PasswordResetIcon() {
+  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
+}
+function RegistrationIcon() {
+  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM3 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 019.374 21c-2.331 0-4.512-.645-6.374-1.766z" /></svg>
 }
 function InboxIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 13.5h3.86a2.25 2.25 0 012.012 1.244l.256.512a2.25 2.25 0 002.013 1.244h3.218a2.25 2.25 0 002.013-1.244l.256-.512a2.25 2.25 0 012.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 00-2.15-1.588H6.911a2.25 2.25 0 00-2.15 1.588L2.35 13.177a2.235 2.235 0 00-.1.661z" /></svg>

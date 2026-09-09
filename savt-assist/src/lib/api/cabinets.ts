@@ -117,6 +117,9 @@ export const cabinetsApi = {
         pendingDocumentRequests: s.pending_document_requests ?? 0,
         pendingProjectShareRequests: s.pending_project_share_requests ?? 0,
         pendingAdditionRequests: s.pending_addition_requests ?? 0,
+        pendingPhoneChangeRequests: s.pending_phone_change_requests ?? 0,
+        pendingRegistrationRequests: s.pending_registration_requests ?? 0,
+        pendingPasswordResetRequests: s.pending_password_reset_requests ?? 0,
       },
       activity,
     }
@@ -125,7 +128,7 @@ export const cabinetsApi = {
 
 export interface ActivityItem {
   id: number
-  type: 'service' | 'document' | 'share' | 'addition'
+  type: 'service' | 'document' | 'share' | 'addition' | 'phone_change' | 'password_reset' | 'registration'
   label: string
   user: string | null
   detail: string
@@ -139,6 +142,9 @@ export interface DashboardStats {
   pendingDocumentRequests: number
   pendingProjectShareRequests: number
   pendingAdditionRequests: number
+  pendingPhoneChangeRequests: number
+  pendingRegistrationRequests: number
+  pendingPasswordResetRequests: number
 }
 
 export interface DashboardData {
@@ -148,8 +154,11 @@ export interface DashboardData {
 
 interface DashboardActivityRaw {
   id: number
-  type: 'service' | 'document' | 'share' | 'addition'
+  type: 'service' | 'document' | 'share' | 'addition' | 'phone_change' | 'password_reset' | 'registration'
   status: string
+  // user_id тоже приходит (int | None — для type: "registration" всегда null,
+  // заявитель ещё не пользователь системы), но мы его не используем: имя уже
+  // готовое в user_full_name, ссылки на карточку пользователя тут нет.
   user_full_name?: string | null
   detail?: string
   created_at: string
@@ -177,4 +186,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
   document: 'Запрос на документ',
   share: 'Доступ к ШУ',
   addition: 'Добавление ШУ',
+  phone_change: 'Смена номера',
+  password_reset: 'Смена пароля',
+  registration: 'Регистрация',
 }
