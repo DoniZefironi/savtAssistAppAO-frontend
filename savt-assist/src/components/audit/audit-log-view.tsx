@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { X, SlidersHorizontal, ScrollText, ChevronDown, Bot, User, Shield, Settings2 } from 'lucide-react'
+import { SlidersHorizontal, ScrollText, ChevronDown, Bot, User, Shield, Settings2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -10,7 +10,8 @@ import { cn } from '@/lib/utils'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel'
-import { SearchIcon } from '@/components/ui/icons'
+import { SearchInput } from '@/components/ui/search-input'
+import { PillButton } from '@/components/ui/pill-button'
 import { auditApi, type AuditLog } from '@/lib/api/audit'
 
 const PAGE_SIZE = 50
@@ -154,20 +155,7 @@ export function AuditLogView() {
 
         <div className={cn('grid transition-[grid-template-rows] duration-150 ease-out', filtersOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
         <div className="overflow-hidden min-h-0">
-        <div className="relative">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск по журналу..."
-            className="pl-9 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 focus-visible:ring-[#4A8FE7]"
-          />
-          {search && (
-            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+        <SearchInput value={search} onChange={setSearch} placeholder="Поиск по журналу..." />
 
         {search && (
           <div className="flex flex-wrap items-center gap-1.5 mt-2">
@@ -193,19 +181,10 @@ export function AuditLogView() {
           {SORT_OPTIONS.map((opt) => {
             const active = sortBy === opt.value
             return (
-              <button
-                key={opt.value}
-                onClick={() => handleSortClick(opt.value)}
-                className={cn(
-                  'flex items-center gap-1.5 px-4 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
-                  active
-                    ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
-                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                )}
-              >
+              <PillButton key={opt.value} active={active} onClick={() => handleSortClick(opt.value)} className="flex items-center gap-1">
                 {opt.label}
-                {active && <span className="text-xs opacity-70">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
-              </button>
+                {active && <span className="opacity-70">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
+              </PillButton>
             )
           })}
         </div>
@@ -213,18 +192,9 @@ export function AuditLogView() {
         <div className="flex flex-wrap items-center gap-1.5 mt-3">
           <span className="text-xs text-slate-400 font-medium mr-0.5">Роль:</span>
           {ACTOR_ROLE_FILTERS.map(f => (
-            <button
-              key={f.label}
-              onClick={() => setActorRole(f.value)}
-              className={cn(
-                'px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
-                actorRole === f.value
-                  ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
-                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-              )}
-            >
+            <PillButton key={f.label} active={actorRole === f.value} onClick={() => setActorRole(f.value)}>
               {f.label}
-            </button>
+            </PillButton>
           ))}
         </div>
 

@@ -9,6 +9,7 @@ import { botApi } from '@/lib/api/bot'
 import { apiErrorMessage } from '@/lib/api/errors'
 import { Button } from '@/components/ui/button'
 import { ProjectCombobox } from '@/components/ui/project-combobox'
+import { PillButton } from '@/components/ui/pill-button'
 import { useAuthStore } from '@/lib/store/auth'
 import { SpinnerIcon } from '@/components/ui/icons'
 
@@ -306,19 +307,13 @@ function BotMaintenanceSection() {
 
           <div className="flex flex-wrap gap-1.5 mt-3">
             {SCOPE_OPTIONS.map(o => (
-              <button
+              <PillButton
                 key={o.value}
-                type="button"
+                active={scope === o.value}
                 onClick={() => { setScope(o.value); if (o.value !== 'document') setProjectId(null) }}
-                className={cn(
-                  'px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
-                  scope === o.value
-                    ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
-                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                )}
               >
                 {o.label}
-              </button>
+              </PillButton>
             ))}
           </div>
 

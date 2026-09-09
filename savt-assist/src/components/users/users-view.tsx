@@ -4,18 +4,22 @@ import { useState, useEffect, useRef } from 'react'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { toast } from 'sonner'
-import { X, CheckCircle2, XCircle, Smartphone, PhoneOff, Users, SlidersHorizontal } from 'lucide-react'
+import { CheckCircle2, XCircle, Smartphone, PhoneOff, Users } from 'lucide-react'
 import { cn, isSuperadminRole } from '@/lib/utils'
 import { usersApi } from '@/lib/api/users'
 import type { AdminUser } from '@/lib/api/users'
 import { useAuthStore } from '@/lib/store/auth'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel'
-import { SearchIcon } from '@/components/ui/icons'
+import { PlusIcon } from '@/components/ui/icons'
+import { ViewModeToggle } from '@/components/ui/view-mode-toggle'
+import { SearchInput } from '@/components/ui/search-input'
+import { PillButton } from '@/components/ui/pill-button'
+import { FormField, PasswordField } from '@/components/ui/form-field'
+import { DialogHeader } from '@/components/ui/dialog-header'
 import { RequestCard, StatusPill, TypePill } from '@/components/requests/request-card'
 import { UserDialog } from './user-dialog'
 import { roleLabel, fmtDate, UserIcon } from './user-shared'
@@ -169,11 +173,7 @@ export function UsersView() {
             <h1 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100">Пользователи</h1>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-              <button onClick={() => setView('list')} title="Список" className={`p-2 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon /></button>
-              <button onClick={() => setView('grid')} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon /></button>
-              <button onClick={() => setFiltersOpen(v => !v)} title={filtersOpen ? 'Скрыть поиск и фильтры' : 'Показать поиск и фильтры'} className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${filtersOpen ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><SlidersHorizontal className="w-4 h-4" /></button>
-            </div>
+            <ViewModeToggle view={view} onViewChange={setView} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen(v => !v)} />
             {!isReadOnly && isSuperadmin && (
               <Button onClick={() => setCreateAdminOpen(true)} className="bg-purple-600 hover:bg-purple-700 cursor-pointer dark:text-white">
                 <PlusIcon className="w-4 h-4 mr-1.5" />
@@ -213,38 +213,16 @@ export function UsersView() {
         </div>
         <div className={cn('grid transition-[grid-template-rows] duration-150 ease-out', filtersOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
         <div className="overflow-hidden min-h-0">
-        <div className="relative mb-3">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
-          <Input
-            value={searchInput}
-            onChange={e => setSearchInput(e.target.value)}
-            placeholder="Поиск по имени, телефону, логину..."
-            className="pl-9 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 focus-visible:ring-[#4A8FE7]"
-          />
-          {searchInput && (
-            <button onClick={() => setSearchInput('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+        <SearchInput value={searchInput} onChange={setSearchInput} placeholder="Поиск по имени, телефону, логину..." className="mb-3" />
 
         <div className="flex flex-wrap items-center gap-2 mt-3">
           {SORT_OPTIONS.map(opt => {
             const active = sortBy === opt.value
             return (
-              <button
-                key={opt.value}
-                onClick={() => handleSortClick(opt.value)}
-                className={cn(
-                  'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
-                  active
-                    ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
-                    : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300'
-                )}
-              >
+              <PillButton key={opt.value} active={active} onClick={() => handleSortClick(opt.value)} className="flex items-center gap-1">
                 {opt.label}
                 {active && <span className="opacity-70">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
-              </button>
+              </PillButton>
             )
           })}
         </div>
@@ -252,35 +230,17 @@ export function UsersView() {
         <div className="flex flex-wrap items-center gap-2 mt-3">
           <span className="text-xs text-slate-400 font-medium mr-0.5">Фильтр:</span>
           {STATUS_FILTERS.map(f => (
-            <button
-              key={f.value}
-              onClick={() => setStatusFilter(f.value)}
-              className={cn(
-                'px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
-                statusFilter === f.value
-                  ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
-                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
-              )}
-            >
+            <PillButton key={f.value} active={statusFilter === f.value} onClick={() => setStatusFilter(f.value)}>
               {f.label}
-            </button>
+            </PillButton>
           ))}
 
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />
 
           {USER_TYPE_FILTERS.map(f => (
-            <button
-              key={f.value}
-              onClick={() => setUserTypeFilter(f.value)}
-              className={cn(
-                'px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
-                userTypeFilter === f.value
-                  ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
-                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
-              )}
-            >
+            <PillButton key={f.value} active={userTypeFilter === f.value} onClick={() => setUserTypeFilter(f.value)}>
               {f.label}
-            </button>
+            </PillButton>
           ))}
 
           <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />
@@ -429,7 +389,6 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
   const [userType, setUserType] = useState<'individual' | 'organization'>('individual')
   const [organizationName, setOrganizationName] = useState('')
   const [contactPhone, setContactPhone] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
 
   const createMut = useMutation({
     mutationFn: () => usersApi.createUser({
@@ -461,22 +420,18 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
   return (
     <AppModal open onClose={onClose}>
       <div className="flex flex-col">
-        <div className="bg-linear-to-r from-emerald-500 to-emerald-700 px-4 sm:px-6 py-4 sm:py-5 shrink-0">
-          <div className="flex items-start gap-3 sm:gap-4 pr-8">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0"><UserIcon /></div>
-            <div>
-              <p className="font-bold text-lg text-white">Новый пользователь</p>
-              <p className="text-sm text-white/60 mt-0.5">Создание аккаунта клиента напрямую, минуя заявку</p>
-            </div>
-          </div>
-        </div>
+        <DialogHeader
+          icon={<UserIcon />}
+          title="Новый пользователь"
+          subtitle="Создание аккаунта клиента напрямую, минуя заявку"
+          gradient="from-emerald-500 to-emerald-700"
+        />
         <div className="px-4 sm:px-6 py-4 space-y-4">
-          <StaffField label="Телефон" hint="логин, формат +375291234567" value={phone} onChange={setPhone}
+          <FormField label="Телефон" hint="логин, формат +375291234567" value={phone} onChange={setPhone}
             error={phone && !phoneValid ? 'Формат: + и от 9 до 15 цифр' : ''} placeholder="+375291234567" />
           <PasswordField label="Пароль" hint="мин. 8 символов" value={password} onChange={setPassword}
-            show={showPassword} onToggle={() => setShowPassword(v => !v)}
             error={password && !passwordValid ? 'Минимум 8 символов' : ''} />
-          <StaffField label="ФИО" value={fullName} onChange={setFullName} placeholder="Иванов Иван Иванович" />
+          <FormField label="ФИО" value={fullName} onChange={setFullName} placeholder="Иванов Иван Иванович" />
           <div>
             <label className="text-xs font-medium text-slate-500 block mb-1.5">Тип</label>
             <div className="flex gap-2">
@@ -498,11 +453,11 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
           {userType === 'organization' && (
-            <StaffField label="Организация" value={organizationName} onChange={setOrganizationName}
+            <FormField label="Организация" value={organizationName} onChange={setOrganizationName}
               error={!orgValid ? 'Обязательно для организации' : ''}
               placeholder="ООО «Ромашка»" />
           )}
-          <StaffField label="Контактный телефон" hint="необязательно" value={contactPhone} onChange={setContactPhone} placeholder="+375291234567" />
+          <FormField label="Контактный телефон" hint="необязательно" value={contactPhone} onChange={setContactPhone} placeholder="+375291234567" />
         </div>
         <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end shrink-0">
           <Button onClick={() => createMut.mutate()} disabled={!canSave} className="bg-emerald-600 hover:bg-emerald-700 cursor-pointer dark:text-white">
@@ -519,7 +474,6 @@ function CreateOperatorModal({ onClose }: { onClose: () => void }) {
   const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
 
   const createMut = useMutation({
     mutationFn: () => usersApi.createOperator({ login: login.trim(), password, full_name: fullName.trim() || null }),
@@ -538,22 +492,13 @@ function CreateOperatorModal({ onClose }: { onClose: () => void }) {
   return (
     <AppModal open onClose={onClose}>
       <div className="flex flex-col">
-        <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-4 sm:px-6 py-4 sm:py-5 shrink-0">
-          <div className="flex items-start gap-3 sm:gap-4 pr-8">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0"><UserIcon /></div>
-            <div>
-              <p className="font-bold text-lg text-white">Новый оператор</p>
-              <p className="text-sm text-white/60 mt-0.5">Создание аккаунта оператора</p>
-            </div>
-          </div>
-        </div>
+        <DialogHeader icon={<UserIcon />} title="Новый оператор" subtitle="Создание аккаунта оператора" />
         <div className="px-4 sm:px-6 py-4 space-y-4">
-          <StaffField label="Логин" hint="мин. 3 символа, без пробелов" value={login} onChange={setLogin}
+          <FormField label="Логин" hint="мин. 3 символа, без пробелов" value={login} onChange={setLogin}
             error={login && !loginValid ? 'Мин. 3 символа, без пробелов' : ''} placeholder="operator1" />
           <PasswordField label="Пароль" hint="мин. 8 символов" value={password} onChange={setPassword}
-            show={showPassword} onToggle={() => setShowPassword(v => !v)}
             error={password && !passwordValid ? 'Минимум 8 символов' : ''} />
-          <StaffField label="ФИО" value={fullName} onChange={setFullName} placeholder="Иванов Иван Иванович" />
+          <FormField label="ФИО" value={fullName} onChange={setFullName} placeholder="Иванов Иван Иванович" />
         </div>
         <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end shrink-0">
           <Button onClick={() => createMut.mutate()} disabled={!canSave} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white">
@@ -570,7 +515,6 @@ function CreateStaffModal({ onClose }: { onClose: () => void }) {
   const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
 
   const createMut = useMutation({
     mutationFn: () => usersApi.createAdmin({ login: login.trim(), password, full_name: fullName.trim() || null }),
@@ -589,22 +533,18 @@ function CreateStaffModal({ onClose }: { onClose: () => void }) {
   return (
     <AppModal open onClose={onClose}>
       <div className="flex flex-col">
-        <div className="bg-linear-to-r from-[#7C3AED] to-[#4C1D95] px-4 sm:px-6 py-4 sm:py-5 shrink-0">
-          <div className="flex items-start gap-3 sm:gap-4 pr-8">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0"><UserIcon /></div>
-            <div>
-              <p className="font-bold text-lg text-white">Новый администратор</p>
-              <p className="text-sm text-white/60 mt-0.5">Создание аккаунта администратора</p>
-            </div>
-          </div>
-        </div>
+        <DialogHeader
+          icon={<UserIcon />}
+          title="Новый администратор"
+          subtitle="Создание аккаунта администратора"
+          gradient="from-[#7C3AED] to-[#4C1D95]"
+        />
         <div className="px-4 sm:px-6 py-4 space-y-4">
-          <StaffField label="Логин" hint="мин. 3 символа, без пробелов" value={login} onChange={setLogin}
+          <FormField label="Логин" hint="мин. 3 символа, без пробелов" value={login} onChange={setLogin}
             error={login && !loginValid ? 'Мин. 3 символа, без пробелов' : ''} placeholder="admin2" />
           <PasswordField label="Пароль" hint="мин. 8 символов" value={password} onChange={setPassword}
-            show={showPassword} onToggle={() => setShowPassword(v => !v)}
             error={password && !passwordValid ? 'Минимум 8 символов' : ''} />
-          <StaffField label="ФИО" value={fullName} onChange={setFullName} placeholder="Иванов Иван Иванович" />
+          <FormField label="ФИО" value={fullName} onChange={setFullName} placeholder="Иванов Иван Иванович" />
         </div>
         <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end shrink-0">
           <Button onClick={() => createMut.mutate()} disabled={!canSave} className="bg-purple-600 hover:bg-purple-700 cursor-pointer dark:text-white">
@@ -614,56 +554,4 @@ function CreateStaffModal({ onClose }: { onClose: () => void }) {
       </div>
     </AppModal>
   )
-}
-
-function StaffField({ label, hint, value, onChange, placeholder, error }: {
-  label: string; hint?: string; value: string; onChange: (v: string) => void; placeholder?: string; error?: string
-}) {
-  return (
-    <div>
-      <label className="text-xs font-medium text-slate-500 block mb-1.5">
-        {label}{hint && <span className="text-slate-400 font-normal ml-1">({hint})</span>}
-      </label>
-      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} autoComplete="off"
-        className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]" />
-      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-    </div>
-  )
-}
-
-function PasswordField({ label, hint, value, onChange, show, onToggle, error }: {
-  label: string; hint?: string; value: string; onChange: (v: string) => void; show: boolean; onToggle: () => void; error?: string
-}) {
-  return (
-    <div>
-      <label className="text-xs font-medium text-slate-500 block mb-1.5">
-        {label}{hint && <span className="text-slate-400 font-normal ml-1">({hint})</span>}
-      </label>
-      <div className="relative">
-        <input value={value} onChange={e => onChange(e.target.value)} type={show ? 'text' : 'password'}
-          placeholder="••••••••" autoComplete="new-password"
-          className="w-full px-3 py-2 pr-10 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]" />
-        <button type="button" onClick={onToggle} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer">
-          {show ? <EyeOffIcon /> : <EyeIcon />}
-        </button>
-      </div>
-      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-    </div>
-  )
-}
-
-function ListIcon() {
-  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
-}
-function GridIcon() {
-  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" /></svg>
-}
-function PlusIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-}
-function EyeIcon() {
-  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-}
-function EyeOffIcon() {
-  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" /></svg>
 }

@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useDebounce } from '@/lib/hooks/use-debounce'
+import { useClickOutside } from '@/lib/hooks/use-click-outside'
 import { cabinetsApi } from '@/lib/api/cabinets'
 import type { Cabinet } from '@/types'
 
@@ -38,13 +39,7 @@ export function CabinetCombobox({ value, onChange, placeholder = 'Поиск п�
   })
   const items = data?.items ?? []
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
+  useClickOutside(ref, () => setOpen(false))
 
   const handleSelect = (c: Cabinet) => {
     onChange(c.id)

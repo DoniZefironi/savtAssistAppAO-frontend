@@ -4,8 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, X, FileText, Image, User, Wrench, CheckCircle2, XCircle, Package, AlertTriangle, SlidersHorizontal } from 'lucide-react'
-import { Input } from '@/components/ui/input'
+import { ArrowLeft, FileText, Image, User, Wrench, CheckCircle2, XCircle, Package, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AppModal } from '@/components/ui/app-modal'
@@ -24,7 +23,10 @@ import { apiErrorMessage } from '@/lib/api/errors'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel'
-import { SearchIcon } from '@/components/ui/icons'
+import { PlusIcon } from '@/components/ui/icons'
+import { ViewModeToggle } from '@/components/ui/view-mode-toggle'
+import { SearchInput } from '@/components/ui/search-input'
+import { PillButton } from '@/components/ui/pill-button'
 import { formatDate } from '@/lib/warranty'
 import { cn } from '@/lib/utils'
 import type { Project } from '@/types'
@@ -436,48 +438,26 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
         {pageTab === 'cabinets' && (
         <>
         <div className="flex items-center gap-2 mb-3">
-          <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-            <button onClick={() => setView('list')} title="Список" className={`p-2 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
-              <ListIcon />
-            </button>
-            <button onClick={() => setView('grid')} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
-              <GridIcon />
-            </button>
-            <button onClick={() => setFiltersOpen(v => !v)} title={filtersOpen ? 'Скрыть поиск и фильтры' : 'Показать поиск и фильтры'} className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${filtersOpen ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
-              <SlidersHorizontal className="w-4 h-4" />
-            </button>
-          </div>
+          <ViewModeToggle view={view} onViewChange={setView} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen(v => !v)} />
         </div>
 
         <div className={cn('grid transition-[grid-template-rows] duration-150 ease-out', filtersOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
         <div className="overflow-hidden min-h-0">
-        <div className="relative">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск по ШУ этого проекта..."
-            className="pl-9 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 focus-visible:ring-[#4A8FE7]"
-          />
-          {search && (
-            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+        <SearchInput value={search} onChange={setSearch} placeholder="Поиск по ШУ этого проекта..." className="mb-3" />
 
         <div className="flex gap-2 mt-3 flex-wrap">
           {SORT_OPTIONS.map((opt) => {
             const active = sortBy === opt.value
             return (
-              <button
+              <PillButton
                 key={opt.value}
+                active={active}
                 onClick={() => handleSortClick(opt.value)}
-                className={`flex items-center gap-1.5 px-4 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${active ? 'bg-[#1B3A72] text-white border-[#1B3A72]' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'}`}
+                className="flex items-center gap-1.5 px-4 py-1"
               >
                 {opt.label}
                 {active && <span className="text-xs opacity-70">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
-              </button>
+              </PillButton>
             )
           })}
         </div>
@@ -646,15 +626,6 @@ function FolderIcon({ className }: { className?: string }) {
       <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 00-1.883 2.542l.857 6a2.25 2.25 0 002.227 1.932H19.05a2.25 2.25 0 002.227-1.932l.857-6a2.25 2.25 0 00-1.883-2.542m-16.5 0V6A2.25 2.25 0 015.25 3.75h5.379a1.5 1.5 0 011.06.44l2.122 2.12a1.5 1.5 0 001.06.44H18.75A2.25 2.25 0 0121 9v.776" />
     </svg>
   )
-}
-function PlusIcon() {
-  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-}
-function ListIcon() {
-  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
-}
-function GridIcon() {
-  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" /></svg>
 }
 function QrIcon({ className }: { className?: string }) {
   return (

@@ -6,6 +6,8 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
+import { DialogHeader } from '@/components/ui/dialog-header'
+import { FormField } from '@/components/ui/form-field'
 import { CabinetTypeCombobox } from '@/components/ui/cabinet-type-combobox'
 import { ProjectCombobox } from '@/components/ui/project-combobox'
 import { cabinetsApi, CreateCabinetDto } from '@/lib/api/cabinets'
@@ -122,11 +124,10 @@ export function CreateCabinetDialog({ open, onClose, projectId }: Props) {
     onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось создать ШУ')),
   })
 
-  const set = (key: keyof FormFields) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      setForm(prev => ({ ...prev, [key]: e.target.value }))
-      clearError(key)
-    }
+  const set = (key: keyof FormFields) => (v: string) => {
+    setForm(prev => ({ ...prev, [key]: v }))
+    clearError(key)
+  }
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -148,20 +149,11 @@ export function CreateCabinetDialog({ open, onClose, projectId }: Props) {
           ширины контента и вылезает шире модалки, см. cabinet-detail-dialog.tsx */}
       <div className="flex flex-col max-h-[85vh] min-w-0">
 
-        {/* Gradient header */}
-        <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-4 sm:px-6 py-4 sm:py-5 shrink-0">
-          <div className="flex items-start gap-3 sm:gap-4 pr-8">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
-              <CabinetIcon className="w-6 h-6 text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-bold text-lg text-white leading-tight">Добавить ШУ</p>
-              <p className="text-sm text-white/60 mt-0.5">
-                {projectId != null ? 'Шкаф будет сразу привязан к этому проекту' : 'Заполните данные нового шкафа управления'}
-              </p>
-            </div>
-          </div>
-        </div>
+        <DialogHeader
+          icon={<CabinetIcon className="w-6 h-6 text-white" />}
+          title="Добавить ШУ"
+          subtitle={projectId != null ? 'Шкаф будет сразу привязан к этому проекту' : 'Заполните данные нового шкафа управления'}
+        />
 
         {/* Body */}
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
@@ -204,14 +196,14 @@ export function CreateCabinetDialog({ open, onClose, projectId }: Props) {
               />
             </div>
 
-            <Field
+            <FormField
               label="Внутреннее название"
               value={form.admin_internal_name ?? ''}
               onChange={set('admin_internal_name')}
               placeholder="ШУ-18К"
             />
 
-            <Field
+            <FormField
               label="Описание"
               value={form.description ?? ''}
               onChange={set('description')}
@@ -220,13 +212,13 @@ export function CreateCabinetDialog({ open, onClose, projectId }: Props) {
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field
+              <FormField
                 label="Назначение"
                 value={form.purpose ?? ''}
                 onChange={set('purpose')}
                 placeholder="Управление освещением..."
               />
-              <Field
+              <FormField
                 label="Комментарий администратора"
                 value={form.admin_comment ?? ''}
                 onChange={set('admin_comment')}
@@ -235,14 +227,14 @@ export function CreateCabinetDialog({ open, onClose, projectId }: Props) {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field
+              <FormField
                 label="Гарантия с *"
                 value={form.warranty_starts_at ?? ''}
                 onChange={set('warranty_starts_at')}
                 type="date"
                 error={errors.warranty_starts_at}
               />
-              <Field
+              <FormField
                 label="Гарантия до *"
                 value={form.warranty_ends_at ?? ''}
                 onChange={set('warranty_ends_at')}
@@ -329,38 +321,6 @@ function ObjectNumberField({
           placeholder="29_099"
           className={cn(base, 'w-full px-3 py-2')}
         />
-      )}
-      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-    </div>
-  )
-}
-
-function Field({
-  label, value, onChange, placeholder, multiline, error, type = 'text',
-}: {
-  label: string
-  value: string
-  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void
-  placeholder?: string
-  multiline?: boolean
-  error?: string
-  type?: string
-}) {
-  const base = cn(
-    'w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none placeholder:text-slate-400',
-    error
-      ? 'border-red-400 focus:border-red-500 dark:border-red-500'
-      : 'border-slate-200 dark:border-slate-600 focus:border-[#4A8FE7]'
-  )
-  return (
-    <div>
-      <label className={cn('text-xs font-medium block mb-1.5', error ? 'text-red-500' : 'text-slate-500')}>
-        {label}
-      </label>
-      {multiline ? (
-        <textarea value={value} onChange={onChange} placeholder={placeholder} rows={2} className={cn(base, 'resize-none')} />
-      ) : (
-        <input type={type} value={value} onChange={onChange} placeholder={placeholder} className={base} />
       )}
       {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
     </div>

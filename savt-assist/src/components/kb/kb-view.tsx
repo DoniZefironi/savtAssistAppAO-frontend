@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { createPortal } from 'react-dom'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { AlertTriangle, FolderTree, SlidersHorizontal, FolderUp } from 'lucide-react'
+import { AlertTriangle, FolderTree, FolderUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { kbApi } from '@/lib/api/kb'
 import type { KbArticleDetail, KbArticleList, KbAttachment, KbCategory, Tag } from '@/lib/api/kb'
@@ -17,7 +17,10 @@ import { useAuthStore } from '@/lib/store/auth'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel'
-import { SearchIcon } from '@/components/ui/icons'
+import { PlusIcon } from '@/components/ui/icons'
+import { ViewModeToggle } from '@/components/ui/view-mode-toggle'
+import { SearchInput } from '@/components/ui/search-input'
+import { PillButton } from '@/components/ui/pill-button'
 import { useFolderUpload } from '@/lib/hooks/use-folder-upload'
 import { validateDocFile } from '@/components/cabinets/cabinet-dialog-shared'
 
@@ -336,11 +339,7 @@ export function KbView() {
               <FolderTree className="w-4 h-4" />
               Категории
             </button>
-            <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-              <button onClick={() => setView('list')} title="Список" className={`p-1.5 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon className="w-4 h-4" /></button>
-              <button onClick={() => setView('grid')} title="Сетка" className={`p-1.5 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon className="w-4 h-4" /></button>
-              <button onClick={() => setFiltersOpen(v => !v)} title={filtersOpen ? 'Скрыть поиск и фильтры' : 'Показать поиск и фильтры'} className={`p-1.5 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${filtersOpen ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><SlidersHorizontal className="w-4 h-4" /></button>
-            </div>
+            <ViewModeToggle view={view} onViewChange={setView} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen(v => !v)} size="sm" />
             {!isReadOnly && (
               <Button onClick={() => setCreateArticleOpen(true)} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white">
                 <PlusIcon className="w-4 h-4 mr-1.5" />
@@ -352,33 +351,16 @@ export function KbView() {
 
         <div className={cn('grid transition-[grid-template-rows] duration-150 ease-out', filtersOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
         <div className="overflow-hidden min-h-0">
-        <div className="relative mb-3">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-          <input
-            value={searchInput}
-            onChange={e => setSearchInput(e.target.value)}
-            placeholder="Поиск по статьям"
-            className="w-full pl-9 pr-3 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:border-[#4A8FE7]"
-          />
-        </div>
+        <SearchInput value={searchInput} onChange={setSearchInput} placeholder="Поиск по статьям" className="mb-3" />
 
         <div className="flex flex-wrap gap-2 items-center mt-3">
           {SORT_OPTIONS.map(opt => {
             const active = sortBy === opt.value
             return (
-              <button
-                key={opt.value}
-                onClick={() => handleSortClick(opt.value)}
-                className={cn(
-                  'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
-                  active
-                    ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
-                    : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300'
-                )}
-              >
+              <PillButton key={opt.value} active={active} onClick={() => handleSortClick(opt.value)} className="flex items-center gap-1">
                 {opt.label}
                 {active && <span className="opacity-70">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
-              </button>
+              </PillButton>
             )
           })}
         </div>
@@ -1266,9 +1248,6 @@ function FolderIcon({ className }: { className?: string }) {
 function PaperclipIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" /></svg>
 }
-function PlusIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-}
 function PencilIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /></svg>
 }
@@ -1295,10 +1274,4 @@ function ChevronLeftIcon({ className }: { className?: string }) {
 }
 function ChevronRightIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
-}
-function ListIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
-}
-function GridIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" /></svg>
 }

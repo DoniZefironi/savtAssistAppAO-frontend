@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { toast } from 'sonner'
-import { X, ClipboardList, SlidersHorizontal, AlertTriangle, Phone, KeyRound } from 'lucide-react'
+import { ClipboardList, AlertTriangle, Phone, KeyRound } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toFullUrl } from '@/lib/api/base-url'
 import { requestsApi } from '@/lib/api/requests'
@@ -13,12 +13,13 @@ import { usersApi } from '@/lib/api/users'
 import { useAuthStore } from '@/lib/store/auth'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { CabinetCombobox } from '@/components/ui/cabinet-combobox'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel'
-import { SearchIcon } from '@/components/ui/icons'
+import { ViewModeToggle, type ViewMode } from '@/components/ui/view-mode-toggle'
+import { SearchInput } from '@/components/ui/search-input'
+import { PillButton } from '@/components/ui/pill-button'
 import { RequestCard, ServiceCardIcon, AdditionCardIcon, RegistrationCardIcon, StatusPill, TypePill } from './request-card'
 import { UserDialog } from '@/components/users/user-dialog'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
@@ -116,8 +117,6 @@ const REQUEST_TYPE_FILTERS = [
   { value: 'onsite_adjustment', label: 'Наладка с выездом' },
   { value: 'other', label: 'Другое' },
 ]
-
-type ViewMode = 'list' | 'grid'
 
 export function RequestsView() {
   const currentUser = useAuthStore(s => s.user)
@@ -299,11 +298,7 @@ export function RequestsView() {
             {total != null && <p className="text-xs text-slate-400 font-medium mb-0.5">{total} заявок</p>}
             <h1 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100">Заявки</h1>
           </div>
-          <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden shrink-0">
-            <button onClick={() => setView('list')} title="Список" className={`p-2 transition-colors cursor-pointer ${view === 'list' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><ListIcon /></button>
-            <button onClick={() => setView('grid')} title="Сетка" className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${view === 'grid' ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><GridIcon /></button>
-            <button onClick={() => setFiltersOpen(v => !v)} title={filtersOpen ? 'Скрыть поиск и фильтры' : 'Показать поиск и фильтры'} className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${filtersOpen ? 'bg-[#1B3A72] text-white' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><SlidersHorizontal className="w-4 h-4" /></button>
-          </div>
+          <ViewModeToggle view={view} onViewChange={setView} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen(v => !v)} />
         </div>
         {/* Табы не переносятся (сломали бы вид подчёркнутой навигации) — на узких экранах скроллятся горизонтально */}
         <div className="flex gap-0 mb-3 overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
@@ -324,60 +319,25 @@ export function RequestsView() {
         </div>
         <div className={cn('grid transition-[grid-template-rows] duration-150 ease-out', filtersOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
         <div className="overflow-hidden min-h-0">
-        <div className="relative mb-3">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
-          <Input
-            value={searchInput}
-            onChange={e => setSearchInput(e.target.value)}
-            placeholder="Поиск по заявкам..."
-            className="pl-9 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 focus-visible:ring-[#4A8FE7]"
-          />
-          {searchInput && (
-            <button onClick={() => setSearchInput('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+        <SearchInput value={searchInput} onChange={setSearchInput} placeholder="Поиск по заявкам..." className="mb-3" />
 
         <div className="flex flex-wrap items-center gap-2 mt-3">
-          {sortOptions.length > 0 && (
-            <>
-              {sortOptions.map(opt => {
-                const active = sortBy === opt.value
-                return (
-                  <button
-                    key={opt.value}
-                    onClick={() => handleSortClick(opt.value)}
-                    className={cn(
-                      'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
-                      active
-                        ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
-                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'
-                    )}
-                  >
-                    {opt.label}
-                    {active && <span className="opacity-70">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
-                  </button>
-                )
-              })}
-            </>
-          )}
+          {sortOptions.map(opt => {
+            const active = sortBy === opt.value
+            return (
+              <PillButton key={opt.value} active={active} onClick={() => handleSortClick(opt.value)} className="flex items-center gap-1">
+                {opt.label}
+                {active && <span className="opacity-70">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
+              </PillButton>
+            )
+          })}
         </div>
         <div className="flex flex-wrap items-center gap-2 mt-3">
           <span className="text-xs text-slate-400 font-medium mr-0.5">Фильтр:</span>
           {filters.map(f => (
-            <button
-              key={f.value}
-              onClick={() => handleFilterChange(f.value)}
-              className={cn(
-                'px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
-                statusFilter === f.value
-                  ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
-                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-              )}
-            >
+            <PillButton key={f.value} active={statusFilter === f.value} onClick={() => handleFilterChange(f.value)}>
               {f.label}
-            </button>
+            </PillButton>
           ))}
         </div>
 
@@ -385,18 +345,9 @@ export function RequestsView() {
           <div className="flex flex-wrap items-center gap-2 mt-2">
             <span className="text-xs text-slate-400 font-medium mr-0.5">Тип:</span>
             {REQUEST_TYPE_FILTERS.map(f => (
-              <button
-                key={f.value}
-                onClick={() => setRequestTypeFilter(f.value)}
-                className={cn(
-                  'px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer',
-                  requestTypeFilter === f.value
-                    ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
-                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                )}
-              >
+              <PillButton key={f.value} active={requestTypeFilter === f.value} onClick={() => setRequestTypeFilter(f.value)}>
                 {f.label}
-              </button>
+              </PillButton>
             ))}
           </div>
         )}
@@ -1489,12 +1440,6 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
   )
 }
 
-function ListIcon() {
-  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
-}
-function GridIcon() {
-  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" /></svg>
-}
 function AddModalIcon() {
   return <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
 }

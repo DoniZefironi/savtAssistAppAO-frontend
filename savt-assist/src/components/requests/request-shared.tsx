@@ -2,6 +2,11 @@ import { Fragment } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+// DialogHeader переехал в components/ui (нужен не только диалогам заявок, но
+// и create-модалкам ШУ/пользователей) — реэкспорт, чтобы не трогать импорты
+// в местах, которые уже берут его отсюда.
+export { DialogHeader } from '@/components/ui/dialog-header'
+
 // Общие для RequestsView (список + Addition/Share/DocumentRequest-диалогов) и
 // ServiceDialog — вынесены сюда, а не в requests-view.tsx, чтобы ServiceDialog
 // мог жить отдельным модулем и не тащить за собой весь список заявок
@@ -93,25 +98,6 @@ export function ModalTextarea({ value, onChange, placeholder, rows = 2 }: {
       rows={rows}
       className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800/50 text-sm text-slate-700 dark:text-slate-200 resize-none focus:outline-none focus:border-[#4A8FE7] dark:placeholder:text-slate-500"
     />
-  )
-}
-
-export function DialogHeader({ icon, title, subtitle, badge }: {
-  icon: React.ReactNode; title: string; subtitle: string; badge?: React.ReactNode
-}) {
-  return (
-    <div className="bg-linear-to-r from-[#4A8FE7] to-[#1B3A72] px-4 sm:px-6 py-4 sm:py-5">
-      <div className="flex items-start gap-3 sm:gap-4">
-        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/15 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
-          {icon}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-bold text-lg text-white leading-tight">{title}</p>
-          <p className="text-sm text-white/60 mt-0.5">{subtitle}</p>
-          {badge && <div className="mt-2">{badge}</div>}
-        </div>
-      </div>
-    </div>
   )
 }
 

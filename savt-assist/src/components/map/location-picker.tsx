@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { useDebounce } from '@/lib/hooks/use-debounce'
+import { useClickOutside } from '@/lib/hooks/use-click-outside'
 
 interface LatLng {
   lat: number
@@ -123,16 +124,7 @@ export function LocationPicker({ value, onChange }: Props) {
     return () => { cancelled = true }
   }, [debouncedAddress])
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (dropRef.current && !dropRef.current.contains(e.target as Node) &&
-          inputRef.current && !inputRef.current.contains(e.target as Node)) {
-        setShowDropdown(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
+  useClickOutside([dropRef, inputRef], () => setShowDropdown(false))
 
   const handleSelect = (r: NominatimResult) => {
     onChange({ lat: parseFloat(r.lat), lng: parseFloat(r.lon) })

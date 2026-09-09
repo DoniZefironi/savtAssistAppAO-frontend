@@ -4,9 +4,8 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { X, FileText, Image, User, Wrench, FolderKanban, AlertTriangle, SlidersHorizontal, Contact, Truck, RefreshCw } from 'lucide-react'
+import { X, FileText, Image, User, Wrench, FolderKanban, AlertTriangle, Contact, Truck, RefreshCw } from 'lucide-react'
 import { WarrantyChips, type WarrantyFilter } from '@/components/ui/warranty-chips'
-import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AppModal } from '@/components/ui/app-modal'
@@ -18,7 +17,10 @@ import { apiErrorMessage } from '@/lib/api/errors'
 import { useDebounce } from '@/lib/hooks/use-debounce'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
 import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-sentinel'
-import { SearchIcon } from '@/components/ui/icons'
+import { PlusIcon } from '@/components/ui/icons'
+import { ViewModeToggle } from '@/components/ui/view-mode-toggle'
+import { SearchInput } from '@/components/ui/search-input'
+import { PillButton } from '@/components/ui/pill-button'
 import type { Project } from '@/types'
 
 const PAGE_SIZE = 20
@@ -309,41 +311,7 @@ export function CabinetsView({ isAdmin }: Props) {
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-              <button
-                onClick={() => setView('list')}
-                title="Список"
-                className={`p-2 transition-colors cursor-pointer ${
-                  view === 'list'
-                    ? 'bg-[#1B3A72] text-white'
-                    : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
-                }`}
-              >
-                <ListIcon />
-              </button>
-              <button
-                onClick={() => setView('grid')}
-                title="Сетка"
-                className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${
-                  view === 'grid'
-                    ? 'bg-[#1B3A72] text-white'
-                    : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
-                }`}
-              >
-                <GridIcon />
-              </button>
-              <button
-                onClick={() => setFiltersOpen(v => !v)}
-                title={filtersOpen ? 'Скрыть поиск и фильтры' : 'Показать поиск и фильтры'}
-                className={`p-2 transition-colors cursor-pointer border-l border-slate-200 dark:border-slate-700 ${
-                  filtersOpen
-                    ? 'bg-[#1B3A72] text-white'
-                    : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
-                }`}
-              >
-                <SlidersHorizontal className="w-4 h-4" />
-              </button>
-            </div>
+            <ViewModeToggle view={view} onViewChange={setView} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen(v => !v)} />
 
             <Button
               onClick={() => syncAllFoldersMutation.mutate()}
@@ -369,40 +337,21 @@ export function CabinetsView({ isAdmin }: Props) {
 
         <div className={`grid transition-[grid-template-rows] duration-150 ease-out ${filtersOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
         <div className="overflow-hidden min-h-0">
-        <div className="relative">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-          <Input
-            value={search}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="Проект, номер, компания, контактное лицо..."
-            className="pl-9 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 focus-visible:ring-[#4A8FE7]"
-          />
-          {search && (
-            <button
-              onClick={() => handleSearchChange('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+        <SearchInput value={search} onChange={handleSearchChange} placeholder="Проект, номер, компания, контактное лицо..." className="mb-3" />
 
         <div className="flex gap-2 mt-3 flex-wrap">
           {PROJECT_SORT_OPTIONS.map((opt) => {
             const active = sortBy === opt.value
             return (
-              <button
+              <PillButton
                 key={opt.value}
+                active={active}
                 onClick={() => handleSortClick(opt.value)}
-                className={`flex items-center gap-1.5 px-4 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
-                  active
-                    ? 'bg-[#1B3A72] text-white border-[#1B3A72]'
-                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                }`}
+                className="flex items-center gap-1.5 px-4 py-1"
               >
                 {opt.label}
                 {active && <span className="text-xs opacity-70">{sortOrder === 'asc' ? '↑' : '↓'}</span>}
-              </button>
+              </PillButton>
             )
           })}
         </div>
@@ -658,27 +607,5 @@ export function CabinetsView({ isAdmin }: Props) {
         </AppModal>
       )}
     </div>
-  )
-}
-
-function PlusIcon() {
-  return (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-    </svg>
-  )
-}
-function ListIcon() {
-  return (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-    </svg>
-  )
-}
-function GridIcon() {
-  return (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-    </svg>
   )
 }

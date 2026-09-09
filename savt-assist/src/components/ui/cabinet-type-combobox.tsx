@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, Plus, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useClickOutside } from '@/lib/hooks/use-click-outside'
 import { kbApi } from '@/lib/api/kb'
 
 interface Props {
@@ -27,15 +28,7 @@ export function CabinetTypeCombobox({ value, onChange, placeholder = 'Венти
     setSearch(value)
   }, [value])
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
+  useClickOutside(ref, () => setOpen(false))
 
   const filtered = tags.filter(t =>
     t.name.toLowerCase().includes(search.toLowerCase())

@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useDebounce } from '@/lib/hooks/use-debounce'
+import { useClickOutside } from '@/lib/hooks/use-click-outside'
 import { simApi } from '@/lib/api/sim'
 import type { SimInfoOut } from '@/types'
 
@@ -37,13 +38,7 @@ export function SimCombobox({ value, valueLabel, onChange, placeholder = 'Пои
   })
   const items = data?.items ?? []
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
+  useClickOutside(ref, () => setOpen(false))
 
   const handleSelect = (s: SimInfoOut) => {
     onChange(s.id)

@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useClickOutside } from '@/lib/hooks/use-click-outside'
 
 interface CategoryLike {
   id: number
@@ -31,13 +32,7 @@ export function CategorySelect({ categories, value, onChange, disabled, placehol
 
   const selected = categories.find(c => c.id === value)
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
+  useClickOutside(ref, () => setOpen(false))
 
   const searchLower = search.trim().toLowerCase()
   const filtered = searchLower
