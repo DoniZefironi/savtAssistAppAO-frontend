@@ -11,21 +11,26 @@ import type { Cabinet } from '@/types'
 
 interface Props {
   value: number | null
+  // Название для уже выбранного значения — на случай, если компонент
+  // монтируется заново (например, родитель прячет его за условным рендером)
+  // уже с готовым value: без этого поле показывало бы пустоту, хотя id уже
+  // выбран (см. ту же задачу в ProjectCombobox).
+  valueLabel?: string | null
   onChange: (id: number | null) => void
   placeholder?: string
   error?: string
 }
 
-function cabinetLabel(c: Cabinet): string {
+export function cabinetLabel(c: Cabinet): string {
   return c.admin_internal_name ? `${c.object_number} — ${c.admin_internal_name}` : c.object_number
 }
 
 // Поиск ШУ по номеру объекта/названию вместо ручного ввода ID — оператор обычно
 // не знает числовой ID шкафа, только его номер объекта или название.
-export function CabinetCombobox({ value, onChange, placeholder = 'Поиск по номеру объекта или названию...', error }: Props) {
+export function CabinetCombobox({ value, valueLabel, onChange, placeholder = 'Поиск по номеру объекта или названию...', error }: Props) {
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
-  const [selectedLabel, setSelectedLabel] = useState('')
+  const [selectedLabel, setSelectedLabel] = useState(valueLabel ?? '')
   const ref = useRef<HTMLDivElement>(null)
   const debouncedSearch = useDebounce(search, 300)
 
