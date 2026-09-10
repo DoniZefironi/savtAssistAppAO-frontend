@@ -253,7 +253,7 @@ type ReindexScope = 'all' | 'faq' | 'kb_article' | 'document'
 
 const SCOPE_OPTIONS: { value: ReindexScope; label: string }[] = [
   { value: 'all', label: 'Всё' },
-  { value: 'faq', label: 'Только FAQ' },
+  { value: 'faq', label: 'Только ЧаВо' },
   { value: 'kb_article', label: 'Только база знаний' },
   { value: 'document', label: 'Документы проекта' },
 ]
@@ -291,7 +291,7 @@ function BotMaintenanceSection() {
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Переиндексация</p>
-              <p className="text-xs text-slate-400 mt-0.5">FAQ, база знаний, документы ШУ</p>
+              <p className="text-xs text-slate-400 mt-0.5">ЧаВо, база знаний, документы ШУ</p>
             </div>
             <Button
               onClick={() => reindexMut.mutate()}

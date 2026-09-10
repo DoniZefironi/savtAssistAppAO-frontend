@@ -300,7 +300,7 @@ export function FaqView() {
         <div className="flex flex-wrap items-end justify-between gap-x-2 gap-y-3 mb-4">
           <div className="min-w-0">
             {total != null && <p className="text-xs text-slate-400 font-medium mb-0.5">{total} вопросов</p>}
-            <h1 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100">FAQ</h1>
+            <h1 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100">ЧаВо</h1>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {/* Категории на мобильном — не колонка рядом, а выдвижная панель по кнопке */}
