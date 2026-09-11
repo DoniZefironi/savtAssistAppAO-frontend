@@ -36,9 +36,19 @@ const BIT_COUNT = 16
 // Общий grid-template для шапки таблицы и каждой строки адреса — колонки
 // одной ширины что там, что там, поэтому всё выравнивается по вертикали.
 // 380px под биты — 16 квадратов по 20px (w-5) с гэпом 4px (gap-1) между ними.
-// Колонка «Биты» скрыта на мобильном (display:none выкидывает её из потока
-// грида), поэтому там всего 3 колонки вместо 4.
-const GROUP_ROW_GRID = 'grid grid-cols-[90px_1fr_auto] sm:grid-cols-[90px_380px_1fr_auto] gap-3 items-center'
+// Колонка «Биты» скрыта в узком контейнере (display:none выкидывает её из
+// потока грида), поэтому там всего 3 колонки вместо 4.
+//
+// @lg (контейнерный, не sm:) — эта таблица используется и на всю ширину
+// страницы (register-definitions-view.tsx), и внутри узкой модалки ШУ
+// (max-w-lg ≈ 512px, вкладка «Переопределения карты»). sm: реагирует на
+// ширину ОКНА браузера, а не модалки — на обычном десктопном окне (>640px)
+// он включал бы этот 380-пиксельный столбец битов и внутри модалки тоже,
+// хотя реальной ширины там ему взяться неоткуда — верстка ехала. @lg:
+// реагирует на ширину самого контейнера (см. @container на корневом div
+// ниже), поэтому в модалке остаётся компактный вид, а на полной странице —
+// прежний, десктопный.
+const GROUP_ROW_GRID = 'grid grid-cols-[90px_1fr_auto] @lg:grid-cols-[90px_380px_1fr_auto] gap-3 items-center'
 
 // Реальная карта — десятки адресов по 16 битов, флатом это стена из
 // повторяющегося номера адреса в каждой строке. Группируем по адресу и
@@ -337,7 +347,7 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
   }
 
   return (
-    <div className="px-4 sm:px-6 py-4">
+    <div className="@container px-4 sm:px-6 py-4">
       {/* Поиск, счётчик и кнопки — всегда наверху, а не под таблицей: при
           сотнях строк (десятки адресов по 16 битов) внизу их было не найти
           без прокрутки мимо всего списка. */}
@@ -391,7 +401,7 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
           </div>
 
           {mode === 'single' && (
-            <div className="grid grid-cols-1 sm:grid-cols-[70px_50px_1fr_1fr] gap-2">
+            <div className="grid grid-cols-1 @lg:grid-cols-[70px_50px_1fr_1fr] gap-2">
               <input
                 value={address}
                 onChange={e => { setAddress(e.target.value); setError(null) }}
@@ -428,13 +438,13 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
                 onChange={e => { setMbAddress(e.target.value); setError(null) }}
                 placeholder="Адрес"
                 inputMode="numeric"
-                className="w-full sm:w-40 px-2 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+                className="w-full @lg:w-40 px-2 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
               />
               <p className="text-xs text-slate-400">Заполните название только для тех битов, что нужны — пустые пропускаются</p>
               {mbExistingBits.length > 0 && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">Уже есть в карте: бит {mbExistingBits.join(', ')}</p>
               )}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 @lg:grid-cols-4 gap-2">
                 {mbNames.map((val, i) => {
                   const taken = mbExistingBits.includes(i)
                   return (
@@ -525,7 +535,7 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
               и каждая строка адреса ниже, чтобы всё выравнивалось по вертикали. */}
           <div className={cn(GROUP_ROW_GRID, 'px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-700/60')}>
             <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Адрес</span>
-            <span className="hidden sm:block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Биты</span>
+            <span className="hidden @lg:block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Биты</span>
             <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Описание</span>
             {canEdit && <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 text-right">Действия</span>}
           </div>
@@ -543,7 +553,7 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
                       <ChevronIcon className={cn('w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform', open && 'rotate-90')} />
                       <span className="text-sm font-mono font-medium text-slate-700 dark:text-slate-200">{hexAddress(group.address)}</span>
                     </button>
-                    <div className="hidden sm:flex">
+                    <div className="hidden @lg:flex">
                       <BitGrid
                         rows={group.rows}
                         canEdit={canEdit}
@@ -567,7 +577,7 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
                     )}
                   </div>
                   {open && (
-                    <div className="p-3 bg-slate-50/60 dark:bg-slate-800/30 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                    <div className="p-3 bg-slate-50/60 dark:bg-slate-800/30 grid grid-cols-1 @lg:grid-cols-2 @5xl:grid-cols-3 gap-2">
                       {group.rows.map(row => {
                         const isRowEditing = editingId === row.id
                         const isRowUpdating = updatingId === row.id

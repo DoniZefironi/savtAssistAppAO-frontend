@@ -151,10 +151,14 @@ export function RegisterDefinitionsView() {
               </span>
             )}
           </div>
-          {/* stopPropagation — иначе клик по самому комбобоксу (выбор ШУ,
-              открытие его выпадающего списка) заодно сворачивал бы/разворачивал
-              панель телеметрии под ним. */}
-          <div className="shrink-0 w-56" onClick={e => e.stopPropagation()}>
+          {/* stopPropagation — иначе клик по самому комбобоксу дошёл бы и до
+              onClick шапки ниже и переключил бы (toggle) панель, вместо того
+              чтобы гарантированно её открыть — при уже открытой панели клик
+              по комбобоксу закрывал бы её вместо выбора ШУ. Вместо toggle
+              здесь явный setTelemetryOpen(true): клик по выбору ШУ должен
+              сразу открывать панель с консолью, а не требовать отдельного
+              клика по шапке до и после выбора. */}
+          <div className="shrink-0 w-56" onClick={e => { e.stopPropagation(); setTelemetryOpen(true) }}>
             <CabinetCombobox
               value={rawFeedCabinetId}
               valueLabel={rawFeedCabinet ? cabinetLabel(rawFeedCabinet) : undefined}
