@@ -1,20 +1,41 @@
 'use client'
 
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { cabinetsApi } from '@/lib/api/cabinets'
 import type { ActivityItem } from '@/lib/api/cabinets'
+import type { ReclamationStatus } from '@/types'
 import { useAuthStore } from '@/lib/store/auth'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { CabinetsMap } from '@/components/map/cabinets-map'
+import { ReclamationDialog } from '@/components/reclamations/reclamation-dialog'
+import { reclStatusCls, reclStatusLabel } from '@/components/reclamations/reclamation-shared'
+
+// Вкладка requests-view.tsx для каждого типа ленты — те же значения, что и в
+// href у карточек-счётчиков выше (?tab=...). «Рекламация» сюда не входит: её
+// карточка открывается на месте через ReclamationDialog (есть GET по id),
+// у остальных 6 типов отдельного GET по id нет — только списком, поэтому
+// клик ведёт на вкладку заявок с ?openId=, а там уже находит и открывает
+// нужный элемент, как только тот подгрузится (см. requests-view.tsx).
+const ACTIVITY_TYPE_TAB: Partial<Record<ActivityItem['type'], string>> = {
+  service: 'service',
+  document: 'docs',
+  share: 'projects',
+  addition: 'additions',
+  phone_change: 'phone',
+  password_reset: 'password',
+  registration: 'registration',
+}
 
 // Раньше все восемь счётчиков лежали плоским рядом одинаковых плиток — с
 // ростом их числа (номер/пароль/регистрация добавились позже) ряд стал
 // нечитаемым. Группируем по смыслу: чаты и сервисные заявки — по одному
 // счётчику как раньше, «по проектам» и «по аккаунтам» — по нескольку строк
 // внутри одной карточки-категории.
-function makeStatCategories(base: string) {
+function makeStatCategories(base: string, isAdmin: boolean) {
   return [
     {
       key: 'chats', title: 'Чаты', cards: [
@@ -40,16 +61,31 @@ function makeStatCategories(base: string) {
         { key: 'pendingRegistrationRequests' as const, label: 'Регистрация', href: `${base}/requests?tab=registration`, accent: '#4F46E5', urgentAbove: 0, icon: <RegistrationIcon /> },
       ],
     },
+    // Только админ — вкладка «Рекламации» в «Заявках» и сами эндпоинты
+    // недоступны оператору (403), см. README-backend.md, «Рут reclamations».
+    ...(isAdmin ? [{
+      key: 'reclamations', title: 'Рекламации', cards: [
+        { key: 'pendingReclamations' as const, label: 'На рассмотрении', href: `${base}/requests?tab=reclamations`, accent: '#EA580C', urgentAbove: 0, icon: <ReclamationIcon /> },
+      ],
+    }] : []),
   ] as const
 }
 
 
 export function AdminDashboard() {
+  const router = useRouter()
   const user = useAuthStore((s) => s.user)
   const isOperator = user?.role === 'operator'
   const base = isOperator ? '/operator' : '/admin'
   const displayName = user?.full_name ?? user?.login ?? (isOperator ? 'Оператор' : 'Администратор')
-  const statCategories = makeStatCategories(base)
+  const statCategories = makeStatCategories(base, !isOperator)
+  const [selectedReclamationId, setSelectedReclamationId] = useState<number | null>(null)
+
+  const openActivityItem = (item: ActivityItem) => {
+    if (item.type === 'reclamation') { setSelectedReclamationId(item.id); return }
+    const tab = ACTIVITY_TYPE_TAB[item.type]
+    if (tab) router.push(`${base}/requests?tab=${tab}&openId=${item.id}`)
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard'],
@@ -65,7 +101,7 @@ export function AdminDashboard() {
 
   return (
     <div className="flex-1 overflow-y-auto scroll-smooth bg-slate-50 dark:bg-slate-900">
-      <div className="max-w-5xl 2xl:max-w-375 mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6">
+      <div className="max-w-6xl 2xl:max-w-375 mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6">
 
         <div className="flex items-center justify-between">
           <div className="min-w-0">
@@ -73,7 +109,12 @@ export function AdminDashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
+        {/* У оператора 4 категории (нет «Рекламаций», см. makeStatCategories),
+            у админа 5 — число колонок под каждого, чтобы ряд всегда
+            заполнялся ровно и ничего не повисало одиноко с пустым местом
+            (было с «Рекламациями» на фиксированных 4 колонках, см.
+            обсуждение по скриншоту при 1440px). */}
+        <div className={cn('grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6', isOperator ? 'xl:grid-cols-4' : 'xl:grid-cols-5')}>
           {statCategories.map((cat) => (
             <div key={cat.key} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
               <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b border-slate-100 dark:border-slate-700/60">
@@ -147,7 +188,7 @@ export function AdminDashboard() {
               ) : (
                 <ul className="divide-y divide-slate-50 dark:divide-slate-700/40">
                   {activity.map((item) => (
-                    <ActivityRow key={`${item.type}-${item.id}`} item={item} />
+                    <ActivityRow key={`${item.type}-${item.id}`} item={item} onClick={() => openActivityItem(item)} />
                   ))}
                 </ul>
               )}
@@ -156,6 +197,9 @@ export function AdminDashboard() {
         </div>
 
       </div>
+      {selectedReclamationId !== null && (
+        <ReclamationDialog reclamationId={selectedReclamationId} onClose={() => setSelectedReclamationId(null)} />
+      )}
     </div>
   )
 }
@@ -168,6 +212,7 @@ const TYPE_META: Record<ActivityItem['type'], { label: string; color: string; ic
   phone_change:   { label: 'Смена номера',       color: 'bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400',      icon: <PhoneChangeIcon /> },
   password_reset: { label: 'Смена пароля',       color: 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400',         icon: <PasswordResetIcon /> },
   registration:   { label: 'Регистрация',        color: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400', icon: <RegistrationIcon /> },
+  reclamation:    { label: 'Рекламация',         color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400', icon: <ReclamationIcon /> },
 }
 
 const STATUS_STYLE: Record<string, string> = {
@@ -185,10 +230,27 @@ const STATUS_LABEL: Record<string, string> = {
   pending: 'ожидает', approved: 'одобрено', rejected: 'отклонено',
 }
 
-function ActivityRow({ item }: { item: ActivityItem }) {
+function ActivityRow({ item, onClick }: { item: ActivityItem; onClick?: () => void }) {
   const meta = TYPE_META[item.type]
+  // Рекламация делит поле status с сервисными заявками, но набор значений
+  // другой (review/in_progress/resolved/rejected, не open/in_progress/
+  // postponed/closed) — подпись/цвет берём по type, а не общей плоской картой
+  // STATUS_STYLE/STATUS_LABEL ниже (см. README-backend.md, «Рекламации в
+  // recent_activity» — предупреждение именно про эту путаницу).
+  const statusCls = item.type === 'reclamation'
+    ? reclStatusCls(item.status as ReclamationStatus)
+    : (STATUS_STYLE[item.status] ?? STATUS_STYLE.pending)
+  const statusLabel = item.type === 'reclamation'
+    ? reclStatusLabel(item.status as ReclamationStatus)
+    : (STATUS_LABEL[item.status] ?? item.status)
   return (
-    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 sm:px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/20 transition-colors">
+    <li
+      onClick={onClick}
+      className={cn(
+        'flex flex-wrap items-center gap-x-3 gap-y-1 px-3 sm:px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/20 transition-colors',
+        onClick && 'cursor-pointer'
+      )}
+    >
       <div className={cn('w-7 h-7 rounded-full flex items-center justify-center shrink-0', meta.color)}>
         <span className="scale-75">{meta.icon}</span>
       </div>
@@ -202,8 +264,8 @@ function ActivityRow({ item }: { item: ActivityItem }) {
       </div>
       {/* На узких экранах статус и время уходят на вторую строку под текст (pl-10 = иконка 28px + gap 12px) */}
       <div className="flex w-full sm:w-auto items-center justify-between sm:justify-end gap-2 pl-10 sm:pl-0">
-        <span className={cn('shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium', STATUS_STYLE[item.status] ?? STATUS_STYLE.pending)}>
-          {STATUS_LABEL[item.status] ?? item.status}
+        <span className={cn('shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium', statusCls)}>
+          {statusLabel}
         </span>
         <span className="shrink-0 text-[11px] text-slate-300 dark:text-slate-600 sm:w-20 text-right">
           {relativeTime(item.created_at)}
@@ -249,6 +311,9 @@ function PasswordResetIcon() {
 }
 function RegistrationIcon() {
   return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM3 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 019.374 21c-2.331 0-4.512-.645-6.374-1.766z" /></svg>
+}
+function ReclamationIcon() {
+  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
 }
 function InboxIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 13.5h3.86a2.25 2.25 0 012.012 1.244l.256.512a2.25 2.25 0 002.013 1.244h3.218a2.25 2.25 0 002.013-1.244l.256-.512a2.25 2.25 0 012.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 00-2.15-1.588H6.911a2.25 2.25 0 00-2.15 1.588L2.35 13.177a2.235 2.235 0 00-.1.661z" /></svg>

@@ -23,16 +23,14 @@ export interface AuthTokens {
 }
 
 // Данные о привязанной SIM (внешний сервис — не эта же база) — см.
-// README-backend.md, «Рут admin: cabinets», поле sim у GET /admin/cabinets/{id}.
+// README-backend.md, «Рут admin: sim». Живой запрос к стороннему приложению
+// на каждый вызов, у нас не хранится и не кэшируется.
 export interface SimInfoOut {
-  id: number
+  // GUID-строка (так устроено в SimApi), не число.
+  id: string
   serial_number: string | null
   phone: string | null
   ip: string | null
-  status: string | null
-  name: string | null
-  activation_date: string | null
-  need_ping: boolean
   // Ссылка на приложение SimApi — одна и та же для всех SIM, НЕ deep-link на
   // конкретную запись (SimApi не отражает открытую карточку в URL). Нужную
   // SIM там придётся искать вручную после перехода.
@@ -58,7 +56,7 @@ export interface Cabinet {
   // sim_id != null && sim == null — SIM привязана, но внешний сервис с её
   // данными сейчас недоступен. Это НЕ то же самое, что "SIM не привязана"
   // (sim_id == null && sim == null) — см. cabinet-detail-dialog.tsx.
-  sim_id?: number | null
+  sim_id?: string | null
   sim?: SimInfoOut | null
   // Топик MQTT-контроллера этого ШУ (напр. "26_001/1/data") — по нему
   // telemetry-proxy сопоставляет входящие сообщения с конкретным ШУ
@@ -184,6 +182,72 @@ export interface PaginatedResponse<T> {
   page: number
   size: number
   pages: number
+}
+
+// Рекламации — гарантийные/негарантийные претензии, отдельная от сервисных
+// заявок сущность (см. README-backend.md, «Рут reclamations»). Пока без
+// интеграции с Bitrix24 — обработка полностью внутри админки.
+export type ReclamationObjectType = 'cabinet' | 'line' | 'component' | 'software' | 'documentation'
+export type ReclamationStatus = 'review' | 'in_progress' | 'resolved' | 'rejected'
+
+export interface ReclamationAttachment {
+  id: number
+  file_url: string
+  file_name: string
+  file_size_bytes: number
+  mime_type: string
+  created_at: string
+}
+
+// Сводка в списке (GET /admin/reclamations) — без вложений и контактов,
+// только то, что нужно показать в ленте.
+export interface ReclamationListItem {
+  id: number
+  object_type: ReclamationObjectType
+  status: ReclamationStatus
+  warranty_classification: boolean | null
+  description: string
+  // Только для object_type === 'cabinet', иначе null.
+  cabinet_object_number: string | null
+  created_at: string
+  resolved_at: string | null
+  user_id: number
+  user_full_name: string | null
+}
+
+// Подробности (GET /admin/reclamations/{id}) — то же, что видит подавший
+// рекламацию пользователь, плюс user_id/user_full_name (кто подал — не путать
+// с contact_name, это снимок с формы заявки на момент подачи).
+export interface ReclamationDetail {
+  id: number
+  status: ReclamationStatus
+  warranty_classification: boolean | null
+  object_type: ReclamationObjectType
+  cabinet_id: number | null
+  cabinet_object_number: string | null
+  // Свободный JSON для всех типов объекта, кроме 'cabinet' — состав зависит
+  // от object_type, см. README-backend.md.
+  object_details: Record<string, string> | null
+  contract_number: string | null
+  order_number: string | null
+  ttn_number: string | null
+  description: string
+  occurrence_conditions: string | null
+  error_codes: string | null
+  contact_name: string
+  contact_phone: string
+  contact_email: string
+  customer_name: string | null
+  root_cause: string | null
+  resolution_comment: string | null
+  rejection_reason: string | null
+  responsible_name: string | null
+  responsible_phone: string | null
+  created_at: string
+  resolved_at: string | null
+  attachments: ReclamationAttachment[]
+  user_id: number
+  user_full_name: string | null
 }
 
 export interface Chat {

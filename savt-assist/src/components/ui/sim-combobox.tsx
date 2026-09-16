@@ -10,20 +10,24 @@ import { simApi } from '@/lib/api/sim'
 import type { SimInfoOut } from '@/types'
 
 interface Props {
-  value: number | null
+  value: string | null
   valueLabel?: string | null
-  onChange: (id: number | null) => void
+  onChange: (id: string | null) => void
   placeholder?: string
 }
 
-function simLabel(s: SimInfoOut): string {
-  return s.name || s.phone || s.serial_number || `SIM #${s.id}`
+// SimInfoOut больше не отдаёт name (см. README-backend.md, «Рут admin: sim») —
+// заголовок берётся из phone/serial_number, id — GUID, показываем только его
+// начало как крайний случай, если совсем нечего показать.
+export function simLabel(s: SimInfoOut): string {
+  return s.phone || s.serial_number || `SIM ${s.id.slice(0, 8)}`
 }
 
 // Поиск SIM по названию — тот же паттерн, что у ProjectCombobox (плюс кнопка
-// отвязки). Ручка /admin/sim умеет фильтровать ещё по phone/serial_number/ip,
-// но один общий поисковый инпут сюда заводит только name — самое человекочитаемое
-// поле для быстрого поиска (см. name в SimInfoOut).
+// отвязки). Ручка /admin/sim умеет фильтровать ещё по phone/serial_number/ip
+// и по name (хотя само название нигде в ответе больше не отдаётся) — один
+// общий поисковый инпут сюда заводит name, самое человекочитаемое поле для
+// быстрого поиска по смыслу запроса.
 export function SimCombobox({ value, valueLabel, onChange, placeholder = 'Поиск SIM по названию...' }: Props) {
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)

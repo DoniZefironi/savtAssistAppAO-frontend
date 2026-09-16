@@ -9,6 +9,8 @@ import { cn } from '@/lib/utils'
 import { toFullUrl } from '@/lib/api/base-url'
 import { requestsApi } from '@/lib/api/requests'
 import type { ServiceRequest, AdditionRequest, DocumentRequest, ProjectRequest, PhoneChangeRequest, RegistrationRequest, PasswordResetRequest } from '@/lib/api/requests'
+import { reclamationsApi } from '@/lib/api/reclamations'
+import type { ReclamationListItem, ReclamationObjectType, ReclamationStatus } from '@/types'
 import { useAuthStore } from '@/lib/store/auth'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
@@ -19,18 +21,20 @@ import { useInfiniteScrollSentinel } from '@/lib/hooks/use-infinite-scroll-senti
 import { ViewModeToggle, type ViewMode } from '@/components/ui/view-mode-toggle'
 import { SearchInput } from '@/components/ui/search-input'
 import { PillButton } from '@/components/ui/pill-button'
-import { RequestCard, ServiceCardIcon, AdditionCardIcon, RegistrationCardIcon, StatusPill, TypePill } from './request-card'
+import { RequestCard, ServiceCardIcon, AdditionCardIcon, RegistrationCardIcon, ReclamationCardIcon, StatusPill, TypePill } from './request-card'
 import { UserDialog } from '@/components/users/user-dialog'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
 import { ProjectDetailDialog } from '@/components/projects/project-detail-dialog'
 import { ServiceDialog } from './service-dialog'
+import { ReclamationDialog } from '@/components/reclamations/reclamation-dialog'
+import { reclStatusCls, reclStatusLabel, reclObjectTypeLabel, reclWarrantyCls, reclWarrantyLabel } from '@/components/reclamations/reclamation-shared'
 import {
   DRow, DRowLink, ModalTextarea, DialogHeader, VerifiedBadge,
   svcStatusCls, svcStatusLabel, reqStatusCls, reqStatusLabel, reqTypeCls, reqTypeLabel,
   userTypeLabel, fmtDate,
 } from './request-shared'
 
-type Tab = 'service' | 'additions' | 'projects' | 'docs' | 'phone' | 'registration' | 'password'
+type Tab = 'service' | 'additions' | 'projects' | 'docs' | 'phone' | 'registration' | 'password' | 'reclamations'
 
 // Сетка карточек заявок: 1 колонка на самых узких, до 4 на широких мониторах
 const GRID_CLASSES = 'grid grid-cols-1 min-[640px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3'
@@ -43,6 +47,10 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'phone', label: 'Смена номера' },
   { id: 'password', label: 'Смена пароля' },
   { id: 'registration', label: 'Регистрация' },
+  // Только админ — GET /admin/reclamations недоступен оператору (403), см.
+  // README-backend.md, «Рут reclamations». Отфильтровывается для оператора
+  // ниже, в visibleTabs.
+  { id: 'reclamations', label: 'Рекламации' },
 ]
 
 const SVC_FILTERS = [
@@ -123,8 +131,36 @@ const WARRANTY_FILTERS = [
   { value: 'no' as const, label: 'Платная' },
 ]
 
+// Рекламации не поддерживают search/sort_by на бэкенде (только
+// status/object_type/warranty_classification, см. README-backend.md, «Рут
+// reclamations») — свой, отдельный набор фильтров вместо общих REQ_FILTERS/
+// REQUEST_TYPE_FILTERS/WARRANTY_FILTERS выше (там другие значения статуса).
+const RECL_STATUS_FILTERS: { value: ReclamationStatus | 'all'; label: string }[] = [
+  { value: 'all', label: 'Все' },
+  { value: 'review', label: 'На рассмотрении' },
+  { value: 'in_progress', label: 'В работе' },
+  { value: 'resolved', label: 'Исполнено' },
+  { value: 'rejected', label: 'Отклонена' },
+]
+const RECL_OBJECT_TYPE_FILTERS: { value: ReclamationObjectType | 'all'; label: string }[] = [
+  { value: 'all', label: 'Все типы' },
+  { value: 'cabinet', label: 'ШУ' },
+  { value: 'line', label: 'Линия' },
+  { value: 'component', label: 'ПКИ' },
+  { value: 'software', label: 'ПО' },
+  { value: 'documentation', label: 'Документация' },
+]
+const RECL_WARRANTY_FILTERS = [
+  { value: 'all' as const, label: 'Все' },
+  { value: 'yes' as const, label: 'Гарантийные' },
+  { value: 'no' as const, label: 'Платные' },
+]
+
 export function RequestsView() {
   const currentUser = useAuthStore(s => s.user)
+  // Рекламации — только админ (GET /admin/reclamations недоступен оператору,
+  // 403), см. README-backend.md, «Рут reclamations».
+  const isAdmin = currentUser?.role !== 'operator'
   // Переживает перезагрузку — иначе после F5 вкладку всегда сбрасывало на «Сервисные».
   const [tab, setTab] = usePersistentState<Tab>('requests-tab', 'service')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -137,6 +173,12 @@ export function RequestsView() {
   const [sortBy, setSortBy] = useState('created_at')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
+  // Свои фильтры у вкладки «Рекламации» — другой набор статусов и без sort_by
+  // (см. RECL_*_FILTERS выше).
+  const [reclStatusFilter, setReclStatusFilter] = useState<ReclamationStatus | 'all'>('all')
+  const [reclObjectTypeFilter, setReclObjectTypeFilter] = useState<ReclamationObjectType | 'all'>('all')
+  const [reclWarrantyFilter, setReclWarrantyFilter] = useState<'all' | 'yes' | 'no'>('all')
+
   const [view, setView] = usePersistentState<ViewMode>('view-mode-requests', 'list')
   const [filtersOpen, setFiltersOpen] = usePersistentState('filters-open-requests', true)
   const [selectedService, setSelectedService] = useState<ServiceRequest | null>(null)
@@ -146,21 +188,35 @@ export function RequestsView() {
   const [selectedDocRequest, setSelectedDocRequest] = useState<DocumentRequest | null>(null)
   const [selectedRegistrationRequest, setSelectedRegistrationRequest] = useState<RegistrationRequest | null>(null)
   const [selectedPasswordResetRequest, setSelectedPasswordResetRequest] = useState<PasswordResetRequest | null>(null)
+  const [selectedReclamation, setSelectedReclamation] = useState<ReclamationListItem | null>(null)
+  // Элемент, который нужно открыть, как только его строка подгрузится в
+  // список (см. ?openId= ниже) — только у 6 типов заявок без отдельного GET
+  // по id (в отличие от рекламаций, см. ReclamationDialog); ждём его в уже
+  // загруженной первой странице своего списка.
+  const [pendingOpenId, setPendingOpenId] = useState<number | null>(null)
 
   const sentinelRef = useRef<HTMLDivElement>(null)
 
-  // Карточки на дашборде ведут сюда с ?tab=... (см. admin-dashboard.tsx) —
-  // без этого клик по «Запросов на документы»/«Заявок на проекты»/«Добавлений
-  // ШУ» всегда открывал вкладку по умолчанию (service), а не ту, что нужна.
-  // Через window.location, а не useSearchParams — иначе initial state на
-  // сервере (window ещё нет) и на клиенте (URL уже есть) разошлись бы, и
-  // React ругнулся бы на hydration mismatch; так же оба рендера сначала
-  // совпадают на дефолтной вкладке, а нужная подставляется сразу после монтирования.
+  // Карточки на дашборде ведут сюда с ?tab=...(&openId=...) (см.
+  // admin-dashboard.tsx) — без этого клик по «Запросов на документы»/«Заявок
+  // на проекты»/«Добавлений ШУ» всегда открывал вкладку по умолчанию
+  // (service), а не ту, что нужна. Через window.location, а не
+  // useSearchParams — иначе initial state на сервере (window ещё нет) и на
+  // клиенте (URL уже есть) разошлись бы, и React ругнулся бы на hydration
+  // mismatch; так же оба рендера сначала совпадают на дефолтной вкладке, а
+  // нужная подставляется сразу после монтирования.
   useEffect(() => {
-    const t = new URLSearchParams(window.location.search).get('tab')
-    if (t === 'service' || t === 'additions' || t === 'projects' || t === 'docs' || t === 'phone' || t === 'registration' || t === 'password') {
+    const params = new URLSearchParams(window.location.search)
+    const t = params.get('tab')
+    if (
+      t === 'service' || t === 'additions' || t === 'projects' || t === 'docs' || t === 'phone' || t === 'registration' || t === 'password' ||
+      (t === 'reclamations' && isAdmin)
+    ) {
       setTab(t)
     }
+    const openId = params.get('openId')
+    if (openId && /^\d+$/.test(openId)) setPendingOpenId(Number(openId))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setTab])
 
   const handleTabChange = (t: Tab) => {
@@ -172,6 +228,9 @@ export function RequestsView() {
     setSearchInput('')
     setSortBy('created_at')
     setSortOrder('desc')
+    setReclStatusFilter('all')
+    setReclObjectTypeFilter('all')
+    setReclWarrantyFilter('all')
   }
   const handleFilterChange = (f: string) => setStatusFilter(f)
   const handleSortClick = (value: string) => {
@@ -267,7 +326,24 @@ export function RequestsView() {
     refetchOnMount: false,
   })
 
-  const curQ = tab === 'service' ? svcQ : tab === 'additions' ? addQ : tab === 'projects' ? prjQ : tab === 'phone' ? phoneQ : tab === 'registration' ? regQ : tab === 'password' ? pwQ : docQ
+  const rsp = reclStatusFilter === 'all' ? undefined : reclStatusFilter
+  const rotp = reclObjectTypeFilter === 'all' ? undefined : reclObjectTypeFilter
+  const rwc = reclWarrantyFilter === 'all' ? undefined : reclWarrantyFilter === 'yes'
+
+  const reclQ = useInfiniteQuery({
+    queryKey: ['reclamations', rsp, rotp, rwc],
+    initialPageParam: 1,
+    queryFn: ({ pageParam }: { pageParam: number }) =>
+      reclamationsApi.getAll({ status: rsp, object_type: rotp, warranty_classification: rwc, page: pageParam, size: 20 }),
+    getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
+    enabled: tab === 'reclamations' && isAdmin,
+    // Без этого — возврат на вкладку спустя >30с после глубокой прокрутки
+    // переперезапрашивает все закэшированные страницы по очереди подряд.
+    // Своя инвалидация после PATCH уже держит список актуальным.
+    refetchOnMount: false,
+  })
+
+  const curQ = tab === 'service' ? svcQ : tab === 'additions' ? addQ : tab === 'projects' ? prjQ : tab === 'phone' ? phoneQ : tab === 'registration' ? regQ : tab === 'password' ? pwQ : tab === 'reclamations' ? reclQ : docQ
   const total = curQ.data?.pages[0]?.total
 
   useInfiniteScrollSentinel(sentinelRef, {
@@ -283,9 +359,47 @@ export function RequestsView() {
   const prjItems = prjQ.data?.pages.flatMap(p => p.items) ?? []
   const docItems = docQ.data?.pages.flatMap(p => p.items) ?? []
   const phoneItems = phoneQ.data?.pages.flatMap(p => p.items) ?? []
+  const reclItems = reclQ.data?.pages.flatMap(p => p.items) ?? []
   const regItems = regQ.data?.pages.flatMap(p => p.items) ?? []
   const pwItems = pwQ.data?.pages.flatMap(p => p.items) ?? []
 
+  // Открыть элемент, на который пришли с дашборда (?openId=, см. эффект
+  // выше) — без отдельного GET по id у этих 6 типов заявок (в отличие от
+  // рекламаций) ищем его в уже подгруженном списке своей вкладки. Recent
+  // activity на дашборде — это последние 10 событий вообще по всем типам,
+  // так что внутри списка СВОЕГО типа элемент почти наверняка попадёт уже на
+  // первую страницу (сортировка по умолчанию — по created_at, самые новые
+  // сверху). Если вдруг не нашёлся (например, из-за активного фильтра) —
+  // просто молча остаётся не открытым, admin всё равно на нужной вкладке.
+  useEffect(() => {
+    if (pendingOpenId == null) return
+    const found =
+      tab === 'service' ? svcItems.find(i => i.id === pendingOpenId) :
+      tab === 'additions' ? addItems.find(i => i.id === pendingOpenId) :
+      tab === 'projects' ? prjItems.find(i => i.id === pendingOpenId) :
+      tab === 'docs' ? docItems.find(i => i.id === pendingOpenId) :
+      tab === 'phone' ? phoneItems.find(i => i.id === pendingOpenId) :
+      tab === 'registration' ? regItems.find(i => i.id === pendingOpenId) :
+      tab === 'password' ? pwItems.find(i => i.id === pendingOpenId) :
+      undefined
+    if (!found) return
+    if (tab === 'service') setSelectedService(found as ServiceRequest)
+    else if (tab === 'additions') setSelectedAddition(found as AdditionRequest)
+    else if (tab === 'projects') setSelectedProjectRequest(found as ProjectRequest)
+    else if (tab === 'docs') setSelectedDocRequest(found as DocumentRequest)
+    else if (tab === 'phone') setSelectedPhoneRequest(found as PhoneChangeRequest)
+    else if (tab === 'registration') setSelectedRegistrationRequest(found as RegistrationRequest)
+    else if (tab === 'password') setSelectedPasswordResetRequest(found as PasswordResetRequest)
+    setPendingOpenId(null)
+    // Зависим от стабильных ссылок *Q.data (react-query меняет их только при
+    // реальном изменении данных), а не от svcItems/addItems/... — те заново
+    // аллоцируются flatMap'ом на каждый рендер, так что как зависимость
+    // гоняли бы этот эффект вообще на каждый рендер, а не только при загрузке
+    // новых данных.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingOpenId, tab, svcQ.data, addQ.data, prjQ.data, docQ.data, phoneQ.data, regQ.data, pwQ.data])
+
+  const visibleTabs = isAdmin ? TABS : TABS.filter(t => t.id !== 'reclamations')
   const filters = tab === 'service' ? SVC_FILTERS : tab === 'phone' ? PHONE_FILTERS : REQ_FILTERS
   const sortOptions =
     tab === 'service' ? SVC_SORT :
@@ -302,14 +416,14 @@ export function RequestsView() {
         <div className="max-w-425 mx-auto w-full">
         <div className="flex items-end justify-between gap-2 mb-4">
           <div className="min-w-0">
-            {total != null && <p className="text-xs text-slate-400 font-medium mb-0.5">{total} заявок</p>}
+            {total != null && <p className="text-xs text-slate-400 font-medium mb-0.5">{total} {tab === 'reclamations' ? 'рекламаций' : 'заявок'}</p>}
             <h1 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100">Заявки</h1>
           </div>
           <ViewModeToggle view={view} onViewChange={setView} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen(v => !v)} />
         </div>
         {/* Табы не переносятся (сломали бы вид подчёркнутой навигации) — на узких экранах скроллятся горизонтально */}
         <div className="flex gap-0 mb-3 overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
-          {TABS.map(t => (
+          {visibleTabs.map(t => (
             <button
               key={t.id}
               onClick={() => handleTabChange(t.id)}
@@ -326,6 +440,8 @@ export function RequestsView() {
         </div>
         <div className={cn('grid transition-[grid-template-rows] duration-150 ease-out', filtersOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
         <div className="overflow-hidden min-h-0">
+        {tab !== 'reclamations' ? (
+          <>
         <SearchInput value={searchInput} onChange={setSearchInput} placeholder="Поиск по заявкам..." className="mb-3" />
 
         <div className="flex flex-wrap items-center gap-2 mt-3">
@@ -367,6 +483,37 @@ export function RequestsView() {
               </PillButton>
             ))}
           </div>
+        )}
+          </>
+        ) : (
+          // Рекламации не поддерживают search/sort_by на бэкенде — свой набор
+          // фильтров вместо общих выше (см. RECL_*_FILTERS).
+          <>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-slate-400 font-medium mr-0.5">Статус:</span>
+          {RECL_STATUS_FILTERS.map(f => (
+            <PillButton key={f.value} active={reclStatusFilter === f.value} onClick={() => setReclStatusFilter(f.value)}>
+              {f.label}
+            </PillButton>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 mt-2">
+          <span className="text-xs text-slate-400 font-medium mr-0.5">Тип объекта:</span>
+          {RECL_OBJECT_TYPE_FILTERS.map(f => (
+            <PillButton key={f.value} active={reclObjectTypeFilter === f.value} onClick={() => setReclObjectTypeFilter(f.value)}>
+              {f.label}
+            </PillButton>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 mt-2">
+          <span className="text-xs text-slate-400 font-medium mr-0.5">Гарантия:</span>
+          {RECL_WARRANTY_FILTERS.map(f => (
+            <PillButton key={f.value} active={reclWarrantyFilter === f.value} onClick={() => setReclWarrantyFilter(f.value)}>
+              {f.label}
+            </PillButton>
+          ))}
+        </div>
+          </>
         )}
         </div>
         </div>
@@ -410,6 +557,9 @@ export function RequestsView() {
         {tab === 'password' && !pwQ.isLoading && !pwQ.isError && (
           <PasswordResetList items={pwItems} onSelect={setSelectedPasswordResetRequest} view={view} />
         )}
+        {tab === 'reclamations' && !reclQ.isLoading && !reclQ.isError && (
+          <ReclamationsList items={reclItems} onSelect={setSelectedReclamation} view={view} />
+        )}
 
         <div ref={sentinelRef} className="h-1 mt-2" />
         {curQ.isFetchingNextPage && (
@@ -441,6 +591,7 @@ export function RequestsView() {
       {selectedPhoneRequest && <PhoneChangeDialog request={selectedPhoneRequest} onClose={() => setSelectedPhoneRequest(null)} />}
       {selectedRegistrationRequest && <RegistrationRequestDialog request={selectedRegistrationRequest} onClose={() => setSelectedRegistrationRequest(null)} />}
       {selectedPasswordResetRequest && <PasswordResetRequestDialog request={selectedPasswordResetRequest} onClose={() => setSelectedPasswordResetRequest(null)} />}
+      {selectedReclamation && <ReclamationDialog reclamationId={selectedReclamation.id} onClose={() => setSelectedReclamation(null)} />}
     </div>
   )
 }
@@ -471,6 +622,27 @@ function ServiceList({ items, onSelect, view }: { items: ServiceRequest[]; onSel
           subtitle={item.user_full_name ?? '—'}
           meta={<TypePill label={reqTypeLabel(item.request_type)} cls={reqTypeCls(item.request_type)} />}
           statusBadge={<StatusPill label={svcStatusLabel(item.status)} cls={svcStatusCls(item.status)} />}
+          date={fmtDate(item.created_at)}
+          onClick={() => onSelect(item)}
+        />
+      ))}
+    </div>
+  )
+}
+
+function ReclamationsList({ items, onSelect, view }: { items: ReclamationListItem[]; onSelect: (r: ReclamationListItem) => void; view: ViewMode }) {
+  if (!items.length) return <Empty text="Рекламаций пока нет" />
+  return (
+    <div className={gridCls(view)}>
+      {items.map(item => (
+        <RequestCard
+          key={item.id}
+          view={view}
+          icon={<ReclamationCardIcon />}
+          title={item.object_type === 'cabinet' && item.cabinet_object_number ? `ШУ ${item.cabinet_object_number}` : reclObjectTypeLabel(item.object_type)}
+          subtitle={item.user_full_name ?? `#${item.user_id}`}
+          meta={<TypePill label={reclWarrantyLabel(item.warranty_classification)} cls={reclWarrantyCls(item.warranty_classification)} />}
+          statusBadge={<StatusPill label={reclStatusLabel(item.status)} cls={reclStatusCls(item.status)} />}
           date={fmtDate(item.created_at)}
           onClick={() => onSelect(item)}
         />

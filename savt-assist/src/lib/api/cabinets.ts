@@ -58,8 +58,9 @@ export interface UpdateCabinetDto {
   // пароль (см. README-backend.md, «Ловушка с mqtt_password для фронта»).
   mqtt_password?: string
   // Как и с остальными полями PATCH — не передавать вообще, если не меняли;
-  // null отвязывает SIM. 409, если эта SIM уже привязана к другому ШУ.
-  sim_id?: number | null
+  // null отвязывает SIM. Одну и ту же SIM можно привязать сразу к нескольким
+  // ШУ — уникальности здесь нет (осознанно, в отличие от mqtt_topic).
+  sim_id?: string | null
 }
 
 export const cabinetsApi = {
@@ -120,6 +121,7 @@ export const cabinetsApi = {
         pendingPhoneChangeRequests: s.pending_phone_change_requests ?? 0,
         pendingRegistrationRequests: s.pending_registration_requests ?? 0,
         pendingPasswordResetRequests: s.pending_password_reset_requests ?? 0,
+        pendingReclamations: s.pending_reclamations ?? 0,
       },
       activity,
     }
@@ -128,7 +130,7 @@ export const cabinetsApi = {
 
 export interface ActivityItem {
   id: number
-  type: 'service' | 'document' | 'share' | 'addition' | 'phone_change' | 'password_reset' | 'registration'
+  type: 'service' | 'document' | 'share' | 'addition' | 'phone_change' | 'password_reset' | 'registration' | 'reclamation'
   label: string
   user: string | null
   detail: string
@@ -145,6 +147,10 @@ export interface DashboardStats {
   pendingPhoneChangeRequests: number
   pendingRegistrationRequests: number
   pendingPasswordResetRequests: number
+  // Рекламации в статусе review (ещё никто не начал обрабатывать) — та же
+  // логика, что у openServiceRequests, in_progress/resolved/rejected в счётчик
+  // не попадают (см. README-backend.md, «Рекламации в stats»).
+  pendingReclamations: number
 }
 
 export interface DashboardData {
@@ -154,7 +160,11 @@ export interface DashboardData {
 
 interface DashboardActivityRaw {
   id: number
-  type: 'service' | 'document' | 'share' | 'addition' | 'phone_change' | 'password_reset' | 'registration'
+  type: 'service' | 'document' | 'share' | 'addition' | 'phone_change' | 'password_reset' | 'registration' | 'reclamation'
+  // Статусы рекламации (review/in_progress/resolved/rejected) — свой набор,
+  // не тот же, что у сервисных заявок (open/in_progress/postponed/closed),
+  // хотя формально это одно поле status — см. README-backend.md, «Рекламации
+  // в recent_activity». Рендерится по type, а не по одному status.
   status: string
   // user_id тоже приходит (int | None — для type: "registration" всегда null,
   // заявитель ещё не пользователь системы), но мы его не используем: имя уже
@@ -189,4 +199,5 @@ const ACTIVITY_LABELS: Record<string, string> = {
   phone_change: 'Смена номера',
   password_reset: 'Смена пароля',
   registration: 'Регистрация',
+  reclamation: 'Рекламация',
 }

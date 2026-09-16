@@ -9,7 +9,7 @@ import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ProjectCombobox } from '@/components/ui/project-combobox'
-import { SimCombobox } from '@/components/ui/sim-combobox'
+import { SimCombobox, simLabel } from '@/components/ui/sim-combobox'
 import { WarrantyBadge } from './warranty-badge'
 import { cabinetsApi, UpdateCabinetDto } from '@/lib/api/cabinets'
 import { apiErrorMessage } from '@/lib/api/errors'
@@ -576,23 +576,20 @@ function SimRow({ cabinetId, cabinet, isAdmin }: {
 }) {
   const qc = useQueryClient()
   const [editing, setEditing] = useState(false)
-  const [simId, setSimId] = useState<number | null>(cabinet.sim_id ?? null)
+  const [simId, setSimId] = useState<string | null>(cabinet.sim_id ?? null)
 
   const mutation = useMutation({
-    mutationFn: (id: number | null) => cabinetsApi.update(cabinetId, { sim_id: id }),
+    mutationFn: (id: string | null) => cabinetsApi.update(cabinetId, { sim_id: id }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cabinet', cabinetId] })
       qc.invalidateQueries({ queryKey: ['cabinets'] })
       toast.success('SIM обновлена')
       setEditing(false)
     },
-    onError: (e) => {
-      if (isAxiosError(e) && e.response?.status === 409) {
-        toast.error('Эта SIM уже привязана к другому ШУ')
-      } else {
-        toast.error(apiErrorMessage(e, 'Не удалось изменить SIM'))
-      }
-    },
+    // Привязка SIM больше не уникальна (одну и ту же можно на несколько ШУ,
+    // см. README-backend.md, «Рут admin: cabinets»), поэтому 409 здесь больше
+    // не ожидается — обычная обработка ошибки, без отдельной ветки под него.
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось изменить SIM')),
   })
 
   const cancel = () => {
@@ -613,24 +610,18 @@ function SimRow({ cabinetId, cabinet, isAdmin }: {
         {!editing ? (
           cabinet.sim ? (() => {
             const sim = cabinet.sim
-            // Заголовок берёт первое непустое из name/phone/serial_number — то,
-            // что попало в заголовок, во второй строке уже не повторяем.
-            const title = sim.name || sim.phone || sim.serial_number || `SIM #${sim.id}`
+            // Заголовок берёт первое непустое из phone/serial_number — то, что
+            // попало в заголовок, во второй строке уже не повторяем. name и
+            // status у SimInfoOut больше нет (см. README-backend.md, «Рут
+            // admin: sim») — бэкенд их больше не отдаёт.
+            const title = simLabel(sim)
             return (
               <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{title}</span>
-                  {sim.status && (
-                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
-                      {sim.status}
-                    </span>
-                  )}
-                </div>
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{title}</span>
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-400">
                   {sim.phone && sim.phone !== title && <span>{sim.phone}</span>}
                   {sim.serial_number && sim.serial_number !== title && <span>{sim.serial_number}</span>}
                   {sim.ip && <span>{sim.ip}</span>}
-                  {sim.activation_date && <span>с {formatDate(sim.activation_date)}</span>}
                 </div>
                 {sim.sim_url && (
                   // Ссылка общая на приложение SimApi, не на конкретную запись
@@ -661,7 +652,7 @@ function SimRow({ cabinetId, cabinet, isAdmin }: {
           <div className="space-y-2">
             <SimCombobox
               value={simId}
-              valueLabel={cabinet.sim?.name ?? (unavailable ? `SIM #${cabinet.sim_id}` : null)}
+              valueLabel={cabinet.sim ? simLabel(cabinet.sim) : (unavailable ? `SIM ${cabinet.sim_id?.slice(0, 8)}` : null)}
               onChange={setSimId}
             />
             <div className="flex justify-end gap-2">
