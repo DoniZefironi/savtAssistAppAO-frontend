@@ -13,14 +13,16 @@ import { cn } from '@/lib/utils'
 import { CabinetsMap } from '@/components/map/cabinets-map'
 import { ReclamationDialog } from '@/components/reclamations/reclamation-dialog'
 import { reclStatusCls, reclStatusLabel } from '@/components/reclamations/reclamation-shared'
+import { TAB_DEEPLINK_PARAM, type Tab } from '@/components/requests/requests-view'
 
 // Вкладка requests-view.tsx для каждого типа ленты — те же значения, что и в
 // href у карточек-счётчиков выше (?tab=...). «Рекламация» сюда не входит: её
 // карточка открывается на месте через ReclamationDialog (есть GET по id),
 // у остальных 6 типов отдельного GET по id нет — только списком, поэтому
-// клик ведёт на вкладку заявок с ?openId=, а там уже находит и открывает
-// нужный элемент, как только тот подгрузится (см. requests-view.tsx).
-const ACTIVITY_TYPE_TAB: Partial<Record<ActivityItem['type'], string>> = {
+// клик ведёт на вкладку заявок со своим явным ?..._request_id= (см.
+// TAB_DEEPLINK_PARAM в requests-view.tsx), а там уже находит и открывает
+// нужный элемент, как только тот подгрузится.
+const ACTIVITY_TYPE_TAB: Partial<Record<ActivityItem['type'], Tab>> = {
   service: 'service',
   document: 'docs',
   share: 'projects',
@@ -84,7 +86,7 @@ export function AdminDashboard() {
   const openActivityItem = (item: ActivityItem) => {
     if (item.type === 'reclamation') { setSelectedReclamationId(item.id); return }
     const tab = ACTIVITY_TYPE_TAB[item.type]
-    if (tab) router.push(`${base}/requests?tab=${tab}&openId=${item.id}`)
+    if (tab) router.push(`${base}/requests?tab=${tab}&${TAB_DEEPLINK_PARAM[tab]}=${item.id}`)
   }
 
   const { data, isLoading } = useQuery({

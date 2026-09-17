@@ -34,7 +34,24 @@ import {
   userTypeLabel, fmtDate,
 } from './request-shared'
 
-type Tab = 'service' | 'additions' | 'projects' | 'docs' | 'phone' | 'registration' | 'password' | 'reclamations'
+export type Tab = 'service' | 'additions' | 'projects' | 'docs' | 'phone' | 'registration' | 'password' | 'reclamations'
+
+// Явные, разные имена query-параметров под диплинк на карточку каждой
+// вкладки — не общий id/openId: тот слишком общий и рискует задваиваться/
+// путаться между вкладками, если диплинки на карточку появятся ещё где-то
+// на этой же странице. Договорено с бэкендом (сборка ссылок для Bitrix) —
+// имя должно совпадать 1:1 с тем, что генерирует бэкенд; при появлении
+// диплинка на новый тип имя параметра здесь нужно с ним согласовать.
+export const TAB_DEEPLINK_PARAM: Record<Tab, string> = {
+  service: 'service_request_id',
+  additions: 'addition_request_id',
+  projects: 'project_request_id',
+  docs: 'document_request_id',
+  phone: 'phone_change_request_id',
+  password: 'password_reset_request_id',
+  registration: 'registration_request_id',
+  reclamations: 'reclamation_id',
+}
 
 // Сетка карточек заявок: 1 колонка на самых узких, до 4 на широких мониторах
 const GRID_CLASSES = 'grid grid-cols-1 min-[640px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3'
@@ -188,23 +205,27 @@ export function RequestsView() {
   const [selectedDocRequest, setSelectedDocRequest] = useState<DocumentRequest | null>(null)
   const [selectedRegistrationRequest, setSelectedRegistrationRequest] = useState<RegistrationRequest | null>(null)
   const [selectedPasswordResetRequest, setSelectedPasswordResetRequest] = useState<PasswordResetRequest | null>(null)
-  const [selectedReclamation, setSelectedReclamation] = useState<ReclamationListItem | null>(null)
+  // ReclamationDialog сам подгружает данные по id (GET /admin/reclamations/{id}),
+  // поэтому достаточно id, а не всего ReclamationListItem — это же позволяет
+  // диплинку (?reclamation_id=, см. ниже) открыть карточку сразу, не дожидаясь
+  // загрузки списка.
+  const [selectedReclamationId, setSelectedReclamationId] = useState<number | null>(null)
   // Элемент, который нужно открыть, как только его строка подгрузится в
-  // список (см. ?openId= ниже) — только у 6 типов заявок без отдельного GET
-  // по id (в отличие от рекламаций, см. ReclamationDialog); ждём его в уже
+  // список (см. TAB_DEEPLINK_PARAM ниже) — только у 6 типов заявок без
+  // отдельного GET по id (в отличие от рекламаций); ждём его в уже
   // загруженной первой странице своего списка.
   const [pendingOpenId, setPendingOpenId] = useState<number | null>(null)
 
   const sentinelRef = useRef<HTMLDivElement>(null)
 
-  // Карточки на дашборде ведут сюда с ?tab=...(&openId=...) (см.
-  // admin-dashboard.tsx) — без этого клик по «Запросов на документы»/«Заявок
-  // на проекты»/«Добавлений ШУ» всегда открывал вкладку по умолчанию
-  // (service), а не ту, что нужна. Через window.location, а не
-  // useSearchParams — иначе initial state на сервере (window ещё нет) и на
-  // клиенте (URL уже есть) разошлись бы, и React ругнулся бы на hydration
-  // mismatch; так же оба рендера сначала совпадают на дефолтной вкладке, а
-  // нужная подставляется сразу после монтирования.
+  // Карточки на дашборде ведут сюда с ?tab=... (см. admin-dashboard.tsx) —
+  // без этого клик по «Запросов на документы»/«Заявок на проекты»/«Добавлений
+  // ШУ» всегда открывал вкладку по умолчанию (service), а не ту, что нужна.
+  // Через window.location, а не useSearchParams — иначе initial state на
+  // сервере (window ещё нет) и на клиенте (URL уже есть) разошлись бы, и
+  // React ругнулся бы на hydration mismatch; так же оба рендера сначала
+  // совпадают на дефолтной вкладке, а нужная подставляется сразу после
+  // монтирования.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const t = params.get('tab')
@@ -214,8 +235,24 @@ export function RequestsView() {
     ) {
       setTab(t)
     }
-    const openId = params.get('openId')
-    if (openId && /^\d+$/.test(openId)) setPendingOpenId(Number(openId))
+
+    // Диплинк на конкретную карточку — свой явный параметр под каждую
+    // вкладку (?service_request_id=/?reclamation_id=/... — см.
+    // TAB_DEEPLINK_PARAM), не общий id. Договорено с бэкендом для ссылок из
+    // Bitrix и переиспользовано для собственных ссылок с дашборда
+    // (admin-dashboard.tsx). Если такой параметр есть — переключаем и
+    // вкладку на нужную, даже если ?tab= не пришёл вовсе или пришёл другой.
+    for (const [tabId, param] of Object.entries(TAB_DEEPLINK_PARAM) as [Tab, string][]) {
+      if (tabId === 'reclamations' && !isAdmin) continue
+      const raw = params.get(param)
+      if (!raw || !/^\d+$/.test(raw)) continue
+      setTab(tabId)
+      // Рекламация сама грузится по id (ReclamationDialog) — открываем сразу,
+      // не дожидаясь загрузки списка, как остальным 6 типам ниже.
+      if (tabId === 'reclamations') setSelectedReclamationId(Number(raw))
+      else setPendingOpenId(Number(raw))
+      break
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setTab])
 
@@ -363,9 +400,10 @@ export function RequestsView() {
   const regItems = regQ.data?.pages.flatMap(p => p.items) ?? []
   const pwItems = pwQ.data?.pages.flatMap(p => p.items) ?? []
 
-  // Открыть элемент, на который пришли с дашборда (?openId=, см. эффект
-  // выше) — без отдельного GET по id у этих 6 типов заявок (в отличие от
-  // рекламаций) ищем его в уже подгруженном списке своей вкладки. Recent
+  // Открыть элемент, на который пришли по диплинку (?service_request_id=/...,
+  // см. TAB_DEEPLINK_PARAM и эффект выше) — без отдельного GET по id у этих
+  // 6 типов заявок (в отличие от рекламаций) ищем его в уже подгруженном
+  // списке своей вкладки. Recent
   // activity на дашборде — это последние 10 событий вообще по всем типам,
   // так что внутри списка СВОЕГО типа элемент почти наверняка попадёт уже на
   // первую страницу (сортировка по умолчанию — по created_at, самые новые
@@ -558,7 +596,7 @@ export function RequestsView() {
           <PasswordResetList items={pwItems} onSelect={setSelectedPasswordResetRequest} view={view} />
         )}
         {tab === 'reclamations' && !reclQ.isLoading && !reclQ.isError && (
-          <ReclamationsList items={reclItems} onSelect={setSelectedReclamation} view={view} />
+          <ReclamationsList items={reclItems} onSelect={r => setSelectedReclamationId(r.id)} view={view} />
         )}
 
         <div ref={sentinelRef} className="h-1 mt-2" />
@@ -591,7 +629,7 @@ export function RequestsView() {
       {selectedPhoneRequest && <PhoneChangeDialog request={selectedPhoneRequest} onClose={() => setSelectedPhoneRequest(null)} />}
       {selectedRegistrationRequest && <RegistrationRequestDialog request={selectedRegistrationRequest} onClose={() => setSelectedRegistrationRequest(null)} />}
       {selectedPasswordResetRequest && <PasswordResetRequestDialog request={selectedPasswordResetRequest} onClose={() => setSelectedPasswordResetRequest(null)} />}
-      {selectedReclamation && <ReclamationDialog reclamationId={selectedReclamation.id} onClose={() => setSelectedReclamation(null)} />}
+      {selectedReclamationId !== null && <ReclamationDialog reclamationId={selectedReclamationId} onClose={() => setSelectedReclamationId(null)} />}
     </div>
   )
 }
