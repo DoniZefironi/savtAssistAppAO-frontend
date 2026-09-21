@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { reclamationsApi } from '@/lib/api/reclamations'
@@ -11,6 +11,7 @@ import { fmtSize } from '@/components/cabinets/cabinet-dialog-shared'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { SpinnerIcon } from '@/components/ui/icons'
 import { UserDialog } from '@/components/users/user-dialog'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
 import { DialogHeader, DRow, DRowLink, fmtDate } from '@/components/requests/request-shared'
@@ -35,6 +36,11 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
   const [rejectionReason, setRejectionReason] = useState('')
   const [resolutionComment, setResolutionComment] = useState('')
   const [rootCause, setRootCause] = useState('')
+  // Подтверждающий документ при закрытии (акт, фото выполненной работы) —
+  // сервер требует его при переводе в resolved (400 без него), см. README-backend.md.
+  const [confirmationFileUrl, setConfirmationFileUrl] = useState<string | null>(null)
+  const [confirmationFileName, setConfirmationFileName] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Черновик формы подхватывает данные с сервера только когда они пришли —
   // тот же приём, что и в других формах настроек в этом проекте (см.
@@ -48,7 +54,27 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
     setRejectionReason(r.rejection_reason ?? '')
     setResolutionComment(r.resolution_comment ?? '')
     setRootCause(r.root_cause ?? '')
+    setConfirmationFileUrl(r.confirmation_file_url ?? null)
+    setConfirmationFileName(r.confirmation_file_name ?? null)
   }, [r])
+
+  // Загружается сразу по выбору файла (тот же принцип, что и вложения при
+  // подаче самой рекламации) — сохраняется в форме только готовый url, не
+  // сам File; PATCH уходит отдельно, по кнопке «Сохранить».
+  const uploadMut = useMutation({
+    mutationFn: (file: File) => reclamationsApi.uploadAttachment(file),
+    onSuccess: (res, file) => {
+      setConfirmationFileUrl(res.url)
+      setConfirmationFileName(file.name)
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось загрузить файл')),
+  })
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) uploadMut.mutate(file)
+    e.target.value = ''
+  }
 
   const saveMut = useMutation({
     mutationFn: (patch: Parameters<typeof reclamationsApi.update>[1]) => reclamationsApi.update(reclamationId, patch),
@@ -76,7 +102,11 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
   // вслепую: показываем причину прямо в форме, до отправки.
   let validationError: string | null = null
   if (status === 'rejected' && !rejectionReason.trim()) validationError = 'Укажите причину отклонения'
+  else if (status === 'resolved' && !resolutionComment.trim() && !confirmationFileUrl) {
+    validationError = 'Укажите итоговый комментарий и приложите подтверждающий документ'
+  }
   else if (status === 'resolved' && !resolutionComment.trim()) validationError = 'Укажите итоговый комментарий'
+  else if (status === 'resolved' && !confirmationFileUrl) validationError = 'Приложите подтверждающий документ — без него рекламацию нельзя закрыть'
   else if (status === 'in_progress' && (!responsibleName.trim() || warranty == null)) {
     validationError = 'Для статуса «В работе» нужны ответственный и гарантийная классификация'
   }
@@ -90,12 +120,14 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
     if (rejectionReason.trim() !== (r.rejection_reason ?? '')) patch.rejection_reason = rejectionReason.trim() || null
     if (resolutionComment.trim() !== (r.resolution_comment ?? '')) patch.resolution_comment = resolutionComment.trim() || null
     if (rootCause.trim() !== (r.root_cause ?? '')) patch.root_cause = rootCause.trim() || null
+    if (confirmationFileUrl !== (r.confirmation_file_url ?? null)) patch.confirmation_file_url = confirmationFileUrl
+    if ((confirmationFileName ?? '') !== (r.confirmation_file_name ?? '')) patch.confirmation_file_name = confirmationFileName || null
     return patch
   }
 
   const patch = buildPatch()
   const hasChanges = Object.keys(patch).length > 0
-  const canSave = hasChanges && !validationError && !saveMut.isPending
+  const canSave = hasChanges && !validationError && !saveMut.isPending && !uploadMut.isPending
 
   return (
     <>
@@ -163,6 +195,13 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
               <DRow label="Решена" value={r.resolved_at ? fmtDate(r.resolved_at) : '—'} />
               {r.rejection_reason && <DRow label="Причина отклонения" value={r.rejection_reason} />}
               {r.resolution_comment && <DRow label="Итоговый комментарий" value={r.resolution_comment} />}
+              {r.confirmation_file_url && (
+                <DRowLink
+                  label="Подтверждающий документ"
+                  value={r.confirmation_file_name || 'Скачать'}
+                  onClick={() => window.open(toFullUrl(r.confirmation_file_url!), '_blank')}
+                />
+              )}
               {(r.responsible_name || r.responsible_phone) && (
                 <DRow label="Ответственный" value={[r.responsible_name, r.responsible_phone].filter(Boolean).join(' · ')} />
               )}
@@ -235,13 +274,53 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
             )}
 
             {status === 'resolved' && (
-              <textarea
-                value={resolutionComment}
-                onChange={e => setResolutionComment(e.target.value)}
-                placeholder="Итоговый комментарий"
-                rows={2}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] resize-none"
-              />
+              <div className="space-y-2">
+                <textarea
+                  value={resolutionComment}
+                  onChange={e => setResolutionComment(e.target.value)}
+                  placeholder="Итоговый комментарий"
+                  rows={2}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] resize-none"
+                />
+                <div>
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1.5">
+                    Подтверждающий документ <span className="text-red-500">*</span>
+                  </label>
+                  {/* Акт, фото выполненной работы и т.п. — сервер требует его
+                      при переводе в resolved, 400 без него (см. README-backend.md). */}
+                  {confirmationFileUrl ? (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50">
+                      <FileIcon className="w-4 h-4 text-slate-400 shrink-0" />
+                      <span className="flex-1 min-w-0 text-sm text-slate-700 dark:text-slate-200 truncate">
+                        {confirmationFileName || 'Файл загружен'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => { setConfirmationFileUrl(null); setConfirmationFileName(null) }}
+                        className="text-xs text-slate-400 hover:text-red-500 transition-colors cursor-pointer shrink-0"
+                      >
+                        Заменить
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadMut.isPending}
+                        className="cursor-pointer"
+                      >
+                        {uploadMut.isPending
+                          ? <><SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />Загрузка...</>
+                          : 'Прикрепить файл'
+                        }
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
             )}
 
             <textarea

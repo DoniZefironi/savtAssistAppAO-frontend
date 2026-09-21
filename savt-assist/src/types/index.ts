@@ -240,6 +240,11 @@ export interface ReclamationDetail {
   customer_name: string | null
   root_cause: string | null
   resolution_comment: string | null
+  // Подтверждающий документ при закрытии (акт, фото выполненной работы) —
+  // обязателен на сервере при переводе в resolved (400 без него), см.
+  // README-backend.md, «Рут reclamations». null, пока не закрыта.
+  confirmation_file_url: string | null
+  confirmation_file_name: string | null
   rejection_reason: string | null
   responsible_name: string | null
   responsible_phone: string | null

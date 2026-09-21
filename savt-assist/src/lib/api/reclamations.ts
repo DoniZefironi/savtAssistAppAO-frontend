@@ -16,7 +16,8 @@ export interface ReclamationListParams {
 // на сервере, но дублируются на клиенте (см. reclamation-dialog.tsx), чтобы
 // не ловить 400 вслепую:
 // - rejected без rejection_reason нельзя;
-// - resolved без resolution_comment нельзя;
+// - resolved без resolution_comment И без confirmation_file_url нельзя —
+//   «Нельзя закрыть рекламацию без подтверждающего документа»;
 // - in_progress без responsible_name и без warranty_classification нельзя
 //   (оба должны быть заданы либо уже раньше, либо этим же запросом).
 export interface ReclamationPatchDto {
@@ -27,6 +28,8 @@ export interface ReclamationPatchDto {
   rejection_reason?: string | null
   resolution_comment?: string | null
   root_cause?: string | null
+  confirmation_file_url?: string | null
+  confirmation_file_name?: string | null
 }
 
 // Только admin — оператору эти эндпоинты недоступны (403), см.
@@ -44,6 +47,19 @@ export const reclamationsApi = {
 
   update: async (id: number, patch: ReclamationPatchDto): Promise<ReclamationDetail> => {
     const { data } = await apiClient.patch(`/admin/reclamations/${id}`, patch)
+    return data
+  },
+
+  // Подтверждающий документ при закрытии (акт, фото выполненной работы и
+  // т.п.) — тот же общий эндпоинт загрузки, что и вложения при подаче самой
+  // рекламации (см. README-backend.md, «Рут reclamations» → confirmation_file_url).
+  // Возвращает подписанный url, который потом уходит в PATCH как есть.
+  uploadAttachment: async (file: File): Promise<{ url: string }> => {
+    const form = new FormData()
+    form.append('file', file)
+    const { data } = await apiClient.post('/upload/attachment', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
     return data
   },
 }
