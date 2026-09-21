@@ -199,6 +199,22 @@ export interface ReclamationAttachment {
   created_at: string
 }
 
+// Сотрудник Bitrix для дропдауна «Ответственный» (GET /admin/reclamations/
+// bitrix-users) — дёргается напрямую у Bitrix при каждом запросе, у нас не
+// хранится. phone — рабочий телефон, если не заполнен в Bitrix — личный
+// мобильный (чтобы не было пустого номера).
+export interface ReclamationBitrixUser {
+  id: number
+  // Гайд обещал непустые full_name/phone/position, но после того как на
+  // бэкенде сняли фильтр USER_TYPE, в выдаче реально встречаются записи с
+  // пустыми полями (профиль в Bitrix не до конца заполнен) — падало на
+  // поиске (.toLowerCase() на null), см. BitrixUserCombobox. Держим как
+  // nullable и подстраховываемся везде, где используем.
+  full_name: string | null
+  phone: string | null
+  position: string | null
+}
+
 // Сводка в списке (GET /admin/reclamations) — без вложений и контактов,
 // только то, что нужно показать в ленте.
 export interface ReclamationListItem {

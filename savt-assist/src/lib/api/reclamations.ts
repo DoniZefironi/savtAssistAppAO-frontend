@@ -1,6 +1,6 @@
 import { apiClient } from './client'
 import type {
-  PaginatedResponse, ReclamationDetail, ReclamationListItem, ReclamationObjectType, ReclamationStatus,
+  PaginatedResponse, ReclamationBitrixUser, ReclamationDetail, ReclamationListItem, ReclamationObjectType, ReclamationStatus,
 } from '@/types'
 
 export interface ReclamationListParams {
@@ -25,6 +25,11 @@ export interface ReclamationPatchDto {
   warranty_classification?: boolean | null
   responsible_name?: string | null
   responsible_phone?: string | null
+  // Дублирует назначение в самой карточке Bitrix — необязательное, если
+  // Bitrix для этой рекламации не настроен, просто не сработает, без ошибки
+  // (см. README-backend.md, «Рут reclamations»). Не возвращается ни в одном
+  // GET — write-only, как mqtt_password у ШУ.
+  responsible_bitrix_user_id?: number | null
   rejection_reason?: string | null
   resolution_comment?: string | null
   root_cause?: string | null
@@ -47,6 +52,12 @@ export const reclamationsApi = {
 
   update: async (id: number, patch: ReclamationPatchDto): Promise<ReclamationDetail> => {
     const { data } = await apiClient.patch(`/admin/reclamations/${id}`, patch)
+    return data
+  },
+
+  // Для дропдауна «Ответственный» в форме обработки — не свободный текст.
+  getBitrixUsers: async (): Promise<ReclamationBitrixUser[]> => {
+    const { data } = await apiClient.get('/admin/reclamations/bitrix-users')
     return data
   },
 

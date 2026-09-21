@@ -12,6 +12,7 @@ import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SpinnerIcon } from '@/components/ui/icons'
+import { BitrixUserCombobox } from '@/components/ui/bitrix-user-combobox'
 import { UserDialog } from '@/components/users/user-dialog'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
 import { DialogHeader, DRow, DRowLink, fmtDate } from '@/components/requests/request-shared'
@@ -33,6 +34,11 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
   const [warranty, setWarranty] = useState<boolean | null>(null)
   const [responsibleName, setResponsibleName] = useState('')
   const [responsiblePhone, setResponsiblePhone] = useState('')
+  // Заполняется только выбором из дропдауна ниже (не бэкендом — сервер его
+  // не отдаёт ни в одном GET, только принимает в PATCH, см.
+  // ReclamationPatchDto). Остаётся null, пока админ явно не выбрал
+  // ответственного заново в этом сеансе — это ок, поле необязательное.
+  const [responsibleBitrixUserId, setResponsibleBitrixUserId] = useState<number | null>(null)
   const [rejectionReason, setRejectionReason] = useState('')
   const [resolutionComment, setResolutionComment] = useState('')
   const [rootCause, setRootCause] = useState('')
@@ -51,6 +57,7 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
     setWarranty(r.warranty_classification)
     setResponsibleName(r.responsible_name ?? '')
     setResponsiblePhone(r.responsible_phone ?? '')
+    setResponsibleBitrixUserId(null)
     setRejectionReason(r.rejection_reason ?? '')
     setResolutionComment(r.resolution_comment ?? '')
     setRootCause(r.root_cause ?? '')
@@ -68,6 +75,16 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
       setConfirmationFileName(file.name)
     },
     onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось загрузить файл')),
+  })
+
+  // Список бьётся прямо в Bitrix при каждом запросе (см. README-backend.md,
+  // «Рут reclamations») — грузим только когда поле «Ответственный» реально
+  // показано, не при каждом открытии карточки.
+  const showResponsible = status === 'in_progress' || status === 'resolved'
+  const { data: bitrixUsers = [], isLoading: bitrixUsersLoading, isError: bitrixUsersError } = useQuery({
+    queryKey: ['reclamation-bitrix-users'],
+    queryFn: reclamationsApi.getBitrixUsers,
+    enabled: showResponsible,
   })
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -117,6 +134,10 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
     if (warranty !== r.warranty_classification) patch.warranty_classification = warranty
     if (responsibleName.trim() !== (r.responsible_name ?? '')) patch.responsible_name = responsibleName.trim() || null
     if (responsiblePhone.trim() !== (r.responsible_phone ?? '')) patch.responsible_phone = responsiblePhone.trim() || null
+    // Не сравниваем с r.* — сервер это поле никогда не возвращает (write-only,
+    // см. ReclamationPatchDto), шлём его, только если админ реально выбрал
+    // кого-то из дропдауна в этом сеансе.
+    if (responsibleBitrixUserId != null) patch.responsible_bitrix_user_id = responsibleBitrixUserId
     if (rejectionReason.trim() !== (r.rejection_reason ?? '')) patch.rejection_reason = rejectionReason.trim() || null
     if (resolutionComment.trim() !== (r.resolution_comment ?? '')) patch.resolution_comment = resolutionComment.trim() || null
     if (rootCause.trim() !== (r.root_cause ?? '')) patch.root_cause = rootCause.trim() || null
@@ -246,19 +267,33 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
               </div>
             )}
 
-            {(status === 'in_progress' || status === 'resolved') && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <input
-                  value={responsibleName}
-                  onChange={e => setResponsibleName(e.target.value)}
-                  placeholder="Ответственный (ФИО)"
-                  className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
-                />
-                <input
-                  value={responsiblePhone}
-                  onChange={e => setResponsiblePhone(e.target.value)}
-                  placeholder="Рабочий телефон"
-                  className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+            {showResponsible && (
+              <div>
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1.5">
+                  Ответственный {status === 'in_progress' && <span className="text-red-500">*</span>}
+                </label>
+                {/* Поиск, не свободный текст — список из Bitrix
+                    (GET /admin/reclamations/bitrix-users). Уже назначенный
+                    ответственный (если есть) показан отдельной строкой ниже —
+                    комбобокс нужен только чтобы назначить/сменить. */}
+                {responsibleName && (
+                  <p className="text-sm text-slate-700 dark:text-slate-200 mb-1.5">
+                    {responsibleName}{responsiblePhone && ` · ${responsiblePhone}`}
+                  </p>
+                )}
+                <BitrixUserCombobox
+                  users={bitrixUsers}
+                  isLoading={bitrixUsersLoading}
+                  isError={bitrixUsersError}
+                  placeholder={responsibleName ? 'Назначить другого...' : 'Выберите ответственного...'}
+                  onChange={u => {
+                    // full_name/phone из Bitrix бывают пустыми (см.
+                    // BitrixUserCombobox) — responsibleName/responsiblePhone
+                    // здесь всегда обычная строка, не null.
+                    setResponsibleBitrixUserId(u.id)
+                    setResponsibleName(u.full_name ?? '')
+                    setResponsiblePhone(u.phone ?? '')
+                  }}
                 />
               </div>
             )}
