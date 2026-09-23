@@ -1,7 +1,7 @@
 import { apiClient } from './client'
 import type {
-  PaginatedResponse, ReclamationBitrixOutboxItem, ReclamationBitrixUser, ReclamationDetail,
-  ReclamationListItem, ReclamationObjectType, ReclamationStatus,
+  PaginatedResponse, ReclamationBitrixDetachedItem, ReclamationBitrixOutboxItem, ReclamationBitrixUser,
+  ReclamationDetail, ReclamationListItem, ReclamationObjectType, ReclamationStatus,
 } from '@/types'
 
 export interface ReclamationListParams {
@@ -71,6 +71,12 @@ export const reclamationsApi = {
   // только на сбоях и исчезают сами, когда фоновый повтор пройдёт успешно.
   getBitrixOutbox: async (): Promise<ReclamationBitrixOutboxItem[]> => {
     const { data } = await apiClient.get('/admin/reclamations/bitrix-outbox')
+    return data
+  },
+
+  // Заявки, чью карточку удалили в Bitrix. В норме пустой.
+  getBitrixDetached: async (): Promise<ReclamationBitrixDetachedItem[]> => {
+    const { data } = await apiClient.get('/admin/reclamations/bitrix-detached')
     return data
   },
 

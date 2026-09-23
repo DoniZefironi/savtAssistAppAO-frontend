@@ -239,6 +239,22 @@ export interface ReclamationBitrixOutboxItem {
   last_attempted_at: string | null
 }
 
+// Рекламация, чью карточку удалили в Bitrix (GET /admin/reclamations/
+// bitrix-detached). Заявка жива, но с порталом больше не связана и сама туда
+// не вернётся — заводить заново или закрывать, решает админ.
+//
+// Формат ответа на момент написания в README не описан, поэтому обязательным
+// считаем только id (это точно «заявки»), остальное читаем как
+// необязательное: так блок одинаково переживёт и полноценный элемент списка,
+// и урезанную форму вроде bitrix-outbox.
+export interface ReclamationBitrixDetachedItem {
+  id: number
+  description?: string | null
+  status?: ReclamationStatus
+  cabinet_object_number?: string | null
+  bitrix_deleted_at?: string | null
+}
+
 // Сводка в списке (GET /admin/reclamations) — без вложений и контактов,
 // только то, что нужно показать в ленте.
 export interface ReclamationListItem {
@@ -300,9 +316,14 @@ export interface ReclamationDetail {
   user_full_name: string | null
   // См. deadline_at у ReclamationListItem выше.
   deadline_at: string | null
-  // id карточки на портале, приходит СТРОКОЙ ("57", не числом). null —
-  // рекламация ещё не доехала до Bitrix.
+  // id карточки на портале, приходит СТРОКОЙ ("57", не числом).
+  // Читать вместе с bitrix_deleted_at:
+  //   оба пусты                       — ещё не уехала в Bitrix;
+  //   bitrix_deleted_at + пустой item — карточку в Bitrix удалили, рекламация
+  //                                     жива, но с порталом больше не связана
+  //                                     и сама туда не вернётся.
   bitrix_item_id: string | null
+  bitrix_deleted_at: string | null
 }
 
 export interface Chat {

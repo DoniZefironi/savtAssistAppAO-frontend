@@ -27,7 +27,7 @@ import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog
 import { ProjectDetailDialog } from '@/components/projects/project-detail-dialog'
 import { ServiceDialog } from './service-dialog'
 import { ReclamationDialog } from '@/components/reclamations/reclamation-dialog'
-import { BitrixOutboxNotice, useBitrixOutbox } from '@/components/reclamations/bitrix-outbox-notice'
+import { BitrixDetachedNotice, BitrixOutboxNotice, useBitrixDetached, useBitrixOutbox } from '@/components/reclamations/bitrix-outbox-notice'
 import { reclStatusCls, reclStatusLabel, reclObjectTypeLabel, reclWarrantyCls, reclWarrantyLabel } from '@/components/reclamations/reclamation-shared'
 import {
   DRow, DRowLink, ModalTextarea, DialogHeader, VerifiedBadge,
@@ -376,6 +376,7 @@ export function RequestsView() {
   // занимает. Грузим только на вкладке рекламаций, тем же ключом, что и
   // карточка (react-query дедуплицирует).
   const { data: outbox = [] } = useBitrixOutbox(tab === 'reclamations' && isAdmin)
+  const { data: detached = [] } = useBitrixDetached(tab === 'reclamations' && isAdmin)
 
   const reclQ = useInfiniteQuery({
     queryKey: ['reclamations', rsp, rotp, rwc],
@@ -607,6 +608,7 @@ export function RequestsView() {
         )}
         {tab === 'reclamations' && !reclQ.isLoading && !reclQ.isError && (
           <>
+            <BitrixDetachedNotice items={detached} onOpen={setSelectedReclamationId} />
             <BitrixOutboxNotice items={outbox} />
             <ReclamationsList items={reclItems} onSelect={r => setSelectedReclamationId(r.id)} view={view} />
           </>

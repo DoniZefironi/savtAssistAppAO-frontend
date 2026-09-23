@@ -17,7 +17,7 @@ import { UserDialog } from '@/components/users/user-dialog'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
 import { DialogHeader, DRow, DRowLink, fmtDate } from '@/components/requests/request-shared'
 import { reclStatusCls, reclStatusLabel, reclObjectTypeLabel, reclWarrantyCls, reclWarrantyLabel } from './reclamation-shared'
-import { BitrixOutboxCardWarning, useBitrixOutbox } from './bitrix-outbox-notice'
+import { BitrixDeletedCardWarning, BitrixOutboxCardWarning, useBitrixOutbox } from './bitrix-outbox-notice'
 
 const STATUS_OPTIONS: ReclamationStatus[] = ['new', 'review', 'in_progress', 'resolved', 'rejected', 'invalid']
 
@@ -127,20 +127,24 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
     )
   }
 
-  // Валидация — те же правила, что и на сервере (см. README-backend.md, «Рут
-  // reclamations», PATCH /admin/reclamations/{id}), чтобы не ловить 400
-  // вслепую: показываем причину прямо в форме, до отправки.
   const needsReason = status === 'rejected' || status === 'invalid'
-  let validationError: string | null = null
-  if (needsReason && !rejectionReason.trim()) validationError = 'Укажите причину'
-  else if (status === 'resolved' && !resolutionComment.trim() && !confirmationFileUrl) {
-    validationError = 'Укажите итоговый комментарий и приложите подтверждающий документ'
-  }
-  else if (status === 'resolved' && !resolutionComment.trim()) validationError = 'Укажите итоговый комментарий'
-  else if (status === 'resolved' && !confirmationFileUrl) validationError = 'Приложите подтверждающий документ — без него рекламацию нельзя закрыть'
-  else if (status === 'in_progress' && (!responsibleName.trim() || warranty == null)) {
-    validationError = 'Для статуса «В работе» нужны ответственный и гарантийная классификация'
-  }
+  // Подтверждающий документ обязателен при ВСЕХ закрывающих статусах, не
+  // только при resolved (см. README-backend.md, «Рут reclamations»).
+  const needsConfirmation = status === 'resolved' || needsReason
+
+  // Валидация — те же правила, что и на сервере, чтобы не ловить 400 вслепую.
+  // Собираем всё недостающее разом: у закрывающих статусов условий по два-три,
+  // и показывать их по одному (как было цепочкой else if) значит гонять админа
+  // по кругу «заполнил — появилось следующее».
+  const missing: string[] = []
+  if (needsReason && !rejectionReason.trim()) missing.push('причину')
+  if (status === 'resolved' && !resolutionComment.trim()) missing.push('итоговый комментарий')
+  if (needsConfirmation && !confirmationFileUrl) missing.push('подтверждающий документ')
+  if (status === 'in_progress' && !responsibleName.trim()) missing.push('ответственного')
+  if (status === 'in_progress' && warranty == null) missing.push('гарантийную классификацию')
+  const validationError = missing.length > 0
+    ? `Для статуса «${reclStatusLabel(status)}» нужно указать: ${missing.join(', ')}`
+    : null
 
   const buildPatch = () => {
     const patch: Parameters<typeof reclamationsApi.update>[1] = {}
@@ -185,6 +189,7 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
             }
           />
 
+          <BitrixDeletedCardWarning deletedAt={r.bitrix_deleted_at} itemId={r.bitrix_item_id} />
           <BitrixOutboxCardWarning items={outboxForThis} />
 
           <div className="flex-1 min-h-0 overflow-y-auto">
@@ -351,52 +356,54 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
             )}
 
             {status === 'resolved' && (
-              <div className="space-y-2">
-                <textarea
-                  value={resolutionComment}
-                  onChange={e => setResolutionComment(e.target.value)}
-                  placeholder="Итоговый комментарий"
-                  rows={2}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] resize-none"
-                />
-                <div>
-                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1.5">
-                    Подтверждающий документ <span className="text-red-500">*</span>
-                  </label>
-                  {/* Акт, фото выполненной работы и т.п. — сервер требует его
-                      при переводе в resolved, 400 без него (см. README-backend.md). */}
-                  {confirmationFileUrl ? (
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50">
-                      <FileIcon className="w-4 h-4 text-slate-400 shrink-0" />
-                      <span className="flex-1 min-w-0 text-sm text-slate-700 dark:text-slate-200 truncate">
-                        {confirmationFileName || 'Файл загружен'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => { setConfirmationFileUrl(null); setConfirmationFileName(null) }}
-                        className="text-xs text-slate-400 hover:text-red-500 transition-colors cursor-pointer shrink-0"
-                      >
-                        Заменить
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={uploadMut.isPending}
-                        className="cursor-pointer"
-                      >
-                        {uploadMut.isPending
-                          ? <><SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />Загрузка...</>
-                          : 'Прикрепить файл'
-                        }
-                      </Button>
-                    </>
-                  )}
-                </div>
+              <textarea
+                value={resolutionComment}
+                onChange={e => setResolutionComment(e.target.value)}
+                placeholder="Итоговый комментарий"
+                rows={2}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] resize-none"
+              />
+            )}
+
+            {/* Акт, фото выполненной работы и т.п. Обязателен при всех трёх
+                закрывающих статусах — «Закрыта», «Отклонена» и «Ошибочная»
+                (см. README-backend.md), а не только при закрытии. */}
+            {needsConfirmation && (
+              <div>
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1.5">
+                  Подтверждающий документ <span className="text-red-500">*</span>
+                </label>
+                {confirmationFileUrl ? (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50">
+                    <FileIcon className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="flex-1 min-w-0 text-sm text-slate-700 dark:text-slate-200 truncate">
+                      {confirmationFileName || 'Файл загружен'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => { setConfirmationFileUrl(null); setConfirmationFileName(null) }}
+                      className="text-xs text-slate-400 hover:text-red-500 transition-colors cursor-pointer shrink-0"
+                    >
+                      Заменить
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadMut.isPending}
+                      className="cursor-pointer"
+                    >
+                      {uploadMut.isPending
+                        ? <><SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />Загрузка...</>
+                        : 'Прикрепить файл'
+                      }
+                    </Button>
+                  </>
+                )}
               </div>
             )}
 
