@@ -185,10 +185,17 @@ export interface PaginatedResponse<T> {
 }
 
 // Рекламации — гарантийные/негарантийные претензии, отдельная от сервисных
-// заявок сущность (см. README-backend.md, «Рут reclamations»). Пока без
-// интеграции с Bitrix24 — обработка полностью внутри админки.
+// заявок сущность (см. README-backend.md, «Рут reclamations»).
 export type ReclamationObjectType = 'cabinet' | 'line' | 'component' | 'software' | 'documentation'
-export type ReclamationStatus = 'review' | 'in_progress' | 'resolved' | 'rejected'
+
+// Шесть статусов, соответствуют стадиям смарт-процесса Bitrix ОДИН К ОДНОМУ —
+// отдельного поля под стадию нет намеренно, status и есть стадия. Синхронизация
+// двусторонняя и полная: подвинули карточку на портале — приедет новый статус
+// (поэтому карточку перечитываем при открытии, staleTime: 0).
+// Новая заявка заводится в new. Раньше статусов было четыре и review означал
+// подачу — теперь подача это new, а review это «специалист уже взял на
+// рассмотрение».
+export type ReclamationStatus = 'new' | 'review' | 'in_progress' | 'resolved' | 'rejected' | 'invalid'
 
 export interface ReclamationAttachment {
   id: number
@@ -215,6 +222,23 @@ export interface ReclamationBitrixUser {
   position: string | null
 }
 
+// Недоставленная операция синхронизации с Bitrix (GET /admin/reclamations/
+// bitrix-outbox). Строка заводится, когда операция упала (портал недоступен,
+// сетевой сбой), фоновая задача повторяет её каждые 15 минут, при успехе
+// строка исчезает сама. Лимита попыток нет — большое attempts при давнем
+// last_attempted_at значит, что застряло всерьёз и нужно разбираться руками.
+export interface ReclamationBitrixOutboxItem {
+  id: number
+  reclamation_id: number
+  // create — создание карточки, status — смена стадии, assignee — назначение
+  // ответственного.
+  operation: 'create' | 'status' | 'assignee'
+  attempts: number
+  last_error: string | null
+  created_at: string
+  last_attempted_at: string | null
+}
+
 // Сводка в списке (GET /admin/reclamations) — без вложений и контактов,
 // только то, что нужно показать в ленте.
 export interface ReclamationListItem {
@@ -229,6 +253,11 @@ export interface ReclamationListItem {
   resolved_at: string | null
   user_id: number
   user_full_name: string | null
+  // Срок отработки, «ГГГГ-ММ-ДД» без времени. Синхронизируется с полем
+  // «Дедлайн» карточки Bitrix В ОБЕ СТОРОНЫ — может измениться на портале и
+  // приехать к нам, поэтому карточку перечитываем при каждом открытии
+  // (staleTime: 0 у запроса детали), а не держим из кэша.
+  deadline_at: string | null
 }
 
 // Подробности (GET /admin/reclamations/{id}) — то же, что видит подавший
@@ -269,6 +298,11 @@ export interface ReclamationDetail {
   attachments: ReclamationAttachment[]
   user_id: number
   user_full_name: string | null
+  // См. deadline_at у ReclamationListItem выше.
+  deadline_at: string | null
+  // id карточки на портале, приходит СТРОКОЙ ("57", не числом). null —
+  // рекламация ещё не доехала до Bitrix.
+  bitrix_item_id: string | null
 }
 
 export interface Chat {

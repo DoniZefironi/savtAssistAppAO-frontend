@@ -27,6 +27,7 @@ import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog
 import { ProjectDetailDialog } from '@/components/projects/project-detail-dialog'
 import { ServiceDialog } from './service-dialog'
 import { ReclamationDialog } from '@/components/reclamations/reclamation-dialog'
+import { BitrixOutboxNotice, useBitrixOutbox } from '@/components/reclamations/bitrix-outbox-notice'
 import { reclStatusCls, reclStatusLabel, reclObjectTypeLabel, reclWarrantyCls, reclWarrantyLabel } from '@/components/reclamations/reclamation-shared'
 import {
   DRow, DRowLink, ModalTextarea, DialogHeader, VerifiedBadge,
@@ -152,12 +153,16 @@ const WARRANTY_FILTERS = [
 // status/object_type/warranty_classification, см. README-backend.md, «Рут
 // reclamations») — свой, отдельный набор фильтров вместо общих REQ_FILTERS/
 // REQUEST_TYPE_FILTERS/WARRANTY_FILTERS выше (там другие значения статуса).
+// Шесть статусов — соответствуют стадиям Bitrix один к одному, подписи те же
+// (см. reclStatusLabel и README-backend.md, «Статусы и стадии Bitrix»).
 const RECL_STATUS_FILTERS: { value: ReclamationStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'Все' },
+  { value: 'new', label: 'Новые' },
   { value: 'review', label: 'На рассмотрении' },
-  { value: 'in_progress', label: 'В работе' },
-  { value: 'resolved', label: 'Исполнено' },
-  { value: 'rejected', label: 'Отклонена' },
+  { value: 'in_progress', label: 'Приняты в работу' },
+  { value: 'resolved', label: 'Закрыты' },
+  { value: 'rejected', label: 'Отклонены' },
+  { value: 'invalid', label: 'Ошибочные' },
 ]
 const RECL_OBJECT_TYPE_FILTERS: { value: ReclamationObjectType | 'all'; label: string }[] = [
   { value: 'all', label: 'Все типы' },
@@ -366,6 +371,11 @@ export function RequestsView() {
   const rsp = reclStatusFilter === 'all' ? undefined : reclStatusFilter
   const rotp = reclObjectTypeFilter === 'all' ? undefined : reclObjectTypeFilter
   const rwc = reclWarrantyFilter === 'all' ? undefined : reclWarrantyFilter === 'yes'
+
+  // Очередь недоставленного в Bitrix — в норме пуста, плашка ничего не
+  // занимает. Грузим только на вкладке рекламаций, тем же ключом, что и
+  // карточка (react-query дедуплицирует).
+  const { data: outbox = [] } = useBitrixOutbox(tab === 'reclamations' && isAdmin)
 
   const reclQ = useInfiniteQuery({
     queryKey: ['reclamations', rsp, rotp, rwc],
@@ -596,7 +606,10 @@ export function RequestsView() {
           <PasswordResetList items={pwItems} onSelect={setSelectedPasswordResetRequest} view={view} />
         )}
         {tab === 'reclamations' && !reclQ.isLoading && !reclQ.isError && (
-          <ReclamationsList items={reclItems} onSelect={r => setSelectedReclamationId(r.id)} view={view} />
+          <>
+            <BitrixOutboxNotice items={outbox} />
+            <ReclamationsList items={reclItems} onSelect={r => setSelectedReclamationId(r.id)} view={view} />
+          </>
         )}
 
         <div ref={sentinelRef} className="h-1 mt-2" />
@@ -668,6 +681,16 @@ function ServiceList({ items, onSelect, view }: { items: ServiceRequest[]; onSel
   )
 }
 
+// deadline_at — дата без времени («ГГГГ-ММ-ДД»), сравниваем по началу
+// сегодняшнего дня: срок «сегодня» ещё не просрочен.
+function isOverdue(item: ReclamationListItem): boolean {
+  if (!item.deadline_at) return false
+  if (item.status === 'resolved' || item.status === 'rejected' || item.status === 'invalid') return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return new Date(item.deadline_at) < today
+}
+
 function ReclamationsList({ items, onSelect, view }: { items: ReclamationListItem[]; onSelect: (r: ReclamationListItem) => void; view: ViewMode }) {
   if (!items.length) return <Empty text="Рекламаций пока нет" />
   return (
@@ -679,7 +702,22 @@ function ReclamationsList({ items, onSelect, view }: { items: ReclamationListIte
           icon={<ReclamationCardIcon />}
           title={item.object_type === 'cabinet' && item.cabinet_object_number ? `ШУ ${item.cabinet_object_number}` : reclObjectTypeLabel(item.object_type)}
           subtitle={item.user_full_name ?? `#${item.user_id}`}
-          meta={<TypePill label={reclWarrantyLabel(item.warranty_classification)} cls={reclWarrantyCls(item.warranty_classification)} />}
+          meta={
+            <div className="flex flex-wrap items-center gap-1.5">
+              <TypePill label={reclWarrantyLabel(item.warranty_classification)} cls={reclWarrantyCls(item.warranty_classification)} />
+              {/* Просроченный срок подсвечиваем только у незакрытых — у
+                  закрытой/отклонённой «просрочка» уже ни на что не влияет и
+                  только красит ленту в красный. */}
+              {item.deadline_at && (
+                <TypePill
+                  label={`Срок: ${fmtDate(item.deadline_at)}`}
+                  cls={isOverdue(item)
+                    ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                    : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}
+                />
+              )}
+            </div>
+          }
           statusBadge={<StatusPill label={reclStatusLabel(item.status)} cls={reclStatusCls(item.status)} />}
           date={fmtDate(item.created_at)}
           onClick={() => onSelect(item)}

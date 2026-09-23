@@ -1,6 +1,7 @@
 import { apiClient } from './client'
 import type {
-  PaginatedResponse, ReclamationBitrixUser, ReclamationDetail, ReclamationListItem, ReclamationObjectType, ReclamationStatus,
+  PaginatedResponse, ReclamationBitrixOutboxItem, ReclamationBitrixUser, ReclamationDetail,
+  ReclamationListItem, ReclamationObjectType, ReclamationStatus,
 } from '@/types'
 
 export interface ReclamationListParams {
@@ -15,7 +16,7 @@ export interface ReclamationListParams {
 // проекте. Обязательные проверки на смену статуса (400 при нарушении) —
 // на сервере, но дублируются на клиенте (см. reclamation-dialog.tsx), чтобы
 // не ловить 400 вслепую:
-// - rejected без rejection_reason нельзя;
+// - rejected и invalid без rejection_reason нельзя;
 // - resolved без resolution_comment И без confirmation_file_url нельзя —
 //   «Нельзя закрыть рекламацию без подтверждающего документа»;
 // - in_progress без responsible_name и без warranty_classification нельзя
@@ -35,6 +36,11 @@ export interface ReclamationPatchDto {
   root_cause?: string | null
   confirmation_file_url?: string | null
   confirmation_file_name?: string | null
+  // Срок отработки, «ГГГГ-ММ-ДД». null очищает. Bitrix требует это поле при
+  // переводе карточки между стадиями — если не задано, сервер подставит
+  // «сегодня + 7 дней», чтобы переход не сорвался, но это заглушка, а не
+  // обещанный заказчику срок (предупреждаем об этом в форме).
+  deadline_at?: string | null
 }
 
 // Только admin — оператору эти эндпоинты недоступны (403), см.
@@ -58,6 +64,13 @@ export const reclamationsApi = {
   // Для дропдауна «Ответственный» в форме обработки — не свободный текст.
   getBitrixUsers: async (): Promise<ReclamationBitrixUser[]> => {
     const { data } = await apiClient.get('/admin/reclamations/bitrix-users')
+    return data
+  },
+
+  // Что не долетело до Bitrix и почему. В норме пустой — строки появляются
+  // только на сбоях и исчезают сами, когда фоновый повтор пройдёт успешно.
+  getBitrixOutbox: async (): Promise<ReclamationBitrixOutboxItem[]> => {
+    const { data } = await apiClient.get('/admin/reclamations/bitrix-outbox')
     return data
   },
 

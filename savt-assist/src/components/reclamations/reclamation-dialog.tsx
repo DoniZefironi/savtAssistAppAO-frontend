@@ -17,8 +17,9 @@ import { UserDialog } from '@/components/users/user-dialog'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
 import { DialogHeader, DRow, DRowLink, fmtDate } from '@/components/requests/request-shared'
 import { reclStatusCls, reclStatusLabel, reclObjectTypeLabel, reclWarrantyCls, reclWarrantyLabel } from './reclamation-shared'
+import { BitrixOutboxCardWarning, useBitrixOutbox } from './bitrix-outbox-notice'
 
-const STATUS_OPTIONS: ReclamationStatus[] = ['review', 'in_progress', 'resolved', 'rejected']
+const STATUS_OPTIONS: ReclamationStatus[] = ['new', 'review', 'in_progress', 'resolved', 'rejected', 'invalid']
 
 export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: number; onClose: () => void }) {
   const qc = useQueryClient()
@@ -28,6 +29,10 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
   const { data: r, isLoading, isError } = useQuery({
     queryKey: ['reclamation', reclamationId],
     queryFn: () => reclamationsApi.getOne(reclamationId),
+    // Перебивает глобальные 30 секунд (providers.tsx): deadline_at и стадия
+    // синхронизируются с Bitrix в обе стороны и могут измениться на портале,
+    // поэтому карточку читаем заново при каждом открытии.
+    staleTime: 0,
   })
 
   const [status, setStatus] = useState<ReclamationStatus>('review')
@@ -46,6 +51,8 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
   // сервер требует его при переводе в resolved (400 без него), см. README-backend.md.
   const [confirmationFileUrl, setConfirmationFileUrl] = useState<string | null>(null)
   const [confirmationFileName, setConfirmationFileName] = useState<string | null>(null)
+  // «ГГГГ-ММ-ДД» — ровно тот формат, что у <input type="date"> и у API.
+  const [deadlineAt, setDeadlineAt] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Черновик формы подхватывает данные с сервера только когда они пришли —
@@ -63,6 +70,7 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
     setRootCause(r.root_cause ?? '')
     setConfirmationFileUrl(r.confirmation_file_url ?? null)
     setConfirmationFileName(r.confirmation_file_name ?? null)
+    setDeadlineAt(r.deadline_at ?? '')
   }, [r])
 
   // Загружается сразу по выбору файла (тот же принцип, что и вложения при
@@ -86,6 +94,11 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
     queryFn: reclamationsApi.getBitrixUsers,
     enabled: showResponsible,
   })
+
+  // Застрявшая синхронизация именно этой рекламации — объясняет ситуацию
+  // «в админке поменяли, а в Bitrix ничего не поменялось» прямо в карточке.
+  const { data: outbox = [] } = useBitrixOutbox(true)
+  const outboxForThis = outbox.filter(i => i.reclamation_id === reclamationId)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -117,8 +130,9 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
   // Валидация — те же правила, что и на сервере (см. README-backend.md, «Рут
   // reclamations», PATCH /admin/reclamations/{id}), чтобы не ловить 400
   // вслепую: показываем причину прямо в форме, до отправки.
+  const needsReason = status === 'rejected' || status === 'invalid'
   let validationError: string | null = null
-  if (status === 'rejected' && !rejectionReason.trim()) validationError = 'Укажите причину отклонения'
+  if (needsReason && !rejectionReason.trim()) validationError = 'Укажите причину'
   else if (status === 'resolved' && !resolutionComment.trim() && !confirmationFileUrl) {
     validationError = 'Укажите итоговый комментарий и приложите подтверждающий документ'
   }
@@ -143,6 +157,7 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
     if (rootCause.trim() !== (r.root_cause ?? '')) patch.root_cause = rootCause.trim() || null
     if (confirmationFileUrl !== (r.confirmation_file_url ?? null)) patch.confirmation_file_url = confirmationFileUrl
     if ((confirmationFileName ?? '') !== (r.confirmation_file_name ?? '')) patch.confirmation_file_name = confirmationFileName || null
+    if (deadlineAt !== (r.deadline_at ?? '')) patch.deadline_at = deadlineAt || null
     return patch
   }
 
@@ -169,6 +184,8 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
               </div>
             }
           />
+
+          <BitrixOutboxCardWarning items={outboxForThis} />
 
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
@@ -213,6 +230,7 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
                 </div>
               )}
               <DRow label="Подана" value={fmtDate(r.created_at)} />
+              <DRow label="Срок отработки" value={r.deadline_at ? fmtDate(r.deadline_at) : '—'} />
               <DRow label="Решена" value={r.resolved_at ? fmtDate(r.resolved_at) : '—'} />
               {r.rejection_reason && <DRow label="Причина отклонения" value={r.rejection_reason} />}
               {r.resolution_comment && <DRow label="Итоговый комментарий" value={r.resolution_comment} />}
@@ -244,6 +262,28 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
                   {reclStatusLabel(s)}
                 </button>
               ))}
+            </div>
+
+            <div>
+              <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1.5">
+                Срок отработки
+              </label>
+              <input
+                type="date"
+                value={deadlineAt}
+                onChange={e => setDeadlineAt(e.target.value)}
+                className="w-full h-9 px-3 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+              />
+              {/* Смена статуса двигает карточку между стадиями Bitrix, а он
+                  требует там заполненный «Дедлайн». Сервер обещает подставлять
+                  «сегодня + 7 дней», но на практике переход всё равно
+                  отваливался с CRM_FIELD_ERROR_REQUIRED и падал в очередь
+                  повторов, поэтому предупреждаем заранее. */}
+              {!deadlineAt && status !== r.status && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  Срок не задан — Bitrix требует «Дедлайн» при смене стадии, без него переход на портале может не пройти. Лучше указать реальный.
+                </p>
+              )}
             </div>
 
             {(status === 'in_progress' || status === 'resolved') && (
@@ -298,11 +338,13 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
               </div>
             )}
 
-            {status === 'rejected' && (
+            {/* rejection_reason обязателен и для «Отклонена», и для «Ошибочной»
+                (см. README-backend.md) — поле общее, меняется только подсказка. */}
+            {needsReason && (
               <textarea
                 value={rejectionReason}
                 onChange={e => setRejectionReason(e.target.value)}
-                placeholder="Причина отклонения"
+                placeholder={status === 'invalid' ? 'Чем рекламация оформлена некорректно' : 'Причина отклонения'}
                 rows={2}
                 className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] resize-none"
               />
