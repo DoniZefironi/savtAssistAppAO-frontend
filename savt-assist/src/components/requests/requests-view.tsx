@@ -702,7 +702,11 @@ function ReclamationsList({ items, onSelect, view }: { items: ReclamationListIte
           key={item.id}
           view={view}
           icon={<ReclamationCardIcon />}
-          title={item.object_type === 'cabinet' && item.cabinet_object_number ? `ШУ ${item.cabinet_object_number}` : reclObjectTypeLabel(item.object_type)}
+          title={
+            item.object_type === 'cabinet' && item.cabinet_object_number
+              ? `ШУ ${item.cabinet_object_number}`
+              : item.project_name ?? reclObjectTypeLabel(item.object_type)
+          }
           subtitle={item.user_full_name ?? `#${item.user_id}`}
           meta={
             <div className="flex flex-wrap items-center gap-1.5">

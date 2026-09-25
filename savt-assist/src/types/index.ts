@@ -260,8 +260,10 @@ export interface ReclamationListItem {
   status: ReclamationStatus
   warranty_classification: boolean | null
   description: string
-  // Только для object_type === 'cabinet', иначе null.
+  // Ровно одно из двух заполнено, как и cabinet_id/project_id при подаче —
+  // cabinet_object_number для object_type === 'cabinet', иначе project_name.
   cabinet_object_number: string | null
+  project_name: string | null
   created_at: string
   resolved_at: string | null
   user_id: number
@@ -283,6 +285,10 @@ export interface ReclamationDetail {
   object_type: ReclamationObjectType
   cabinet_id: number | null
   cabinet_object_number: string | null
+  // Ровно одно из двух заполнено (как и cabinet_id/project_id при подаче) —
+  // проект обязателен для всех типов объекта, кроме 'cabinet'.
+  project_id: number | null
+  project_name: string | null
   // Свободный JSON для всех типов объекта, кроме 'cabinet' — состав зависит
   // от object_type, см. README-backend.md.
   object_details: Record<string, string> | null
@@ -306,6 +312,11 @@ export interface ReclamationDetail {
   rejection_reason: string | null
   responsible_name: string | null
   responsible_phone: string | null
+  // Синхронизируется с assignedById карточки Bitrix В ОБЕ СТОРОНЫ (как и
+  // deadline_at) — могли назначить прямо на портале, минуя админку. Используем
+  // для предвыбора текущего ответственного в дропдауне при открытии формы,
+  // сверять по одному только имени ненадёжно. null — не назначен нигде.
+  responsible_bitrix_user_id: number | null
   created_at: string
   resolved_at: string | null
   attachments: ReclamationAttachment[]

@@ -67,7 +67,9 @@ function makeStatCategories(base: string, isAdmin: boolean) {
     // недоступны оператору (403), см. README-backend.md, «Рут reclamations».
     ...(isAdmin ? [{
       key: 'reclamations', title: 'Рекламации', cards: [
-        { key: 'pendingReclamations' as const, label: 'На рассмотрении', href: `${base}/requests?tab=reclamations`, accent: '#EA580C', urgentAbove: 0, icon: <ReclamationIcon /> },
+        // Считает new + review (см. README-backend.md) — обе стадии до того,
+        // как рекламацию взяли в работу, не только «На рассмотрении».
+        { key: 'pendingReclamations' as const, label: 'Не в работе', href: `${base}/requests?tab=reclamations`, accent: '#EA580C', urgentAbove: 0, icon: <ReclamationIcon /> },
       ],
     }] : []),
   ] as const

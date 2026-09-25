@@ -15,8 +15,9 @@ import { SpinnerIcon } from '@/components/ui/icons'
 import { BitrixUserCombobox } from '@/components/ui/bitrix-user-combobox'
 import { UserDialog } from '@/components/users/user-dialog'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
+import { ProjectDetailDialog } from '@/components/projects/project-detail-dialog'
 import { DialogHeader, DRow, DRowLink, fmtDate } from '@/components/requests/request-shared'
-import { reclStatusCls, reclStatusLabel, reclObjectTypeLabel, reclWarrantyCls, reclWarrantyLabel } from './reclamation-shared'
+import { reclStatusCls, reclStatusLabel, reclObjectTypeLabel, reclWarrantyLabel } from './reclamation-shared'
 import { BitrixDeletedCardWarning, BitrixOutboxCardWarning, useBitrixOutbox } from './bitrix-outbox-notice'
 
 const STATUS_OPTIONS: ReclamationStatus[] = ['new', 'review', 'in_progress', 'resolved', 'rejected', 'invalid']
@@ -25,6 +26,7 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
   const qc = useQueryClient()
   const [subUserId, setSubUserId] = useState<number | null>(null)
   const [subCabinetId, setSubCabinetId] = useState<number | null>(null)
+  const [subProjectId, setSubProjectId] = useState<number | null>(null)
 
   const { data: r, isLoading, isError } = useQuery({
     queryKey: ['reclamation', reclamationId],
@@ -39,10 +41,9 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
   const [warranty, setWarranty] = useState<boolean | null>(null)
   const [responsibleName, setResponsibleName] = useState('')
   const [responsiblePhone, setResponsiblePhone] = useState('')
-  // Заполняется только выбором из дропдауна ниже (не бэкендом — сервер его
-  // не отдаёт ни в одном GET, только принимает в PATCH, см.
-  // ReclamationPatchDto). Остаётся null, пока админ явно не выбрал
-  // ответственного заново в этом сеансе — это ок, поле необязательное.
+  // Предвыбирается из r.responsible_bitrix_user_id при открытии — значение
+  // синхронизируется с Bitrix в обе стороны (могли назначить прямо на
+  // портале), сверять по одному только имени ненадёжно (см. README-backend.md).
   const [responsibleBitrixUserId, setResponsibleBitrixUserId] = useState<number | null>(null)
   const [rejectionReason, setRejectionReason] = useState('')
   const [resolutionComment, setResolutionComment] = useState('')
@@ -64,7 +65,7 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
     setWarranty(r.warranty_classification)
     setResponsibleName(r.responsible_name ?? '')
     setResponsiblePhone(r.responsible_phone ?? '')
-    setResponsibleBitrixUserId(null)
+    setResponsibleBitrixUserId(r.responsible_bitrix_user_id ?? null)
     setRejectionReason(r.rejection_reason ?? '')
     setResolutionComment(r.resolution_comment ?? '')
     setRootCause(r.root_cause ?? '')
@@ -85,14 +86,15 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
     onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось загрузить файл')),
   })
 
-  // Список бьётся прямо в Bitrix при каждом запросе (см. README-backend.md,
-  // «Рут reclamations») — грузим только когда поле «Ответственный» реально
-  // показано, не при каждом открытии карточки.
-  const showResponsible = status === 'in_progress' || status === 'resolved'
+  // deadline_at требует Bitrix для всех переходов КРОМЕ new/review — эти две
+  // стадии карточку между собой в Bitrix ещё не двигают (см. README-backend.md).
+  const needsDeadline = status !== 'new' && status !== 'review'
+  // Поле «Ответственный» теперь в общем списке (не привязано к статусу, см.
+  // DRow «Ответственный» ниже) — список сотрудников Bitrix грузится сразу при
+  // открытии карточки, не дожидаясь конкретного статуса.
   const { data: bitrixUsers = [], isLoading: bitrixUsersLoading, isError: bitrixUsersError } = useQuery({
     queryKey: ['reclamation-bitrix-users'],
     queryFn: reclamationsApi.getBitrixUsers,
-    enabled: showResponsible,
   })
 
   // Застрявшая синхронизация именно этой рекламации — объясняет ситуацию
@@ -132,18 +134,31 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
   // только при resolved (см. README-backend.md, «Рут reclamations»).
   const needsConfirmation = status === 'resolved' || needsReason
 
-  // Валидация — те же правила, что и на сервере, чтобы не ловить 400 вслепую.
-  // Собираем всё недостающее разом: у закрывающих статусов условий по два-три,
-  // и показывать их по одному (как было цепочкой else if) значит гонять админа
-  // по кругу «заполнил — появилось следующее».
+  // Обязательные проверки на сервере срабатывают только «при смене статуса»
+  // (см. README-backend.md, §3) — если статус не меняется (например, карточка
+  // уже in_progress, а админ просто добавляет срок отработки), сервер их не
+  // требует, и клиент не должен требовать тоже.
+  const isTransitioning = status !== r.status
+
+  // Гарантия и ответственный не блокируют сохранение (см. missing ниже), но
+  // сервер их всё равно требует при переходе в in_progress/resolved и без них
+  // отклонит запрос 400-кой — вместо того чтобы узнавать об этом только после
+  // клика «Сохранить», подсказываем заранее прямо у полей (тот же приём, что
+  // и у «Срок отработки»).
+  const wantsWarrantyAndResponsible = isTransitioning && (status === 'in_progress' || status === 'resolved')
+
+  // Валидация — только то, что реально блокирует сервер 400-кой. Ответственный
+  // и гарантия сюда намеренно не входят — необязательные поля, ограничивать
+  // сохранение ими не нужно (сервер и так проверит своё, если что-то важное
+  // не так, ошибка придёт тостом).
   const missing: string[] = []
-  if (needsReason && !rejectionReason.trim()) missing.push('причину')
-  if (status === 'resolved' && !resolutionComment.trim()) missing.push('итоговый комментарий')
-  if (needsConfirmation && !confirmationFileUrl) missing.push('подтверждающий документ')
-  if (status === 'in_progress' && !responsibleName.trim()) missing.push('ответственного')
-  if (status === 'in_progress' && warranty == null) missing.push('гарантийную классификацию')
+  if (isTransitioning) {
+    if (needsReason && !rejectionReason.trim()) missing.push('причину')
+    if (status === 'resolved' && !resolutionComment.trim()) missing.push('итоговый комментарий')
+    if (needsConfirmation && !confirmationFileUrl) missing.push('подтверждающий документ')
+  }
   const validationError = missing.length > 0
-    ? `Для статуса «${reclStatusLabel(status)}» нужно указать: ${missing.join(', ')}`
+    ? `Для перехода в «${reclStatusLabel(status)}» нужно указать: ${missing.join(', ')}`
     : null
 
   const buildPatch = () => {
@@ -152,10 +167,9 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
     if (warranty !== r.warranty_classification) patch.warranty_classification = warranty
     if (responsibleName.trim() !== (r.responsible_name ?? '')) patch.responsible_name = responsibleName.trim() || null
     if (responsiblePhone.trim() !== (r.responsible_phone ?? '')) patch.responsible_phone = responsiblePhone.trim() || null
-    // Не сравниваем с r.* — сервер это поле никогда не возвращает (write-only,
-    // см. ReclamationPatchDto), шлём его, только если админ реально выбрал
-    // кого-то из дропдауна в этом сеансе.
-    if (responsibleBitrixUserId != null) patch.responsible_bitrix_user_id = responsibleBitrixUserId
+    if (responsibleBitrixUserId !== (r.responsible_bitrix_user_id ?? null)) {
+      patch.responsible_bitrix_user_id = responsibleBitrixUserId
+    }
     if (rejectionReason.trim() !== (r.rejection_reason ?? '')) patch.rejection_reason = rejectionReason.trim() || null
     if (resolutionComment.trim() !== (r.resolution_comment ?? '')) patch.resolution_comment = resolutionComment.trim() || null
     if (rootCause.trim() !== (r.root_cause ?? '')) patch.root_cause = rootCause.trim() || null
@@ -206,6 +220,21 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
               <DRow label="Тип объекта" value={reclObjectTypeLabel(r.object_type)} />
               {r.object_type === 'cabinet' && r.cabinet_id != null ? (
                 <DRowLink label="Объект" value={`ШУ ${r.cabinet_object_number}`} onClick={() => setSubCabinetId(r.cabinet_id)} />
+              ) : r.project_id != null ? (
+                <>
+                  <DRowLink label="Проект" value={r.project_name ?? `#${r.project_id}`} onClick={() => setSubProjectId(r.project_id)} />
+                  {r.object_details && (
+                    <DRow label="Объект" value={
+                      <div className="space-y-0.5">
+                        {Object.entries(r.object_details).map(([k, v]) => (
+                          <p key={k} className="text-xs text-slate-500 dark:text-slate-400">
+                            <span className="text-slate-400 dark:text-slate-500">{k}:</span> {v}
+                          </p>
+                        ))}
+                      </div>
+                    } />
+                  )}
+                </>
               ) : r.object_details ? (
                 <DRow label="Объект" value={
                   <div className="space-y-0.5">
@@ -241,6 +270,57 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
               )}
               <DRow label="Подана" value={fmtDate(r.created_at)} />
               <DRow label="Срок отработки" value={r.deadline_at ? fmtDate(r.deadline_at) : '—'} />
+              {/* Гарантия и ответственный — необязательные поля, не условие
+                  перехода статуса (клиент их для этого не требует, см.
+                  validationError ниже), поэтому живут здесь, в общем списке
+                  полей, а не в блоке «Обработка»: проставить можно на любом
+                  этапе. */}
+              <DRow label="Гарантия" value={
+                <div>
+                  <select
+                    value={warranty === null ? '' : warranty ? 'true' : 'false'}
+                    onChange={e => setWarranty(e.target.value === '' ? null : e.target.value === 'true')}
+                    className="w-full h-9 px-3 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] cursor-pointer"
+                  >
+                    <option value="">Не классифицирована</option>
+                    <option value="true">Гарантийный случай</option>
+                    <option value="false">Платно</option>
+                  </select>
+                  {wantsWarrantyAndResponsible && warranty == null && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                      Не классифицирована — без этого Bitrix откажет в переходе в «{reclStatusLabel(status)}».
+                    </p>
+                  )}
+                </div>
+              } />
+              <DRow label="Ответственный" value={
+                <div>
+                  {responsibleName && (
+                    <p className="text-sm text-slate-700 dark:text-slate-200 mb-1.5">
+                      {responsibleName}{responsiblePhone && ` · ${responsiblePhone}`}
+                    </p>
+                  )}
+                  <BitrixUserCombobox
+                    users={bitrixUsers}
+                    isLoading={bitrixUsersLoading}
+                    isError={bitrixUsersError}
+                    placeholder={responsibleName ? 'Назначить другого...' : 'Выберите ответственного...'}
+                    onChange={u => {
+                      // full_name/phone из Bitrix бывают пустыми (см.
+                      // BitrixUserCombobox) — responsibleName/responsiblePhone
+                      // здесь всегда обычная строка, не null.
+                      setResponsibleBitrixUserId(u.id)
+                      setResponsibleName(u.full_name ?? '')
+                      setResponsiblePhone(u.phone ?? '')
+                    }}
+                  />
+                  {wantsWarrantyAndResponsible && !responsibleName.trim() && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                      Не назначен — без этого Bitrix откажет в переходе в «{reclStatusLabel(status)}».
+                    </p>
+                  )}
+                </div>
+              } />
               <DRow label="Решена" value={r.resolved_at ? fmtDate(r.resolved_at) : '—'} />
               {r.rejection_reason && <DRow label="Причина отклонения" value={r.rejection_reason} />}
               {r.resolution_comment && <DRow label="Итоговый комментарий" value={r.resolution_comment} />}
@@ -250,9 +330,6 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
                   value={r.confirmation_file_name || 'Скачать'}
                   onClick={() => window.open(toFullUrl(r.confirmation_file_url!), '_blank')}
                 />
-              )}
-              {(r.responsible_name || r.responsible_phone) && (
-                <DRow label="Ответственный" value={[r.responsible_name, r.responsible_phone].filter(Boolean).join(' · ')} />
               )}
             </div>
           </div>
@@ -274,77 +351,29 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
               ))}
             </div>
 
-            <div>
-              <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1.5">
-                Срок отработки
-              </label>
-              <input
-                type="date"
-                value={deadlineAt}
-                onChange={e => setDeadlineAt(e.target.value)}
-                className="w-full h-9 px-3 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
-              />
-              {/* Смена статуса двигает карточку между стадиями Bitrix, а он
-                  требует там заполненный «Дедлайн». Сервер обещает подставлять
-                  «сегодня + 7 дней», но на практике переход всё равно
-                  отваливался с CRM_FIELD_ERROR_REQUIRED и падал в очередь
-                  повторов, поэтому предупреждаем заранее. */}
-              {!deadlineAt && status !== r.status && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                  Срок не задан — Bitrix требует «Дедлайн» при смене стадии, без него переход на портале может не пройти. Лучше указать реальный.
-                </p>
-              )}
-            </div>
-
-            {(status === 'in_progress' || status === 'resolved') && (
-              <div className="flex gap-1.5">
-                <button
-                  onClick={() => setWarranty(true)}
-                  className={`flex-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
-                    warranty === true ? reclWarrantyCls(true) + ' border-transparent' : 'border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-300'
-                  }`}
-                >
-                  Гарантийный случай
-                </button>
-                <button
-                  onClick={() => setWarranty(false)}
-                  className={`flex-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
-                    warranty === false ? reclWarrantyCls(false) + ' border-transparent' : 'border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-300'
-                  }`}
-                >
-                  Платно
-                </button>
-              </div>
-            )}
-
-            {showResponsible && (
+            {/* Поле, а не только предупреждение, показывается только там, где
+                Bitrix реально требует дедлайн для перехода (needsDeadline) —
+                на new/review его нет смысла даже предлагать заполнить. */}
+            {needsDeadline && (
               <div>
                 <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1.5">
-                  Ответственный {status === 'in_progress' && <span className="text-red-500">*</span>}
+                  Срок отработки
                 </label>
-                {/* Поиск, не свободный текст — список из Bitrix
-                    (GET /admin/reclamations/bitrix-users). Уже назначенный
-                    ответственный (если есть) показан отдельной строкой ниже —
-                    комбобокс нужен только чтобы назначить/сменить. */}
-                {responsibleName && (
-                  <p className="text-sm text-slate-700 dark:text-slate-200 mb-1.5">
-                    {responsibleName}{responsiblePhone && ` · ${responsiblePhone}`}
+                <input
+                  type="date"
+                  value={deadlineAt}
+                  onChange={e => setDeadlineAt(e.target.value)}
+                  className="w-full h-9 px-3 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+                />
+                {/* Сервер обещает подставлять «сегодня + 7 дней», но на
+                    практике переход всё равно отваливался с
+                    CRM_FIELD_ERROR_REQUIRED и падал в очередь повторов,
+                    поэтому предупреждаем заранее, а не полагаемся на заглушку. */}
+                {!deadlineAt && status !== r.status && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                    Срок не задан — Bitrix требует «Дедлайн» при переходе в этот статус, без него переход на портале может не пройти. Лучше указать реальный.
                   </p>
                 )}
-                <BitrixUserCombobox
-                  users={bitrixUsers}
-                  isLoading={bitrixUsersLoading}
-                  isError={bitrixUsersError}
-                  placeholder={responsibleName ? 'Назначить другого...' : 'Выберите ответственного...'}
-                  onChange={u => {
-                    // full_name/phone из Bitrix бывают пустыми (см.
-                    // BitrixUserCombobox) — responsibleName/responsiblePhone
-                    // здесь всегда обычная строка, не null.
-                    setResponsibleBitrixUserId(u.id)
-                    setResponsibleName(u.full_name ?? '')
-                    setResponsiblePhone(u.phone ?? '')
-                  }}
-                />
               </div>
             )}
 
@@ -436,6 +465,7 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
       </AppModal>
       {subUserId !== null && <UserDialog userId={subUserId} role="user" onClose={() => setSubUserId(null)} />}
       {subCabinetId !== null && <CabinetDetailDialog cabinetId={subCabinetId} isAdmin onClose={() => setSubCabinetId(null)} />}
+      <ProjectDetailDialog projectId={subProjectId} isAdmin onClose={() => setSubProjectId(null)} />
     </>
   )
 }
