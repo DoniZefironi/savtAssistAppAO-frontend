@@ -231,8 +231,8 @@ export interface ReclamationBitrixOutboxItem {
   id: number
   reclamation_id: number
   // create — создание карточки, status — смена стадии, assignee — назначение
-  // ответственного.
-  operation: 'create' | 'status' | 'assignee'
+  // ответственного, deadline — срок отработки.
+  operation: 'create' | 'status' | 'assignee' | 'deadline'
   attempts: number
   last_error: string | null
   created_at: string
@@ -241,18 +241,15 @@ export interface ReclamationBitrixOutboxItem {
 
 // Рекламация, чью карточку удалили в Bitrix (GET /admin/reclamations/
 // bitrix-detached). Заявка жива, но с порталом больше не связана и сама туда
-// не вернётся — заводить заново или закрывать, решает админ.
-//
-// Формат ответа на момент написания в README не описан, поэтому обязательным
-// считаем только id (это точно «заявки»), остальное читаем как
-// необязательное: так блок одинаково переживёт и полноценный элемент списка,
-// и урезанную форму вроде bitrix-outbox.
+// не вернётся — завести карточку заново, закрыть или удалить
+// (DELETE /admin/reclamations/{id}, разрешён только для таких), решает админ.
 export interface ReclamationBitrixDetachedItem {
   id: number
-  description?: string | null
-  status?: ReclamationStatus
-  cabinet_object_number?: string | null
-  bitrix_deleted_at?: string | null
+  status: ReclamationStatus
+  description: string
+  user_full_name: string | null
+  created_at: string
+  bitrix_deleted_at: string
 }
 
 // Сводка в списке (GET /admin/reclamations) — без вложений и контактов,

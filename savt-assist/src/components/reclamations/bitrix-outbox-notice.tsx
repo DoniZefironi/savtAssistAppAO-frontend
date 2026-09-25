@@ -1,16 +1,20 @@
 'use client'
 
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { AlertTriangle, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { reclamationsApi } from '@/lib/api/reclamations'
+import { apiErrorMessage } from '@/lib/api/errors'
 import type { ReclamationBitrixDetachedItem, ReclamationBitrixOutboxItem } from '@/types'
+import { reclStatusLabel } from './reclamation-shared'
 
 const OPERATION_LABEL: Record<ReclamationBitrixOutboxItem['operation'], string> = {
   create: 'создание карточки',
   status: 'смена стадии',
   assignee: 'назначение ответственного',
+  deadline: 'срок отработки',
 }
 
 // Один общий queryKey на все места (список рекламаций и карточка) — react-query
@@ -30,6 +34,37 @@ export function useBitrixDetached(enabled: boolean) {
     queryFn: reclamationsApi.getBitrixDetached,
     enabled,
   })
+}
+
+// Удаление отвязанной от Bitrix рекламации. Нативный confirm(), как и у
+// остальных необратимых удалений в админке (адрес целиком на карте регистров,
+// заготовки рассылки), — но с явным «окончательно» в тексте: заявитель её тоже
+// больше не увидит. Сервер разрешает удаление только для рекламаций из
+// bitrix-detached, поэтому и кнопка есть только в этих двух местах.
+export function useDeleteReclamation(onDeleted?: (id: number) => void) {
+  const qc = useQueryClient()
+  const mut = useMutation({
+    mutationFn: (id: number) => reclamationsApi.remove(id),
+    onSuccess: (_, id) => {
+      // Сначала закрываем открытую карточку, и только потом чистим её кэш —
+      // иначе ещё смонтированный диалог успел бы перезапросить уже удалённую
+      // рекламацию и показать 404 вместо того, чтобы просто закрыться.
+      onDeleted?.(id)
+      qc.removeQueries({ queryKey: ['reclamation', id] })
+      qc.invalidateQueries({ queryKey: ['reclamation-bitrix-detached'] })
+      qc.invalidateQueries({ queryKey: ['reclamation-bitrix-outbox'] })
+      qc.invalidateQueries({ queryKey: ['reclamations'] })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
+      toast.success('Рекламация удалена')
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось удалить рекламацию')),
+  })
+  const confirmAndDelete = (id: number) => {
+    if (window.confirm(
+      `Удалить рекламацию #${id} окончательно?\n\nВместе с ней удалятся вложения, у заявителя она тоже пропадёт. Отменить нельзя.`
+    )) mut.mutate(id)
+  }
+  return { confirmAndDelete, isPending: mut.isPending, pendingId: mut.isPending ? mut.variables : undefined }
 }
 
 function fmtWhen(iso: string | null): string {
@@ -95,6 +130,7 @@ export function BitrixDetachedNotice({ items, onOpen }: {
   onOpen?: (id: number) => void
 }) {
   const [open, setOpen] = useState(false)
+  const { confirmAndDelete, pendingId } = useDeleteReclamation()
   if (items.length === 0) return null
 
   return (
@@ -120,22 +156,32 @@ export function BitrixDetachedNotice({ items, onOpen }: {
                 key={i.id}
                 onClick={onOpen ? () => onOpen(i.id) : undefined}
                 className={cn(
-                  'rounded-lg bg-white/70 dark:bg-slate-800/60 border border-red-100 dark:border-red-900/40 px-3 py-2',
+                  'flex items-start gap-3 rounded-lg bg-white/70 dark:bg-slate-800/60 border border-red-100 dark:border-red-900/40 px-3 py-2',
                   onOpen && 'cursor-pointer hover:bg-white dark:hover:bg-slate-800'
                 )}
               >
-                <p className="text-xs font-medium text-slate-700 dark:text-slate-200">
-                  Рекламация #{i.id}
-                  {i.cabinet_object_number ? ` · ШУ ${i.cabinet_object_number}` : ''}
-                  {i.bitrix_deleted_at ? ` · удалена ${fmtWhen(i.bitrix_deleted_at)}` : ''}
-                </p>
-                {i.description && (
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-slate-700 dark:text-slate-200">
+                    Рекламация #{i.id} · {reclStatusLabel(i.status)}
+                    {i.user_full_name ? ` · ${i.user_full_name}` : ''}
+                  </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">{i.description}</p>
-                )}
+                  <p className="text-[11px] text-slate-400 mt-0.5">Карточку в Bitrix удалили {fmtWhen(i.bitrix_deleted_at)}</p>
+                </div>
+                {/* stopPropagation — иначе клик по «Удалить» заодно открывал бы
+                    карточку рекламации под подтверждением. */}
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); confirmAndDelete(i.id) }}
+                  disabled={pendingId === i.id}
+                  className="shrink-0 text-xs text-red-600 dark:text-red-400 hover:underline cursor-pointer disabled:opacity-50"
+                >
+                  {pendingId === i.id ? 'Удаление...' : 'Удалить'}
+                </button>
               </div>
             ))}
             <p className="text-[11px] text-red-700/80 dark:text-red-400/80">
-              Заявки живы и работают у нас — решите по каждой, заводить её в Bitrix заново или закрывать.
+              Заявки живы и работают у нас — решите по каждой: завести в Bitrix заново, закрыть или удалить окончательно.
             </p>
           </div>
         </div>
@@ -171,19 +217,32 @@ export function BitrixOutboxCardWarning({ items }: { items: ReclamationBitrixOut
 // Карточку этой рекламации удалили в Bitrix. Отличать от «ещё не уехала»
 // нужно по паре полей: удалённая — это заполненный bitrix_deleted_at при
 // пустом bitrix_item_id, а когда пусты оба, она просто ещё не доехала.
-export function BitrixDeletedCardWarning({ deletedAt, itemId }: {
+export function BitrixDeletedCardWarning({ reclamationId, deletedAt, itemId, onDeleted }: {
+  reclamationId: number
   deletedAt: string | null
   itemId: string | null
+  onDeleted: () => void
 }) {
+  const { confirmAndDelete, isPending } = useDeleteReclamation(onDeleted)
   if (!deletedAt || itemId) return null
   return (
     <div className="px-4 sm:px-6 py-3 bg-red-50 dark:bg-red-900/20 border-y border-red-100 dark:border-red-900/40">
       <div className="flex items-start gap-2">
         <AlertTriangle className="w-3.5 h-3.5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
-        <p className="text-xs text-red-700 dark:text-red-300">
-          Карточку в Bitrix удалили {fmtWhen(deletedAt)}. Рекламация работает у нас, но с порталом больше не связана
-          и сама туда не вернётся — её нужно либо завести в Bitrix заново, либо закрыть здесь.
-        </p>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-red-700 dark:text-red-300">
+            Карточку в Bitrix удалили {fmtWhen(deletedAt)}. Рекламация работает у нас, но с порталом больше не связана
+            и сама туда не вернётся — её нужно завести в Bitrix заново, закрыть здесь или удалить окончательно.
+          </p>
+          <button
+            type="button"
+            onClick={() => confirmAndDelete(reclamationId)}
+            disabled={isPending}
+            className="mt-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:underline cursor-pointer disabled:opacity-50"
+          >
+            {isPending ? 'Удаление...' : 'Удалить рекламацию'}
+          </button>
+        </div>
       </div>
     </div>
   )

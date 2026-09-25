@@ -189,7 +189,12 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
             }
           />
 
-          <BitrixDeletedCardWarning deletedAt={r.bitrix_deleted_at} itemId={r.bitrix_item_id} />
+          <BitrixDeletedCardWarning
+            reclamationId={r.id}
+            deletedAt={r.bitrix_deleted_at}
+            itemId={r.bitrix_item_id}
+            onDeleted={onClose}
+          />
           <BitrixOutboxCardWarning items={outboxForThis} />
 
           <div className="flex-1 min-h-0 overflow-y-auto">

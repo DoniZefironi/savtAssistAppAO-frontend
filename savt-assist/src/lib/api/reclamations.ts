@@ -80,6 +80,14 @@ export const reclamationsApi = {
     return data
   },
 
+  // Окончательное удаление — ТОЛЬКО для рекламаций из bitrix-detached (карточку
+  // в Bitrix уже удалили), для любой другой 400: у живой осталась бы карточка
+  // на портале без пары у нас. Уходят и вложения, у заявителя она тоже
+  // пропадает; в журнале аудита остаётся reclamation.delete.
+  remove: async (id: number): Promise<void> => {
+    await apiClient.delete(`/admin/reclamations/${id}`)
+  },
+
   // Подтверждающий документ при закрытии (акт, фото выполненной работы и
   // т.п.) — тот же общий эндпоинт загрузки, что и вложения при подаче самой
   // рекламации (см. README-backend.md, «Рут reclamations» → confirmation_file_url).
