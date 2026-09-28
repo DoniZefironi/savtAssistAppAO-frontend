@@ -17,10 +17,13 @@ export interface ReclamationListParams {
 // на сервере, но дублируются на клиенте (см. reclamation-dialog.tsx), чтобы
 // не ловить 400 вслепую:
 // - rejected и invalid без rejection_reason нельзя;
-// - resolved без resolution_comment И без confirmation_file_url нельзя —
-//   «Нельзя закрыть рекламацию без подтверждающего документа»;
-// - in_progress без responsible_name и без warranty_classification нельзя
-//   (оба должны быть заданы либо уже раньше, либо этим же запросом).
+// - resolved/rejected/invalid без confirmation_file_url нельзя — «Нельзя
+//   закрыть рекламацию без подтверждающего документа»;
+// - resolved дополнительно требует resolution_comment;
+// - in_progress без responsible_name нельзя (должен быть задан либо уже
+//   раньше, либо этим же запросом). warranty_classification для in_progress
+//   НЕ обязателен (снято 2026-09-25) — своё правило, не Bitrix, мешало
+//   реальной работе; классифицировать можно в любой момент отдельно.
 export interface ReclamationPatchDto {
   status?: ReclamationStatus
   warranty_classification?: boolean | null
@@ -72,6 +75,22 @@ export const reclamationsApi = {
   getBitrixOutbox: async (): Promise<ReclamationBitrixOutboxItem[]> => {
     const { data } = await apiClient.get('/admin/reclamations/bitrix-outbox')
     return data
+  },
+
+  // Ручная правка застрявшего payload — на крайний случай, когда авторетрай
+  // сам никогда не пройдёт (например, в payload create пустой company_id).
+  // Тело целиком заменяет payload строки, сразу следом — попытка отправки, не
+  // дожидаясь 15-минутного цикла. success:false — снова не прошло, row несёт
+  // обновлённый last_error, чтобы сразу видеть, чего ещё не хватает.
+  updateBitrixOutbox: async (id: number, payload: Record<string, unknown>): Promise<{ success: boolean; row: ReclamationBitrixOutboxItem | null }> => {
+    const { data } = await apiClient.patch(`/admin/reclamations/bitrix-outbox/${id}`, { payload })
+    return data
+  },
+
+  // Снять операцию с повторов насовсем (если чинить не планируется) — не
+  // трогает саму рекламацию, только эту одну строку очереди.
+  deleteBitrixOutbox: async (id: number): Promise<void> => {
+    await apiClient.delete(`/admin/reclamations/bitrix-outbox/${id}`)
   },
 
   // Заявки, чью карточку удалили в Bitrix. В норме пустой.

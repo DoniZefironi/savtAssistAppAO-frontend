@@ -231,8 +231,17 @@ export interface ReclamationBitrixOutboxItem {
   id: number
   reclamation_id: number
   // create — создание карточки, status — смена стадии, assignee — назначение
-  // ответственного, deadline — срок отработки.
-  operation: 'create' | 'status' | 'assignee' | 'deadline'
+  // ответственного, deadline — срок отработки, warranty — гарантия (всегда
+  // отдельная операция от status, см. README-backend.md — совместная отправка
+  // с сменой стадии запускала автозакрытие карточки роботом на портале),
+  // comment — коренная причина/итоговый комментарий/причина отклонения одним
+  // комментарием в таймлайн карточки.
+  operation: 'create' | 'status' | 'assignee' | 'deadline' | 'warranty' | 'comment'
+  // То, с чем именно вызовется Bitrix при повторе (снимок на момент сбоя, не
+  // текущее состояние рекламации) — по нему видно причину сбоя напрямую
+  // (например, пустой company_id у create). Состав ключей зависит от
+  // operation, единой схемы нет — см. README-backend.md, «Рут reclamations».
+  payload: Record<string, unknown>
   attempts: number
   last_error: string | null
   created_at: string

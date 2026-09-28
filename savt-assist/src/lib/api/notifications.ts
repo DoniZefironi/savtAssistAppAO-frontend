@@ -1,6 +1,12 @@
 import { apiClient } from './client'
 
-export type NotifType = 'warranty_expiring' | 'promotional' | 'chat_message' | 'operator_requested' | 'request_status'
+// bitrix_sync_error — сбой синхронизации рекламации с Bitrix, уходит всем
+// admin/superadmin (не operator — у него нет прав на рекламации), только на
+// первый сбой конкретной операции, не на каждый повтор (см. README-backend.md,
+// «Рут reclamations»). В отличие от cabinet_alarm (уходит участникам проекта,
+// это мобильное приложение) — этот тип адресован напрямую пользователям
+// админки, поэтому и оформлен здесь отдельным случаем в typeColor/NotifIcon.
+export type NotifType = 'warranty_expiring' | 'promotional' | 'chat_message' | 'operator_requested' | 'request_status' | 'bitrix_sync_error'
 
 export interface Notification {
   id: number

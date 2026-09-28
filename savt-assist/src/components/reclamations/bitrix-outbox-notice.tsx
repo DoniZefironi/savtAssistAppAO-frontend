@@ -15,6 +15,8 @@ const OPERATION_LABEL: Record<ReclamationBitrixOutboxItem['operation'], string> 
   status: 'смена стадии',
   assignee: 'назначение ответственного',
   deadline: 'срок отработки',
+  warranty: 'гарантия',
+  comment: 'комментарий в таймлайн',
 }
 
 // Один общий queryKey на все места (список рекламаций и карточка) — react-query
@@ -67,9 +69,146 @@ export function useDeleteReclamation(onDeleted?: (id: number) => void) {
   return { confirmAndDelete, isPending: mut.isPending, pendingId: mut.isPending ? mut.variables : undefined }
 }
 
+// Ручная правка payload + немедленная попытка отправки. success:false — не
+// HTTP-ошибка, а «снова не прошло»: row несёт обновлённый last_error, тост
+// показывает его же, чтобы сразу было видно, чего ещё не хватает.
+function useUpdateBitrixOutboxRow() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Record<string, unknown> }) =>
+      reclamationsApi.updateBitrixOutbox(id, payload),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['reclamation-bitrix-outbox'] })
+      if (res.success) toast.success('Отправлено в Bitrix')
+      else toast.error(res.row?.last_error ? `Снова не прошло: ${res.row.last_error}` : 'Снова не удалось отправить')
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось сохранить правку')),
+  })
+}
+
+// Снять операцию с повторов насовсем — необратимо (если не почините вручную,
+// она никогда не уйдёт в Bitrix), поэтому тоже через confirm(), как и
+// удаление самой рекламации.
+function useDeleteBitrixOutboxRow() {
+  const qc = useQueryClient()
+  const mut = useMutation({
+    mutationFn: (id: number) => reclamationsApi.deleteBitrixOutbox(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['reclamation-bitrix-outbox'] })
+      toast.success('Снято с повторов')
+    },
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось снять с очереди')),
+  })
+  const confirmAndRemove = (id: number) => {
+    if (window.confirm('Снять операцию с повторов насовсем?\n\nЕсли не починить вручную, она никогда не уйдёт в Bitrix. Отменить нельзя.')) {
+      mut.mutate(id)
+    }
+  }
+  return { confirmAndRemove, pendingId: mut.isPending ? mut.variables : undefined }
+}
+
 function fmtWhen(iso: string | null): string {
   if (!iso) return 'ещё не пробовали'
   return new Date(iso).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
+
+// Строка одной застрявшей операции — общая и для списка на странице
+// рекламаций, и для предупреждения внутри конкретной карточки. payload
+// показываем свёрнутым по умолчанию (строгой схемы под него нет, состав
+// ключей отличается по operation — незачем показывать сырой JSON, пока не
+// понадобилось), «Редактировать и повторить» разворачивает его в текстовое
+// поле поверх того же payload, а не открывает отдельную модалку.
+function OutboxRow({ item, showReclamationId = true }: { item: ReclamationBitrixOutboxItem; showReclamationId?: boolean }) {
+  const [expanded, setExpanded] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [editText, setEditText] = useState('')
+  const updateMut = useUpdateBitrixOutboxRow()
+  const { confirmAndRemove, pendingId: deletePendingId } = useDeleteBitrixOutboxRow()
+
+  const startEdit = () => {
+    setEditText(JSON.stringify(item.payload, null, 2))
+    setEditing(true)
+    setExpanded(true)
+  }
+
+  const submitEdit = () => {
+    let payload: Record<string, unknown>
+    try {
+      payload = JSON.parse(editText)
+    } catch {
+      toast.error('Невалидный JSON')
+      return
+    }
+    updateMut.mutate({ id: item.id, payload }, {
+      // Закрываем форму только если реально прошло — на повторном сбое
+      // оставляем как есть, чтобы можно было тут же поправить ещё раз, не
+      // печатая payload заново.
+      onSuccess: (res) => { if (res.success) setEditing(false) },
+    })
+  }
+
+  return (
+    <div className="rounded-lg bg-white/70 dark:bg-slate-800/60 border border-amber-100 dark:border-amber-900/40 px-3 py-2">
+      <p className="text-xs font-medium text-slate-700 dark:text-slate-200">
+        {showReclamationId && <>Рекламация #{item.reclamation_id} · </>}
+        {OPERATION_LABEL[item.operation]} · попыток: {item.attempts}
+      </p>
+      {item.last_error && (
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 wrap-break-word">{item.last_error}</p>
+      )}
+      <p className="text-[11px] text-slate-400 mt-0.5">Последняя попытка: {fmtWhen(item.last_attempted_at)}</p>
+
+      <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-1.5">
+        <button type="button" onClick={() => setExpanded(v => !v)} className="text-xs text-amber-700 dark:text-amber-400 hover:underline cursor-pointer">
+          {expanded ? 'Скрыть payload' : 'Показать payload'}
+        </button>
+        {!editing && (
+          <button type="button" onClick={startEdit} className="text-xs text-amber-700 dark:text-amber-400 hover:underline cursor-pointer">
+            Редактировать и повторить
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => confirmAndRemove(item.id)}
+          disabled={deletePendingId === item.id}
+          className="text-xs text-red-600 dark:text-red-400 hover:underline cursor-pointer disabled:opacity-50"
+        >
+          {deletePendingId === item.id ? 'Снятие...' : 'Снять с очереди'}
+        </button>
+      </div>
+
+      {expanded && (
+        editing ? (
+          <div className="mt-2 space-y-1.5">
+            <textarea
+              value={editText}
+              onChange={e => setEditText(e.target.value)}
+              rows={6}
+              spellCheck={false}
+              className="w-full px-2 py-1.5 text-xs font-mono rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] resize-y"
+            />
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={() => setEditing(false)} disabled={updateMut.isPending} className="text-xs text-slate-500 dark:text-slate-400 hover:underline cursor-pointer disabled:opacity-50">
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={submitEdit}
+                disabled={updateMut.isPending}
+                className="text-xs font-medium text-amber-700 dark:text-amber-400 hover:underline cursor-pointer disabled:opacity-50"
+              >
+                {updateMut.isPending ? 'Отправка...' : 'Отправить'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <pre className="mt-2 px-2 py-1.5 text-[11px] font-mono rounded-lg bg-black/5 dark:bg-black/30 text-slate-600 dark:text-slate-300 overflow-x-auto">
+            {JSON.stringify(item.payload, null, 2)}
+          </pre>
+        )
+      )}
+    </div>
+  )
 }
 
 // Плашка над списком рекламаций: в норме очередь пуста и не видно ничего
@@ -99,19 +238,9 @@ export function BitrixOutboxNotice({ items }: { items: ReclamationBitrixOutboxIt
       <div className={cn('grid transition-[grid-template-rows] duration-200 ease-out', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
         <div className="overflow-hidden min-h-0">
           <div className="px-3 sm:px-4 pb-3 space-y-2">
-            {items.map(i => (
-              <div key={i.id} className="rounded-lg bg-white/70 dark:bg-slate-800/60 border border-amber-100 dark:border-amber-900/40 px-3 py-2">
-                <p className="text-xs font-medium text-slate-700 dark:text-slate-200">
-                  Рекламация #{i.reclamation_id} · {OPERATION_LABEL[i.operation]} · попыток: {i.attempts}
-                </p>
-                {i.last_error && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 wrap-break-word">{i.last_error}</p>
-                )}
-                <p className="text-[11px] text-slate-400 mt-0.5">Последняя попытка: {fmtWhen(i.last_attempted_at)}</p>
-              </div>
-            ))}
+            {items.map(i => <OutboxRow key={i.id} item={i} />)}
             <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80">
-              Повтор идёт сам каждые 15 минут. Если попыток много, а последняя давно — разбираться нужно руками.
+              Повтор идёт сам каждые 15 минут — «Редактировать и повторить» пробует сразу же, не дожидаясь цикла.
             </p>
           </div>
         </div>
@@ -196,20 +325,8 @@ export function BitrixDetachedNotice({ items, onOpen }: {
 export function BitrixOutboxCardWarning({ items }: { items: ReclamationBitrixOutboxItem[] }) {
   if (items.length === 0) return null
   return (
-    <div className="px-4 sm:px-6 py-3 bg-amber-50 dark:bg-amber-900/20 border-y border-amber-100 dark:border-amber-900/40">
-      {items.map(i => (
-        <div key={i.id} className="flex items-start gap-2">
-          <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-          <div className="min-w-0">
-            <p className="text-xs text-amber-700 dark:text-amber-300">
-              Не ушло в Bitrix: {OPERATION_LABEL[i.operation]} (попыток: {i.attempts}). Повтор идёт автоматически.
-            </p>
-            {i.last_error && (
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 wrap-break-word">{i.last_error}</p>
-            )}
-          </div>
-        </div>
-      ))}
+    <div className="px-4 sm:px-6 py-3 bg-amber-50 dark:bg-amber-900/20 border-y border-amber-100 dark:border-amber-900/40 space-y-2">
+      {items.map(i => <OutboxRow key={i.id} item={i} showReclamationId={false} />)}
     </div>
   )
 }
