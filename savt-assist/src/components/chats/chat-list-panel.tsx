@@ -1,13 +1,27 @@
 'use client'
 
 import { useMemo, type ReactNode } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Package, FileText, MessageCircle, Search, Wrench, Archive, Folder } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { Package, FileText, MessageCircle, Search, Wrench, Archive, Folder, Pin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { chatsApi } from '@/lib/api/chats'
 import type { MessageSearchResult } from '@/lib/api/chats'
 import { useChatNavStore } from '@/lib/store/chat-nav'
 import type { Chat } from '@/types'
+
+// Закреп чата — личный для каждого, кто его видит (см. is_pinned в Chat). Внутри
+// очереди operator_requested пин не перекрывает: это реально ждущие обращения,
+// поэтому пин работает только как вторичный ключ сортировки внутри каждой группы.
+function useTogglePinChat() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, pinned }: { id: number; pinned: boolean }) =>
+      pinned ? chatsApi.unpinChat(id) : chatsApi.pinChat(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['operator-chats'] }),
+    onError: () => toast.error('Не удалось изменить закреп чата'),
+  })
+}
 
 interface Props {
   chats: Chat[]
@@ -28,6 +42,8 @@ export function ChatListPanel({ chats, selectedId, onSelect, onSelectChatId, loa
   const sorted = useMemo(() => [...chats].sort((a, b) => {
     if (a.operator_requested && !b.operator_requested) return -1
     if (!a.operator_requested && b.operator_requested) return 1
+    if (a.is_pinned && !b.is_pinned) return -1
+    if (!a.is_pinned && b.is_pinned) return 1
     return new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime()
   }), [chats])
 
@@ -238,6 +254,10 @@ function CompactChatRow({ chat, selected, onSelect }: { chat: Chat; selected: bo
       {isWaiting && !hasUnread && (
         <span className="absolute top-1.5 right-2 w-2 h-2 bg-amber-500 rounded-full" />
       )}
+
+      {chat.is_pinned && (
+        <Pin className={cn('absolute bottom-0.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5', selected ? 'text-[#1B3A72]' : 'text-slate-400')} fill="currentColor" />
+      )}
     </button>
   )
 }
@@ -246,12 +266,16 @@ function ChatRow({ chat, selected, onSelect }: { chat: Chat; selected: boolean; 
   const name = chatDisplayName(chat)
   const hasUnread = chat.unread_count > 0
   const isWaiting = chat.operator_requested
+  const togglePin = useTogglePinChat()
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect() }}
       className={cn(
-        'w-full text-left flex items-center gap-3 px-3 py-2.5 transition-colors relative cursor-pointer',
+        'group w-full text-left flex items-center gap-3 px-3 py-2.5 transition-colors relative cursor-pointer',
         selected
           ? 'bg-[#1B3A72] text-white'
           : isWaiting
@@ -266,11 +290,26 @@ function ChatRow({ chat, selected, onSelect }: { chat: Chat; selected: boolean; 
           <span className={cn('text-sm font-semibold truncate', selected ? 'text-white' : 'text-slate-800 dark:text-slate-100')}>
             {name}
           </span>
-          {chat.last_message_at && (
-            <span className={cn('text-xs shrink-0', selected ? 'text-white/70' : hasUnread ? 'text-[#1B3A72] dark:text-blue-400' : 'text-slate-400')}>
-              {formatTime(chat.last_message_at)}
-            </span>
-          )}
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); togglePin.mutate({ id: chat.id, pinned: !!chat.is_pinned }) }}
+              title={chat.is_pinned ? 'Открепить чат' : 'Закрепить чат'}
+              className={cn(
+                'p-0.5 rounded transition-opacity cursor-pointer',
+                chat.is_pinned
+                  ? selected ? 'text-white' : 'text-[#1B3A72] dark:text-blue-400'
+                  : cn('opacity-0 group-hover:opacity-100 focus-visible:opacity-100', selected ? 'text-white/70 hover:text-white' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300')
+              )}
+            >
+              <Pin className="w-3.5 h-3.5" fill={chat.is_pinned ? 'currentColor' : 'none'} />
+            </button>
+            {chat.last_message_at && (
+              <span className={cn('text-xs', selected ? 'text-white/70' : hasUnread ? 'text-[#1B3A72] dark:text-blue-400' : 'text-slate-400')}>
+                {formatTime(chat.last_message_at)}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center justify-between gap-2 mt-0.5">
@@ -290,7 +329,7 @@ function ChatRow({ chat, selected, onSelect }: { chat: Chat; selected: boolean; 
           </div>
         </div>
       </div>
-    </button>
+    </div>
   )
 }
 

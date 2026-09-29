@@ -148,6 +148,18 @@ export const chatsApi = {
     }
   },
 
+  // Закреп самого чата в списке (не сообщения внутри него, см. pinMessage выше) —
+  // личный, независимый для каждого, кто видит чат (оператор/админ/заявитель).
+  // Эндпоинт зеркальный, /chats/... — для заявителя (мобильное приложение, вне
+  // этого репозитория), здесь используется только /operator/chats/... вариант.
+  pinChat: async (chatId: number): Promise<void> => {
+    await apiClient.put(`/operator/chats/${chatId}/pin-chat`)
+  },
+
+  unpinChat: async (chatId: number): Promise<void> => {
+    await apiClient.delete(`/operator/chats/${chatId}/pin-chat`)
+  },
+
   getAttachments: async (chatId: number, type?: 'image' | 'voice' | 'document' | 'video' | 'location'): Promise<ChatAttachment[]> => {
     const { data } = await apiClient.get<ChatAttachment[]>(`/operator/chats/${chatId}/attachments`, { params: type ? { type } : undefined })
     return data

@@ -367,6 +367,10 @@ export interface Chat {
   service_request_description?: string | null
   service_request_created_at?: string | null
   archived_at?: string | null
+  // Личный закреп чата в списке (у каждого — оператора, админа, заявителя —
+  // независимо, своя запись в pinned_chats). Не путать с закрепом сообщений
+  // внутри чата (ChatPinnedMessage) — это про сам чат в общем списке.
+  is_pinned?: boolean
 }
 
 export interface ChatMessage {
