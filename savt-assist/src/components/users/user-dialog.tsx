@@ -152,18 +152,7 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
           <div className="overflow-y-auto flex-1">
             <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
               {user.phone && <DRow label="Телефон (логин)" value={user.phone} />}
-              {/* Не подтверждён и меняется пользователем свободно — по нему нельзя
-                  опознавать звонящего, поэтому подписываем явно */}
-              {user.contact_phone && (
-                <DRow label="Телефон для связи" value={
-                  <span className="flex items-center gap-2 flex-wrap">
-                    {user.contact_phone}
-                    <span className="text-xs font-normal px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
-                      не подтверждён
-                    </span>
-                  </span>
-                } />
-              )}
+              {user.contact_phone && <DRow label="Телефон для связи" value={user.contact_phone} />}
               {user.login && <DRow label="Логин" value={user.login} />}
               {user.email && <DRow label="Email" value={user.email} />}
               {user.organization_name && <DRow label="Организация" value={user.organization_name} />}
