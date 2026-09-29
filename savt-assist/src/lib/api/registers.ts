@@ -1,4 +1,4 @@
-import { apiClient } from './client'
+import { apiClient, authorizedFetch } from './client'
 import type { PaginatedResponse, RegisterDefinition, RegisterOverride, TelemetryEntry, TelemetryLiveState } from '@/types'
 
 export interface RegisterDto {
@@ -26,6 +26,32 @@ export interface TelemetryParams {
   include_unnamed?: boolean
 }
 
+// Скачивание файлов Excel, которые собирает openpyxl на сервере (шрифт,
+// заливка шапки, ширина колонок, закреплённая первая строка) — фронту
+// остаётся только дёрнуть GET и отдать браузеру пришедший файл, см. downloadAttachment
+// в kb.ts (тот же приём). Имя файла берём из Content-Disposition, если сервер
+// его прислал, иначе — запасной вариант.
+async function downloadFile(path: string, fallbackFilename: string): Promise<void> {
+  try {
+    const res = await authorizedFetch(path)
+    if (!res.ok) throw new Error('Export failed')
+    const blob = await res.blob()
+    const cd = res.headers.get('content-disposition') ?? ''
+    const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(cd)
+    const filename = match ? decodeURIComponent(match[1]) : fallbackFilename
+    const blobUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(blobUrl)
+  } catch {
+    window.open(`/backend${path}`, '_blank')
+  }
+}
+
 export const registersApi = {
   getDefinitions: async (): Promise<RegisterDefinition[]> => {
     const { data } = await apiClient.get('/admin/register-definitions')
@@ -45,6 +71,20 @@ export const registersApi = {
   deleteDefinition: async (id: number): Promise<void> => {
     await apiClient.delete(`/admin/register-definitions/${id}`)
   },
+
+  // Вся карта целиком, отформатированная сервером под Excel — не путать с
+  // client-side «Экспорт CSV» в register-map-table.tsx (тот берёт уже
+  // загруженные строки без сетевого запроса, этот — отдельный запрос за
+  // готовым .xlsx с визуальным оформлением).
+  exportDefinitions: (): Promise<void> =>
+    downloadFile('/admin/register-definitions/export', 'register-map.xlsx'),
+
+  // Действующая карта конкретного ШУ — стандартная карта + переопределения
+  // поверх (override важнее, тот же принцип, что уже используется при
+  // расшифровке телеметрии), с колонкой «Источник», показывающей, что именно
+  // переопределено для этого ШУ.
+  exportCabinetMap: (cabinetId: number): Promise<void> =>
+    downloadFile(`/admin/cabinets/${cabinetId}/register-map/export`, `register-map-cabinet-${cabinetId}.xlsx`),
 
   getOverrides: async (cabinetId: number): Promise<RegisterOverride[]> => {
     const { data } = await apiClient.get(`/admin/cabinets/${cabinetId}/register-overrides`)

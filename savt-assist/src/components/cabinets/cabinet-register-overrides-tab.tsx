@@ -3,8 +3,10 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { Download } from 'lucide-react'
 import { registersApi, type RegisterDto, type RegisterPatchDto } from '@/lib/api/registers'
 import { apiErrorMessage } from '@/lib/api/errors'
+import { Button } from '@/components/ui/button'
 import { RegisterMapTable } from '@/components/registers/register-map-table'
 
 // Добавки/переопределения карты регистров для этого конкретного ШУ — при
@@ -68,11 +70,21 @@ export function RegisterOverridesTab({ cabinetId, isAdmin }: { cabinetId: number
     onSettled: () => setDeletingId(null),
   })
 
+  const exportMut = useMutation({ mutationFn: () => registersApi.exportCabinetMap(cabinetId) })
+
   return (
     <>
-      <p className="text-xs text-slate-400 px-6 pt-3">
-        Действуют только для этого ШУ и имеют приоритет над стандартной картой регистров.
-      </p>
+      <div className="flex items-start justify-between gap-3 px-6 pt-3">
+        <p className="text-xs text-slate-400">
+          Действуют только для этого ШУ и имеют приоритет над стандартной картой регистров.
+        </p>
+        {/* Действующая карта = стандартная + эти переопределения поверх, с колонкой
+            «Источник» — сама эта таблица ниже показывает только переопределения,
+            смёрженный результат собирает сервер. */}
+        <Button variant="outline" onClick={() => exportMut.mutate()} disabled={exportMut.isPending} className="h-7 text-xs px-2.5 shrink-0 cursor-pointer">
+          <Download className="w-3.5 h-3.5 mr-1.5" /> {exportMut.isPending ? 'Экспорт...' : 'Скачать действующую карту'}
+        </Button>
+      </div>
       <RegisterMapTable
         items={data ?? []}
         isLoading={isLoading}

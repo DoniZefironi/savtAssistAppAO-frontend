@@ -88,26 +88,6 @@ function parseImportText(text: string): ParsedRow[] {
     .filter((r): r is ParsedRow => r !== null)
 }
 
-// CSV — целиком на клиенте: getDefinitions() и так отдаёт все строки разом
-// (без пагинации), поэтому экспорт не требует отдельного запроса. ﻿ —
-// BOM, без него Excel по умолчанию показывает кириллицу битым текстом.
-function exportCsv(items: RegisterRow[]) {
-  const escape = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
-  const rows = [...items]
-    .sort((a, b) => a.address - b.address || a.bit - b.bit)
-    .map(r => [String(r.address), String(r.bit), escape(r.name), escape(r.description ?? '')].join(','))
-  const csv = '﻿' + ['Адрес,Бит,Название,Описание', ...rows].join('\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'register-map.csv'
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
-}
-
 // Общая таблица «адрес / бит / название / описание» — используется и для
 // стандартной карты регистров (глобальной), и для переопределений на
 // конкретном ШУ (см. README-backend.md, «Рут admin: telemetry»). Разница
@@ -372,11 +352,6 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
               >
                 {expanded.size === groups.length ? 'Свернуть всё' : 'Развернуть всё'}
               </button>
-            )}
-            {items.length > 0 && (
-              <Button variant="outline" onClick={() => exportCsv(items)} className="h-8 text-xs px-3 cursor-pointer">
-                <ExportIcon className="w-3.5 h-3.5 mr-1.5" /> Экспорт CSV
-              </Button>
             )}
             {canEdit && !showAdd && (
               <>
@@ -749,7 +724,4 @@ function XIcon({ className }: { className?: string }) {
 }
 function ImportIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
-}
-function ExportIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 7.5L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
 }

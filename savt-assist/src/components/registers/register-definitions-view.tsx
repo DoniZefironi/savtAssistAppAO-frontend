@@ -3,12 +3,13 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Download } from 'lucide-react'
 import { registersApi, type RegisterDto, type RegisterPatchDto } from '@/lib/api/registers'
 import { cabinetsApi } from '@/lib/api/cabinets'
 import { apiErrorMessage } from '@/lib/api/errors'
 import { useAuthStore } from '@/lib/store/auth'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import { CabinetCombobox, cabinetLabel } from '@/components/ui/cabinet-combobox'
 import { RegisterMapTable } from './register-map-table'
 import { TelemetryLiveBoard } from './telemetry-live-board'
@@ -97,6 +98,8 @@ export function RegisterDefinitionsView() {
     onSettled: () => setDeletingId(null),
   })
 
+  const exportMut = useMutation({ mutationFn: () => registersApi.exportDefinitions() })
+
   return (
     // Раньше вся страница целиком была одной длинной прокруткой, и панель
     // телеметрии внизу можно было пролистать мимо. Теперь страница — сама
@@ -105,11 +108,16 @@ export function RegisterDefinitionsView() {
     // а не часть прокручиваемого содержимого, поэтому всегда прижата к низу
     // и всегда видна, свёрнута она или раскрыта.
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900">
-      <div className="px-3 sm:px-6 pt-4 sm:pt-6 pb-4 sm:pb-5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0">
-        <h1 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100">Карта регистров</h1>
-        <p className="text-sm text-slate-400 mt-0.5">
-          Стандартная расшифровка адресов, общая для всех ШУ. Для отдельного ШУ её можно дополнить или переопределить на вкладке «Переопределения карты» в его карточке.
-        </p>
+      <div className="px-3 sm:px-6 pt-4 sm:pt-6 pb-4 sm:pb-5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 shrink-0 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100">Карта регистров</h1>
+          <p className="text-sm text-slate-400 mt-0.5">
+            Стандартная расшифровка адресов, общая для всех ШУ. Для отдельного ШУ её можно дополнить или переопределить на вкладке «Переопределения карты» в его карточке.
+          </p>
+        </div>
+        <Button variant="outline" onClick={() => exportMut.mutate()} disabled={exportMut.isPending} className="h-8 text-xs px-3 shrink-0 cursor-pointer">
+          <Download className="w-3.5 h-3.5 mr-1.5" /> {exportMut.isPending ? 'Экспорт...' : 'Скачать Excel'}
+        </Button>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-4 sm:py-6">
