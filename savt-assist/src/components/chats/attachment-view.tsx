@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X, FileText, FileSpreadsheet, Video, Archive, Paperclip, Mic, Music, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ChatAttachment } from '@/types'
@@ -362,9 +363,20 @@ function FileAttachment({ a, isOwn }: { a: ChatAttachment; isOwn: boolean }) {
 }
 
 export function ImageLightbox({ url, name, onClose }: { url: string; name: string; onClose: () => void }) {
-  return (
+  if (typeof document === 'undefined') return null
+
+  // Портал в body + zIndex выше модального стека (AppModal на 1200+, см.
+  // app-modal.tsx) — тот же приём, что и у BitrixUserCombobox/тегов в
+  // kb-view.tsx: без портала фиксированный оверлей клипался бы overflow-hidden
+  // контейнера AppModal, если лайтбокс открыт из вложения внутри модалки
+  // (например, reclamation-dialog.tsx), и выглядел бы «поверх модалки внутри
+  // модалки», а не поверх всего экрана.
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center"
+      // Тот же лёгкий фон, что у подложки модалок (ModalBackdrop в
+      // app-modal.tsx) — не сплошной чёрный, а затемнение + блюр того, что
+      // под лайтбоксом, через backdrop-filter.
+      className="fixed inset-0 z-[1300] bg-black/10 supports-backdrop-filter:backdrop-blur-xs flex flex-col items-center justify-center animate-in fade-in-0 duration-100"
       onClick={onClose}
     >
       <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-3 bg-black/50">
@@ -392,7 +404,8 @@ export function ImageLightbox({ url, name, onClose }: { url: string; name: strin
         onClick={(e) => e.stopPropagation()}
         className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl"
       />
-    </div>
+    </div>,
+    document.body
   )
 }
 

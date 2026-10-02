@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SpinnerIcon } from '@/components/ui/icons'
 import { BitrixUserCombobox } from '@/components/ui/bitrix-user-combobox'
+import { ImageLightbox } from '@/components/chats/attachment-view'
 import { UserDialog } from '@/components/users/user-dialog'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
 import { ProjectDetailDialog } from '@/components/projects/project-detail-dialog'
@@ -513,23 +514,32 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
 }
 
 function AttachmentRow({ a }: { a: { id: number; file_url: string; file_name: string; file_size_bytes: number; mime_type: string } }) {
+  const [lightbox, setLightbox] = useState(false)
+  const isImage = a.mime_type.startsWith('image/')
+  const url = toFullUrl(a.file_url)
+
   return (
-    <div
-      onClick={() => window.open(toFullUrl(a.file_url), '_blank')}
-      className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg border border-slate-100 dark:border-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer"
-    >
-      <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
-        {a.mime_type.includes('pdf')
-          ? <PdfIcon className="w-3.5 h-3.5 text-red-500" />
-          : a.mime_type.startsWith('image/')
-          ? <ImageIcon className="w-3.5 h-3.5 text-blue-500" />
-          : <FileIcon className="w-3.5 h-3.5 text-slate-400" />}
+    <>
+      <div
+        onClick={() => isImage ? setLightbox(true) : window.open(url, '_blank')}
+        className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg border border-slate-100 dark:border-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer"
+      >
+        <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
+          {a.mime_type.includes('pdf')
+            ? <PdfIcon className="w-3.5 h-3.5 text-red-500" />
+            : isImage
+            ? <ImageIcon className="w-3.5 h-3.5 text-blue-500" />
+            : <FileIcon className="w-3.5 h-3.5 text-slate-400" />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">{a.file_name}</p>
+          <span className="text-[11px] text-slate-400">{fmtSize(a.file_size_bytes)}</span>
+        </div>
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">{a.file_name}</p>
-        <span className="text-[11px] text-slate-400">{fmtSize(a.file_size_bytes)}</span>
-      </div>
-    </div>
+      {/* Фото открывается поверх модалки лайтбоксом (как в чатах), остальные
+          файлы — отдельной вкладкой, им превью всё равно не нужно. */}
+      {lightbox && <ImageLightbox url={url} name={a.file_name} onClose={() => setLightbox(false)} />}
+    </>
   )
 }
 

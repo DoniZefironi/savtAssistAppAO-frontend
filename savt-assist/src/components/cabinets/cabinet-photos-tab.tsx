@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { AppModal } from '@/components/ui/app-modal'
@@ -340,9 +341,16 @@ function PhotoLightbox({ photos, initialIdx, onClose }: {
     return () => document.removeEventListener('keydown', handler)
   }, [onClose, photos.length])
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  // Портал в body + zIndex выше модального стека, лёгкий фон с блюром вместо
+  // сплошного чёрного — тот же стиль, что у ImageLightbox в attachment-view.tsx
+  // (см. его комментарий): открывается эта галерея обычно из вкладки «Фото»
+  // внутри CabinetDetailDialog/ProjectDetailDialog, без портала её обрезал бы
+  // overflow-hidden модалки.
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
+      className="fixed inset-0 z-[1300] bg-black/10 supports-backdrop-filter:backdrop-blur-xs flex items-center justify-center animate-in fade-in-0 duration-100"
       onClick={onClose}
     >
       <button
@@ -365,7 +373,7 @@ function PhotoLightbox({ photos, initialIdx, onClose }: {
           <img
             src={mediaApi.toFullUrl(photo.url)}
             alt={photo.caption ?? ''}
-            className="max-h-[85vh] max-w-full object-contain rounded-xl"
+            className="max-h-[85vh] max-w-full object-contain rounded-xl shadow-2xl"
           />
           {photo.caption && (
             <p className="text-white/70 text-sm text-center">{photo.caption}</p>
@@ -383,6 +391,7 @@ function PhotoLightbox({ photos, initialIdx, onClose }: {
           <ChevronRightIcon className="w-5 h-5" />
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
