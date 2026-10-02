@@ -3,10 +3,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { ChevronDown } from 'lucide-react'
 import { reclamationsApi } from '@/lib/api/reclamations'
 import type { ReclamationStatus } from '@/types'
 import { apiErrorMessage } from '@/lib/api/errors'
 import { toFullUrl } from '@/lib/api/base-url'
+import { cn } from '@/lib/utils'
 import { fmtSize } from '@/components/cabinets/cabinet-dialog-shared'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
@@ -55,6 +57,13 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
   // «ГГГГ-ММ-ДД» — ровно тот формат, что у <input type="date"> и у API.
   const [deadlineAt, setDeadlineAt] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Свёрнуто по умолчанию — поля обработки нужны только пока реально меняешь
+  // статус, а инфо-список выше при длинной карточке иначе почти не влезал в
+  // видимую область (см. обсуждение со скриншотом). Разворачивается кликом
+  // по заголовку, а принудительно — если не хватает поля для сохранения
+  // (validationError ниже), чтобы не прятать от админа то, из-за чего кнопка
+  // «Сохранить» не нажимается.
+  const [processingOpen, setProcessingOpen] = useState(false)
 
   // Черновик формы подхватывает данные с сервера только когда они пришли —
   // тот же приём, что и в других формах настроек в этом проекте (см.
@@ -334,131 +343,164 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
             </div>
           </div>
 
-          <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700 space-y-3">
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Обработка</p>
-
-            <div className="flex flex-wrap gap-1.5">
-              {STATUS_OPTIONS.map(s => (
-                <button
-                  key={s}
-                  onClick={() => setStatus(s)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
-                    status === s ? reclStatusCls(s) + ' border-transparent' : 'border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-300'
-                  }`}
-                >
-                  {reclStatusLabel(s)}
-                </button>
-              ))}
-            </div>
-
-            {/* Поле, а не только предупреждение, показывается только там, где
-                Bitrix реально требует дедлайн для перехода (needsDeadline) —
-                на new/review его нет смысла даже предлагать заполнить. */}
-            {needsDeadline && (
-              <div>
-                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1.5">
-                  Срок отработки
-                </label>
-                <input
-                  type="date"
-                  value={deadlineAt}
-                  onChange={e => setDeadlineAt(e.target.value)}
-                  className="w-full h-9 px-3 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
-                />
-                {/* Сервер обещает подставлять «сегодня + 7 дней», но на
-                    практике переход всё равно отваливался с
-                    CRM_FIELD_ERROR_REQUIRED и падал в очередь повторов,
-                    поэтому предупреждаем заранее, а не полагаемся на заглушку. */}
-                {!deadlineAt && status !== r.status && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                    Срок не задан — Bitrix требует «Дедлайн» при переходе в этот статус, без него переход на портале может не пройти. Лучше указать реальный.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* rejection_reason обязателен и для «Отклонена», и для «Ошибочной»
-                (см. README-backend.md) — поле общее, меняется только подсказка. */}
-            {needsReason && (
-              <textarea
-                value={rejectionReason}
-                onChange={e => setRejectionReason(e.target.value)}
-                placeholder={status === 'invalid' ? 'Чем рекламация оформлена некорректно' : 'Причина отклонения'}
-                rows={2}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] resize-none"
-              />
-            )}
-
-            {status === 'resolved' && (
-              <textarea
-                value={resolutionComment}
-                onChange={e => setResolutionComment(e.target.value)}
-                placeholder="Итоговый комментарий"
-                rows={2}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] resize-none"
-              />
-            )}
-
-            {/* Акт, фото выполненной работы и т.п. Обязателен при всех трёх
-                закрывающих статусах — «Закрыта», «Отклонена» и «Ошибочная»
-                (см. README-backend.md), а не только при закрытии. */}
-            {needsConfirmation && (
-              <div>
-                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1.5">
-                  Подтверждающий документ <span className="text-red-500">*</span>
-                </label>
-                {confirmationFileUrl ? (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50">
-                    <FileIcon className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span className="flex-1 min-w-0 text-sm text-slate-700 dark:text-slate-200 truncate">
-                      {confirmationFileName || 'Файл загружен'}
+          <div className="border-t border-slate-100 dark:border-slate-700 shrink-0">
+            {/* Свёрнуто по умолчанию (processingOpen), но принудительно
+                раскрыто, пока есть недостающее поле для сохранения
+                (validationError) — иначе от админа была бы спрятана причина,
+                по которой не нажимается «Сохранить». */}
+            {(() => {
+              const isOpen = processingOpen || (!!validationError && hasChanges)
+              return (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setProcessingOpen(v => !v)}
+                    className="w-full flex items-center justify-between gap-2 px-4 sm:px-6 py-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
+                  >
+                    <span className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                      <ChevronDown className={cn('w-4 h-4 shrink-0 transition-transform duration-200', isOpen && 'rotate-180')} />
+                      Обработка
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => { setConfirmationFileUrl(null); setConfirmationFileName(null) }}
-                      className="text-xs text-slate-400 hover:text-red-500 transition-colors cursor-pointer shrink-0"
-                    >
-                      Заменить
-                    </button>
+                    <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', reclStatusCls(status))}>
+                      {reclStatusLabel(status)}
+                    </span>
+                  </button>
+
+                  <div className={cn('grid transition-[grid-template-rows] duration-200 ease-out', isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
+                    <div className="overflow-hidden min-h-0">
+                      <div className="px-4 sm:px-6 pb-4 space-y-3">
+                        <div className="flex flex-wrap gap-1.5">
+                          {STATUS_OPTIONS.map(s => (
+                            <button
+                              key={s}
+                              onClick={() => setStatus(s)}
+                              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
+                                status === s ? reclStatusCls(s) + ' border-transparent' : 'border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-300'
+                              }`}
+                            >
+                              {reclStatusLabel(s)}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Поле, а не только предупреждение, показывается только там, где
+                            Bitrix реально требует дедлайн для перехода (needsDeadline) —
+                            на new/review его нет смысла даже предлагать заполнить. */}
+                        {needsDeadline && (
+                          <div>
+                            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1.5">
+                              Срок отработки
+                            </label>
+                            <input
+                              type="date"
+                              value={deadlineAt}
+                              onChange={e => setDeadlineAt(e.target.value)}
+                              className="w-full h-9 px-3 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
+                            />
+                            {/* Сервер обещает подставлять «сегодня + 7 дней», но на
+                                практике переход всё равно отваливался с
+                                CRM_FIELD_ERROR_REQUIRED и падал в очередь повторов,
+                                поэтому предупреждаем заранее, а не полагаемся на заглушку. */}
+                            {!deadlineAt && status !== r.status && (
+                              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                                Срок не задан — Bitrix требует «Дедлайн» при переходе в этот статус, без него переход на портале может не пройти. Лучше указать реальный.
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* rejection_reason обязателен и для «Отклонена», и для «Ошибочной»
+                            (см. README-backend.md) — поле общее, меняется только подсказка. */}
+                        {needsReason && (
+                          <textarea
+                            value={rejectionReason}
+                            onChange={e => setRejectionReason(e.target.value)}
+                            placeholder={status === 'invalid' ? 'Чем рекламация оформлена некорректно' : 'Причина отклонения'}
+                            rows={2}
+                            className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] resize-none"
+                          />
+                        )}
+
+                        {status === 'resolved' && (
+                          <textarea
+                            value={resolutionComment}
+                            onChange={e => setResolutionComment(e.target.value)}
+                            placeholder="Итоговый комментарий"
+                            rows={2}
+                            className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] resize-none"
+                          />
+                        )}
+
+                        {/* Акт, фото выполненной работы и т.п. Обязателен при всех трёх
+                            закрывающих статусах — «Закрыта», «Отклонена» и «Ошибочная»
+                            (см. README-backend.md), а не только при закрытии. */}
+                        {needsConfirmation && (
+                          <div>
+                            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1.5">
+                              Подтверждающий документ <span className="text-red-500">*</span>
+                            </label>
+                            {confirmationFileUrl ? (
+                              <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50">
+                                <FileIcon className="w-4 h-4 text-slate-400 shrink-0" />
+                                <span className="flex-1 min-w-0 text-sm text-slate-700 dark:text-slate-200 truncate">
+                                  {confirmationFileName || 'Файл загружен'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => { setConfirmationFileUrl(null); setConfirmationFileName(null) }}
+                                  className="text-xs text-slate-400 hover:text-red-500 transition-colors cursor-pointer shrink-0"
+                                >
+                                  Заменить
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => fileInputRef.current?.click()}
+                                  disabled={uploadMut.isPending}
+                                  className="cursor-pointer"
+                                >
+                                  {uploadMut.isPending
+                                    ? <><SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />Загрузка...</>
+                                    : 'Прикрепить файл'
+                                  }
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        )}
+
+                        <textarea
+                          value={rootCause}
+                          onChange={e => setRootCause(e.target.value)}
+                          placeholder="Коренная причина (необязательно)"
+                          rows={2}
+                          className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] resize-none"
+                        />
+                      </div>
+                    </div>
                   </div>
-                ) : (
-                  <>
-                    <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploadMut.isPending}
-                      className="cursor-pointer"
-                    >
-                      {uploadMut.isPending
-                        ? <><SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />Загрузка...</>
-                        : 'Прикрепить файл'
-                      }
-                    </Button>
-                  </>
-                )}
+                </>
+              )
+            })()}
+
+            {/* Вне сворачиваемой области — «Сохранить» нужен и для правок вне
+                «Обработки» (гарантия/ответственный в списке полей выше), и не
+                должен прятаться вместе с ней. */}
+            <div className="px-4 sm:px-6 pb-4 space-y-2">
+              {validationError && hasChanges && <p className="text-xs text-red-500">{validationError}</p>}
+              <div className="flex justify-end">
+                <Button
+                  onClick={() => saveMut.mutate(patch)}
+                  disabled={!canSave}
+                  className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white"
+                >
+                  {saveMut.isPending ? 'Сохранение...' : 'Сохранить'}
+                </Button>
               </div>
-            )}
-
-            <textarea
-              value={rootCause}
-              onChange={e => setRootCause(e.target.value)}
-              placeholder="Коренная причина (необязательно)"
-              rows={2}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] resize-none"
-            />
-
-            {validationError && hasChanges && <p className="text-xs text-red-500">{validationError}</p>}
-
-            <div className="flex justify-end">
-              <Button
-                onClick={() => saveMut.mutate(patch)}
-                disabled={!canSave}
-                className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white"
-              >
-                {saveMut.isPending ? 'Сохранение...' : 'Сохранить'}
-              </Button>
             </div>
           </div>
         </div>
