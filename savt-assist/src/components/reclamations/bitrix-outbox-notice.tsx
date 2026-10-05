@@ -79,6 +79,9 @@ function useUpdateBitrixOutboxRow() {
       reclamationsApi.updateBitrixOutbox(id, payload),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['reclamation-bitrix-outbox'] })
+      // Карточка читает pending_create_outbox/bitrix_item_id из своего запроса —
+      // после успешной отправки они должны обновиться (null / заполнено).
+      qc.invalidateQueries({ queryKey: ['reclamation'] })
       if (res.success) toast.success('Отправлено в Bitrix')
       else toast.error(res.row?.last_error ? `Снова не прошло: ${res.row.last_error}` : 'Снова не удалось отправить')
     },
@@ -95,6 +98,7 @@ function useDeleteBitrixOutboxRow() {
     mutationFn: (id: number) => reclamationsApi.deleteBitrixOutbox(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['reclamation-bitrix-outbox'] })
+      qc.invalidateQueries({ queryKey: ['reclamation'] })
       toast.success('Снято с повторов')
     },
     onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось снять с очереди')),
@@ -319,14 +323,83 @@ export function BitrixDetachedNotice({ items, onOpen }: {
   )
 }
 
-// То же самое, но про одну конкретную рекламацию — внутри её карточки.
-// Объясняет ровно ту ситуацию, из-за которой обычно и приходят с вопросами:
-// в админке поменяли, а в Bitrix «ничего не происходит».
-export function BitrixOutboxCardWarning({ items }: { items: ReclamationBitrixOutboxItem[] }) {
-  if (items.length === 0) return null
+// Блок «Не доехало до Bitrix» внутри карточки — про застрявшее создание этой
+// рекламации (pending_create_outbox из GET /admin/reclamations/{id}). В отличие
+// от свёрнутой строки в общем списке, payload здесь сразу виден и правится
+// прямо в поле: чаще всего причина сбоя читается именно в нём (пустое
+// обязательное поле), а после правки остаётся нажать «Отправить повторно».
+export function BitrixPendingCreateBlock({ item }: { item: ReclamationBitrixOutboxItem | null }) {
+  if (!item) return null
+  return <PendingCreateForm key={item.id} item={item} />
+}
+
+function PendingCreateForm({ item }: { item: ReclamationBitrixOutboxItem }) {
+  const [text, setText] = useState(() => JSON.stringify(item.payload, null, 2))
+  const updateMut = useUpdateBitrixOutboxRow()
+  const { confirmAndRemove, pendingId } = useDeleteBitrixOutboxRow()
+
+  const resend = () => {
+    let payload: Record<string, unknown>
+    try {
+      payload = JSON.parse(text)
+    } catch {
+      toast.error('Невалидный JSON')
+      return
+    }
+    updateMut.mutate({ id: item.id, payload })
+  }
+
   return (
-    <div className="px-4 sm:px-6 py-3 bg-amber-50 dark:bg-amber-900/20 border-y border-amber-100 dark:border-amber-900/40 space-y-2">
-      {items.map(i => <OutboxRow key={i.id} item={i} showReclamationId={false} />)}
+    <div className="px-4 sm:px-6 py-3 bg-amber-50 dark:bg-amber-900/20 border-y border-amber-100 dark:border-amber-900/40">
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0 space-y-2">
+          <div>
+            <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+              Не доехало до Bitrix · попыток: {item.attempts}
+            </p>
+            {item.last_error && (
+              <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 wrap-break-word">{item.last_error}</p>
+            )}
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Последняя попытка: {fmtWhen(item.last_attempted_at)}. Повтор идёт сам каждые 15 минут.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor={`outbox-payload-${item.id}`} className="text-[11px] text-slate-500 dark:text-slate-400 block mb-1">
+              Данные, с которыми карточка уйдёт в Bitrix
+            </label>
+            <textarea
+              id={`outbox-payload-${item.id}`}
+              value={text}
+              onChange={e => setText(e.target.value)}
+              rows={6}
+              spellCheck={false}
+              className="w-full px-2 py-1.5 text-xs font-mono rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] resize-y"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => confirmAndRemove(item.id)}
+              disabled={pendingId === item.id || updateMut.isPending}
+              className="text-xs text-red-600 dark:text-red-400 hover:underline cursor-pointer disabled:opacity-50"
+            >
+              {pendingId === item.id ? 'Снятие...' : 'Снять с очереди'}
+            </button>
+            <button
+              type="button"
+              onClick={resend}
+              disabled={updateMut.isPending || pendingId === item.id}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#1B3A72] text-white hover:bg-[#1B3A72]/90 cursor-pointer disabled:opacity-50"
+            >
+              {updateMut.isPending ? 'Отправка...' : 'Отправить повторно'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

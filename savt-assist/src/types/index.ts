@@ -206,22 +206,6 @@ export interface ReclamationAttachment {
   created_at: string
 }
 
-// Сотрудник Bitrix для дропдауна «Ответственный» (GET /admin/reclamations/
-// bitrix-users) — дёргается напрямую у Bitrix при каждом запросе, у нас не
-// хранится. phone — рабочий телефон, если не заполнен в Bitrix — личный
-// мобильный (чтобы не было пустого номера).
-export interface ReclamationBitrixUser {
-  id: number
-  // Гайд обещал непустые full_name/phone/position, но после того как на
-  // бэкенде сняли фильтр USER_TYPE, в выдаче реально встречаются записи с
-  // пустыми полями (профиль в Bitrix не до конца заполнен) — падало на
-  // поиске (.toLowerCase() на null), см. BitrixUserCombobox. Держим как
-  // nullable и подстраховываемся везде, где используем.
-  full_name: string | null
-  phone: string | null
-  position: string | null
-}
-
 // Недоставленная операция синхронизации с Bitrix (GET /admin/reclamations/
 // bitrix-outbox). Строка заводится, когда операция упала (портал недоступен,
 // сетевой сбой), фоновая задача повторяет её каждые 15 минут, при успехе
@@ -230,12 +214,10 @@ export interface ReclamationBitrixUser {
 export interface ReclamationBitrixOutboxItem {
   id: number
   reclamation_id: number
-  // create — создание карточки, status — смена стадии, assignee — назначение
-  // ответственного, deadline — срок отработки, warranty — гарантия (всегда
-  // отдельная операция от status, см. README-backend.md — совместная отправка
-  // с сменой стадии запускала автозакрытие карточки роботом на портале),
-  // comment — коренная причина/итоговый комментарий/причина отклонения одним
-  // комментарием в таймлайн карточки.
+  // Практически всегда create — заявка не доехала до Bitrix при подаче. Остальные
+  // виды (status/assignee/deadline/warranty/comment) заводились только из
+  // обработки через админку, которой больше нет: новых не появится, но старые,
+  // висевшие в очереди на момент перехода, ещё могут встретиться.
   operation: 'create' | 'status' | 'assignee' | 'deadline' | 'warranty' | 'comment'
   // То, с чем именно вызовется Bitrix при повторе (снимок на момент сбоя, не
   // текущее состояние рекламации) — по нему видно причину сбоя напрямую
@@ -277,10 +259,9 @@ export interface ReclamationListItem {
   resolved_at: string | null
   user_id: number
   user_full_name: string | null
-  // Срок отработки, «ГГГГ-ММ-ДД» без времени. Синхронизируется с полем
-  // «Дедлайн» карточки Bitrix В ОБЕ СТОРОНЫ — может измениться на портале и
-  // приехать к нам, поэтому карточку перечитываем при каждом открытии
-  // (staleTime: 0 у запроса детали), а не держим из кэша.
+  // Срок отработки, «ГГГГ-ММ-ДД» без времени. Приезжает из Bitrix вебхуком —
+  // карточку перечитываем при каждом открытии (staleTime: 0 у запроса детали),
+  // а не держим из кэша.
   deadline_at: string | null
 }
 
@@ -313,18 +294,16 @@ export interface ReclamationDetail {
   customer_name: string | null
   root_cause: string | null
   resolution_comment: string | null
-  // Подтверждающий документ при закрытии (акт, фото выполненной работы) —
-  // обязателен на сервере при переводе в resolved (400 без него), см.
-  // README-backend.md, «Рут reclamations». null, пока не закрыта.
+  // root_cause/resolution_comment/rejection_reason/confirmation_file_* больше
+  // никто не пишет (ручки обработки нет, в Bitrix под них нет полей) — остались
+  // в схеме только как исторический текст у старых рекламаций, показываем как
+  // есть, если заполнено.
   confirmation_file_url: string | null
   confirmation_file_name: string | null
   rejection_reason: string | null
   responsible_name: string | null
   responsible_phone: string | null
-  // Синхронизируется с assignedById карточки Bitrix В ОБЕ СТОРОНЫ (как и
-  // deadline_at) — могли назначить прямо на портале, минуя админку. Используем
-  // для предвыбора текущего ответственного в дропдауне при открытии формы,
-  // сверять по одному только имени ненадёжно. null — не назначен нигде.
+  // Приезжает из Bitrix вебхуком (назначают там же), у нас только показывается.
   responsible_bitrix_user_id: number | null
   created_at: string
   resolved_at: string | null
@@ -334,13 +313,17 @@ export interface ReclamationDetail {
   // См. deadline_at у ReclamationListItem выше.
   deadline_at: string | null
   // id карточки на портале, приходит СТРОКОЙ ("57", не числом).
-  // Читать вместе с bitrix_deleted_at:
-  //   оба пусты                       — ещё не уехала в Bitrix;
+  // Читать вместе с bitrix_deleted_at и pending_create_outbox:
   //   bitrix_deleted_at + пустой item — карточку в Bitrix удалили, рекламация
   //                                     жива, но с порталом больше не связана
-  //                                     и сама туда не вернётся.
+  //                                     и сама туда не вернётся;
+  //   оба пусты + pending_create_outbox — не доехала до Bitrix вообще;
+  //   оба пусты + pending_create_outbox null — обычная задержка, отправка идёт.
   bitrix_item_id: string | null
   bitrix_deleted_at: string | null
+  // Застрявшее создание карточки в Bitrix, null — всё доехало или ещё идёт.
+  // id отсюда — для PATCH/DELETE /admin/reclamations/bitrix-outbox/{id}.
+  pending_create_outbox: ReclamationBitrixOutboxItem | null
 }
 
 export interface Chat {

@@ -1,32 +1,26 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
-import { ChevronDown } from 'lucide-react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { reclamationsApi } from '@/lib/api/reclamations'
-import type { ReclamationStatus } from '@/types'
-import { apiErrorMessage } from '@/lib/api/errors'
 import { toFullUrl } from '@/lib/api/base-url'
-import { cn } from '@/lib/utils'
 import { fmtSize } from '@/components/cabinets/cabinet-dialog-shared'
 import { AppModal } from '@/components/ui/app-modal'
-import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { SpinnerIcon } from '@/components/ui/icons'
-import { BitrixUserCombobox } from '@/components/ui/bitrix-user-combobox'
-import { ImageLightbox } from '@/components/chats/attachment-view'
 import { UserDialog } from '@/components/users/user-dialog'
 import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
 import { ProjectDetailDialog } from '@/components/projects/project-detail-dialog'
+import { ImageLightbox } from '@/components/chats/attachment-view'
 import { DialogHeader, DRow, DRowLink, fmtDate } from '@/components/requests/request-shared'
-import { reclStatusCls, reclStatusLabel, reclObjectTypeLabel, reclWarrantyLabel } from './reclamation-shared'
-import { BitrixDeletedCardWarning, BitrixOutboxCardWarning, useBitrixOutbox } from './bitrix-outbox-notice'
+import { reclStatusCls, reclStatusLabel, reclObjectTypeLabel, reclWarrantyCls, reclWarrantyLabel } from './reclamation-shared'
+import { BitrixDeletedCardWarning, BitrixPendingCreateBlock } from './bitrix-outbox-notice'
 
-const STATUS_OPTIONS: ReclamationStatus[] = ['new', 'review', 'in_progress', 'resolved', 'rejected', 'invalid']
-
+// Карточка только для просмотра: статус, гарантию, ответственного и срок
+// выставляет специалист в Bitrix, к нам это приезжает вебхуком (см.
+// README-backend.md, «Обработки через нашу админку нет»). Единственное, что
+// можно сделать отсюда, — повторно отправить рекламацию в Bitrix, если она не
+// доехала (BitrixPendingCreateBlock), и удалить, если карточку там удалили.
 export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: number; onClose: () => void }) {
-  const qc = useQueryClient()
   const [subUserId, setSubUserId] = useState<number | null>(null)
   const [subCabinetId, setSubCabinetId] = useState<number | null>(null)
   const [subProjectId, setSubProjectId] = useState<number | null>(null)
@@ -34,98 +28,10 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
   const { data: r, isLoading, isError } = useQuery({
     queryKey: ['reclamation', reclamationId],
     queryFn: () => reclamationsApi.getOne(reclamationId),
-    // Перебивает глобальные 30 секунд (providers.tsx): deadline_at и стадия
-    // синхронизируются с Bitrix в обе стороны и могут измениться на портале,
-    // поэтому карточку читаем заново при каждом открытии.
+    // Перебивает глобальные 30 секунд (providers.tsx): status, гарантия, срок и
+    // ответственный приходят только вебхуком из Bitrix и меняются без нашего
+    // участия, поэтому карточку читаем заново при каждом открытии.
     staleTime: 0,
-  })
-
-  const [status, setStatus] = useState<ReclamationStatus>('review')
-  const [warranty, setWarranty] = useState<boolean | null>(null)
-  const [responsibleName, setResponsibleName] = useState('')
-  const [responsiblePhone, setResponsiblePhone] = useState('')
-  // Предвыбирается из r.responsible_bitrix_user_id при открытии — значение
-  // синхронизируется с Bitrix в обе стороны (могли назначить прямо на
-  // портале), сверять по одному только имени ненадёжно (см. README-backend.md).
-  const [responsibleBitrixUserId, setResponsibleBitrixUserId] = useState<number | null>(null)
-  const [rejectionReason, setRejectionReason] = useState('')
-  const [resolutionComment, setResolutionComment] = useState('')
-  const [rootCause, setRootCause] = useState('')
-  // Подтверждающий документ при закрытии (акт, фото выполненной работы) —
-  // сервер требует его при переводе в resolved (400 без него), см. README-backend.md.
-  const [confirmationFileUrl, setConfirmationFileUrl] = useState<string | null>(null)
-  const [confirmationFileName, setConfirmationFileName] = useState<string | null>(null)
-  // «ГГГГ-ММ-ДД» — ровно тот формат, что у <input type="date"> и у API.
-  const [deadlineAt, setDeadlineAt] = useState('')
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  // Свёрнуто по умолчанию — поля обработки нужны только пока реально меняешь
-  // статус, а инфо-список выше при длинной карточке иначе почти не влезал в
-  // видимую область (см. обсуждение со скриншотом). Разворачивается кликом
-  // по заголовку, а принудительно — если не хватает поля для сохранения
-  // (validationError ниже), чтобы не прятать от админа то, из-за чего кнопка
-  // «Сохранить» не нажимается.
-  const [processingOpen, setProcessingOpen] = useState(false)
-
-  // Черновик формы подхватывает данные с сервера только когда они пришли —
-  // тот же приём, что и в других формах настроек в этом проекте (см.
-  // settings/page.tsx, PromoScheduleSection).
-  useEffect(() => {
-    if (!r) return
-    setStatus(r.status)
-    setWarranty(r.warranty_classification)
-    setResponsibleName(r.responsible_name ?? '')
-    setResponsiblePhone(r.responsible_phone ?? '')
-    setResponsibleBitrixUserId(r.responsible_bitrix_user_id ?? null)
-    setRejectionReason(r.rejection_reason ?? '')
-    setResolutionComment(r.resolution_comment ?? '')
-    setRootCause(r.root_cause ?? '')
-    setConfirmationFileUrl(r.confirmation_file_url ?? null)
-    setConfirmationFileName(r.confirmation_file_name ?? null)
-    setDeadlineAt(r.deadline_at ?? '')
-  }, [r])
-
-  // Загружается сразу по выбору файла (тот же принцип, что и вложения при
-  // подаче самой рекламации) — сохраняется в форме только готовый url, не
-  // сам File; PATCH уходит отдельно, по кнопке «Сохранить».
-  const uploadMut = useMutation({
-    mutationFn: (file: File) => reclamationsApi.uploadAttachment(file),
-    onSuccess: (res, file) => {
-      setConfirmationFileUrl(res.url)
-      setConfirmationFileName(file.name)
-    },
-    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось загрузить файл')),
-  })
-
-  // deadline_at требует Bitrix для всех переходов КРОМЕ new/review — эти две
-  // стадии карточку между собой в Bitrix ещё не двигают (см. README-backend.md).
-  const needsDeadline = status !== 'new' && status !== 'review'
-  // Поле «Ответственный» теперь в общем списке (не привязано к статусу, см.
-  // DRow «Ответственный» ниже) — список сотрудников Bitrix грузится сразу при
-  // открытии карточки, не дожидаясь конкретного статуса.
-  const { data: bitrixUsers = [], isLoading: bitrixUsersLoading, isError: bitrixUsersError } = useQuery({
-    queryKey: ['reclamation-bitrix-users'],
-    queryFn: reclamationsApi.getBitrixUsers,
-  })
-
-  // Застрявшая синхронизация именно этой рекламации — объясняет ситуацию
-  // «в админке поменяли, а в Bitrix ничего не поменялось» прямо в карточке.
-  const { data: outbox = [] } = useBitrixOutbox(true)
-  const outboxForThis = outbox.filter(i => i.reclamation_id === reclamationId)
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) uploadMut.mutate(file)
-    e.target.value = ''
-  }
-
-  const saveMut = useMutation({
-    mutationFn: (patch: Parameters<typeof reclamationsApi.update>[1]) => reclamationsApi.update(reclamationId, patch),
-    onSuccess: (res) => {
-      qc.setQueryData(['reclamation', reclamationId], res)
-      qc.invalidateQueries({ queryKey: ['reclamations'] })
-      toast.success('Рекламация обновлена')
-    },
-    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось сохранить')),
   })
 
   if (!r) {
@@ -138,60 +44,6 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
       </AppModal>
     )
   }
-
-  const needsReason = status === 'rejected' || status === 'invalid'
-  // Подтверждающий документ обязателен при ВСЕХ закрывающих статусах, не
-  // только при resolved (см. README-backend.md, «Рут reclamations»).
-  const needsConfirmation = status === 'resolved' || needsReason
-
-  // Обязательные проверки на сервере срабатывают только «при смене статуса»
-  // (см. README-backend.md, §3) — если статус не меняется (например, карточка
-  // уже in_progress, а админ просто добавляет срок отработки), сервер их не
-  // требует, и клиент не должен требовать тоже.
-  const isTransitioning = status !== r.status
-
-  // Гарантия и ответственный не блокируют сохранение (см. missing ниже), но
-  // сервер их всё равно требует при переходе в in_progress/resolved и без них
-  // отклонит запрос 400-кой — вместо того чтобы узнавать об этом только после
-  // клика «Сохранить», подсказываем заранее прямо у полей (тот же приём, что
-  // и у «Срок отработки»).
-  const wantsWarrantyAndResponsible = isTransitioning && (status === 'in_progress' || status === 'resolved')
-
-  // Валидация — только то, что реально блокирует сервер 400-кой. Ответственный
-  // и гарантия сюда намеренно не входят — необязательные поля, ограничивать
-  // сохранение ими не нужно (сервер и так проверит своё, если что-то важное
-  // не так, ошибка придёт тостом).
-  const missing: string[] = []
-  if (isTransitioning) {
-    if (needsReason && !rejectionReason.trim()) missing.push('причину')
-    if (status === 'resolved' && !resolutionComment.trim()) missing.push('итоговый комментарий')
-    if (needsConfirmation && !confirmationFileUrl) missing.push('подтверждающий документ')
-  }
-  const validationError = missing.length > 0
-    ? `Для перехода в «${reclStatusLabel(status)}» нужно указать: ${missing.join(', ')}`
-    : null
-
-  const buildPatch = () => {
-    const patch: Parameters<typeof reclamationsApi.update>[1] = {}
-    if (status !== r.status) patch.status = status
-    if (warranty !== r.warranty_classification) patch.warranty_classification = warranty
-    if (responsibleName.trim() !== (r.responsible_name ?? '')) patch.responsible_name = responsibleName.trim() || null
-    if (responsiblePhone.trim() !== (r.responsible_phone ?? '')) patch.responsible_phone = responsiblePhone.trim() || null
-    if (responsibleBitrixUserId !== (r.responsible_bitrix_user_id ?? null)) {
-      patch.responsible_bitrix_user_id = responsibleBitrixUserId
-    }
-    if (rejectionReason.trim() !== (r.rejection_reason ?? '')) patch.rejection_reason = rejectionReason.trim() || null
-    if (resolutionComment.trim() !== (r.resolution_comment ?? '')) patch.resolution_comment = resolutionComment.trim() || null
-    if (rootCause.trim() !== (r.root_cause ?? '')) patch.root_cause = rootCause.trim() || null
-    if (confirmationFileUrl !== (r.confirmation_file_url ?? null)) patch.confirmation_file_url = confirmationFileUrl
-    if ((confirmationFileName ?? '') !== (r.confirmation_file_name ?? '')) patch.confirmation_file_name = confirmationFileName || null
-    if (deadlineAt !== (r.deadline_at ?? '')) patch.deadline_at = deadlineAt || null
-    return patch
-  }
-
-  const patch = buildPatch()
-  const hasChanges = Object.keys(patch).length > 0
-  const canSave = hasChanges && !validationError && !saveMut.isPending && !uploadMut.isPending
 
   return (
     <>
@@ -219,7 +71,7 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
             itemId={r.bitrix_item_id}
             onDeleted={onClose}
           />
-          <BitrixOutboxCardWarning items={outboxForThis} />
+          <BitrixPendingCreateBlock item={r.pending_create_outbox} />
 
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="divide-y divide-slate-50 dark:divide-slate-700/50">
@@ -233,28 +85,10 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
               ) : r.project_id != null ? (
                 <>
                   <DRowLink label="Проект" value={r.project_name ?? `#${r.project_id}`} onClick={() => setSubProjectId(r.project_id)} />
-                  {r.object_details && (
-                    <DRow label="Объект" value={
-                      <div className="space-y-0.5">
-                        {Object.entries(r.object_details).map(([k, v]) => (
-                          <p key={k} className="text-xs text-slate-500 dark:text-slate-400">
-                            <span className="text-slate-400 dark:text-slate-500">{k}:</span> {v}
-                          </p>
-                        ))}
-                      </div>
-                    } />
-                  )}
+                  {r.object_details && <DRow label="Объект" value={<ObjectDetails details={r.object_details} />} />}
                 </>
               ) : r.object_details ? (
-                <DRow label="Объект" value={
-                  <div className="space-y-0.5">
-                    {Object.entries(r.object_details).map(([k, v]) => (
-                      <p key={k} className="text-xs text-slate-500 dark:text-slate-400">
-                        <span className="text-slate-400 dark:text-slate-500">{k}:</span> {v}
-                      </p>
-                    ))}
-                  </div>
-                } />
+                <DRow label="Объект" value={<ObjectDetails details={r.object_details} />} />
               ) : null}
               {r.contract_number && <DRow label="Договор" value={r.contract_number} />}
               {r.order_number && <DRow label="Заказ" value={r.order_number} />}
@@ -279,61 +113,31 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
                 </div>
               )}
               <DRow label="Подана" value={fmtDate(r.created_at)} />
-              <DRow label="Срок отработки" value={r.deadline_at ? fmtDate(r.deadline_at) : '—'} />
-              {/* Гарантия и ответственный — необязательные поля, не условие
-                  перехода статуса (клиент их для этого не требует, см.
-                  validationError ниже), поэтому живут здесь, в общем списке
-                  полей, а не в блоке «Обработка»: проставить можно на любом
-                  этапе. */}
+
+              {/* Всё ниже — из Bitrix, у нас только показывается. */}
+              <DRow label="Статус" value={
+                <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${reclStatusCls(r.status)}`}>
+                  {reclStatusLabel(r.status)}
+                </span>
+              } />
               <DRow label="Гарантия" value={
-                <div>
-                  <select
-                    value={warranty === null ? '' : warranty ? 'true' : 'false'}
-                    onChange={e => setWarranty(e.target.value === '' ? null : e.target.value === 'true')}
-                    className="w-full h-9 px-3 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] cursor-pointer"
-                  >
-                    <option value="">Не классифицирована</option>
-                    <option value="true">Гарантийный случай</option>
-                    <option value="false">Платно</option>
-                  </select>
-                  {wantsWarrantyAndResponsible && warranty == null && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                      Не классифицирована — без этого Bitrix откажет в переходе в «{reclStatusLabel(status)}».
-                    </p>
-                  )}
-                </div>
+                <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${reclWarrantyCls(r.warranty_classification)}`}>
+                  {reclWarrantyLabel(r.warranty_classification)}
+                </span>
               } />
               <DRow label="Ответственный" value={
-                <div>
-                  {responsibleName && (
-                    <p className="text-sm text-slate-700 dark:text-slate-200 mb-1.5">
-                      {responsibleName}{responsiblePhone && ` · ${responsiblePhone}`}
-                    </p>
-                  )}
-                  <BitrixUserCombobox
-                    users={bitrixUsers}
-                    isLoading={bitrixUsersLoading}
-                    isError={bitrixUsersError}
-                    placeholder={responsibleName ? 'Назначить другого...' : 'Выберите ответственного...'}
-                    onChange={u => {
-                      // full_name/phone из Bitrix бывают пустыми (см.
-                      // BitrixUserCombobox) — responsibleName/responsiblePhone
-                      // здесь всегда обычная строка, не null.
-                      setResponsibleBitrixUserId(u.id)
-                      setResponsibleName(u.full_name ?? '')
-                      setResponsiblePhone(u.phone ?? '')
-                    }}
-                  />
-                  {wantsWarrantyAndResponsible && !responsibleName.trim() && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                      Не назначен — без этого Bitrix откажет в переходе в «{reclStatusLabel(status)}».
-                    </p>
-                  )}
-                </div>
+                r.responsible_name
+                  ? `${r.responsible_name}${r.responsible_phone ? ` · ${r.responsible_phone}` : ''}`
+                  : '—'
               } />
+              <DRow label="Срок отработки" value={r.deadline_at ? fmtDate(r.deadline_at) : '—'} />
               <DRow label="Решена" value={r.resolved_at ? fmtDate(r.resolved_at) : '—'} />
+
+              {/* Эти поля никто больше не заполняет (ручки обработки нет) —
+                  показываем исторический текст у старых рекламаций, если он есть. */}
               {r.rejection_reason && <DRow label="Причина отклонения" value={r.rejection_reason} />}
               {r.resolution_comment && <DRow label="Итоговый комментарий" value={r.resolution_comment} />}
+              {r.root_cause && <DRow label="Коренная причина" value={r.root_cause} />}
               {r.confirmation_file_url && (
                 <DRowLink
                   label="Подтверждающий документ"
@@ -344,172 +148,27 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
             </div>
           </div>
 
-          <div className="border-t border-slate-100 dark:border-slate-700 shrink-0">
-            {/* Свёрнуто по умолчанию (processingOpen), но принудительно
-                раскрыто, пока есть недостающее поле для сохранения
-                (validationError) — иначе от админа была бы спрятана причина,
-                по которой не нажимается «Сохранить». */}
-            {(() => {
-              const isOpen = processingOpen || (!!validationError && hasChanges)
-              return (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setProcessingOpen(v => !v)}
-                    className="w-full flex items-center justify-between gap-2 px-4 sm:px-6 py-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
-                  >
-                    <span className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-                      <ChevronDown className={cn('w-4 h-4 shrink-0 transition-transform duration-200', isOpen && 'rotate-180')} />
-                      Обработка
-                    </span>
-                    <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', reclStatusCls(status))}>
-                      {reclStatusLabel(status)}
-                    </span>
-                  </button>
-
-                  <div className={cn('grid transition-[grid-template-rows] duration-200 ease-out', isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
-                    <div className="overflow-hidden min-h-0">
-                      <div className="px-4 sm:px-6 pb-4 space-y-3">
-                        <div className="flex flex-wrap gap-1.5">
-                          {STATUS_OPTIONS.map(s => (
-                            <button
-                              key={s}
-                              onClick={() => setStatus(s)}
-                              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer ${
-                                status === s ? reclStatusCls(s) + ' border-transparent' : 'border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-300'
-                              }`}
-                            >
-                              {reclStatusLabel(s)}
-                            </button>
-                          ))}
-                        </div>
-
-                        {/* Поле, а не только предупреждение, показывается только там, где
-                            Bitrix реально требует дедлайн для перехода (needsDeadline) —
-                            на new/review его нет смысла даже предлагать заполнить. */}
-                        {needsDeadline && (
-                          <div>
-                            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1.5">
-                              Срок отработки
-                            </label>
-                            <input
-                              type="date"
-                              value={deadlineAt}
-                              onChange={e => setDeadlineAt(e.target.value)}
-                              className="w-full h-9 px-3 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
-                            />
-                            {/* Сервер обещает подставлять «сегодня + 7 дней», но на
-                                практике переход всё равно отваливался с
-                                CRM_FIELD_ERROR_REQUIRED и падал в очередь повторов,
-                                поэтому предупреждаем заранее, а не полагаемся на заглушку. */}
-                            {!deadlineAt && status !== r.status && (
-                              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                                Срок не задан — Bitrix требует «Дедлайн» при переходе в этот статус, без него переход на портале может не пройти. Лучше указать реальный.
-                              </p>
-                            )}
-                          </div>
-                        )}
-
-                        {/* rejection_reason обязателен и для «Отклонена», и для «Ошибочной»
-                            (см. README-backend.md) — поле общее, меняется только подсказка. */}
-                        {needsReason && (
-                          <textarea
-                            value={rejectionReason}
-                            onChange={e => setRejectionReason(e.target.value)}
-                            placeholder={status === 'invalid' ? 'Чем рекламация оформлена некорректно' : 'Причина отклонения'}
-                            rows={2}
-                            className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] resize-none"
-                          />
-                        )}
-
-                        {status === 'resolved' && (
-                          <textarea
-                            value={resolutionComment}
-                            onChange={e => setResolutionComment(e.target.value)}
-                            placeholder="Итоговый комментарий"
-                            rows={2}
-                            className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] resize-none"
-                          />
-                        )}
-
-                        {/* Акт, фото выполненной работы и т.п. Обязателен при всех трёх
-                            закрывающих статусах — «Закрыта», «Отклонена» и «Ошибочная»
-                            (см. README-backend.md), а не только при закрытии. */}
-                        {needsConfirmation && (
-                          <div>
-                            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 block mb-1.5">
-                              Подтверждающий документ <span className="text-red-500">*</span>
-                            </label>
-                            {confirmationFileUrl ? (
-                              <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50">
-                                <FileIcon className="w-4 h-4 text-slate-400 shrink-0" />
-                                <span className="flex-1 min-w-0 text-sm text-slate-700 dark:text-slate-200 truncate">
-                                  {confirmationFileName || 'Файл загружен'}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => { setConfirmationFileUrl(null); setConfirmationFileName(null) }}
-                                  className="text-xs text-slate-400 hover:text-red-500 transition-colors cursor-pointer shrink-0"
-                                >
-                                  Заменить
-                                </button>
-                              </div>
-                            ) : (
-                              <>
-                                <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" />
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  onClick={() => fileInputRef.current?.click()}
-                                  disabled={uploadMut.isPending}
-                                  className="cursor-pointer"
-                                >
-                                  {uploadMut.isPending
-                                    ? <><SpinnerIcon className="w-4 h-4 mr-1.5 animate-spin" />Загрузка...</>
-                                    : 'Прикрепить файл'
-                                  }
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                        )}
-
-                        <textarea
-                          value={rootCause}
-                          onChange={e => setRootCause(e.target.value)}
-                          placeholder="Коренная причина (необязательно)"
-                          rows={2}
-                          className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7] resize-none"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )
-            })()}
-
-            {/* Вне сворачиваемой области — «Сохранить» нужен и для правок вне
-                «Обработки» (гарантия/ответственный в списке полей выше), и не
-                должен прятаться вместе с ней. */}
-            <div className="px-4 sm:px-6 pb-4 space-y-2">
-              {validationError && hasChanges && <p className="text-xs text-red-500">{validationError}</p>}
-              <div className="flex justify-end">
-                <Button
-                  onClick={() => saveMut.mutate(patch)}
-                  disabled={!canSave}
-                  className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white"
-                >
-                  {saveMut.isPending ? 'Сохранение...' : 'Сохранить'}
-                </Button>
-              </div>
-            </div>
-          </div>
+          <p className="px-4 sm:px-6 py-3 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-400">
+            Статус, гарантию, ответственного и срок меняет специалист в карточке Bitrix — здесь они обновляются сами.
+          </p>
         </div>
       </AppModal>
       {subUserId !== null && <UserDialog userId={subUserId} role="user" onClose={() => setSubUserId(null)} />}
       {subCabinetId !== null && <CabinetDetailDialog cabinetId={subCabinetId} isAdmin onClose={() => setSubCabinetId(null)} />}
       <ProjectDetailDialog projectId={subProjectId} isAdmin onClose={() => setSubProjectId(null)} />
     </>
+  )
+}
+
+function ObjectDetails({ details }: { details: Record<string, string> }) {
+  return (
+    <div className="space-y-0.5">
+      {Object.entries(details).map(([k, v]) => (
+        <p key={k} className="text-xs text-slate-500 dark:text-slate-400">
+          <span className="text-slate-400 dark:text-slate-500">{k}:</span> {v}
+        </p>
+      ))}
+    </div>
   )
 }
 
