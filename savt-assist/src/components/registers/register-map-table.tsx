@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { confirmDialog } from '@/lib/store/confirm'
 import type { RegisterDto, RegisterPatchDto } from '@/lib/api/registers'
 import { SearchIcon, PlusIcon } from '@/components/ui/icons'
 
@@ -309,12 +310,16 @@ export function RegisterMapTable({ items, isLoading, canEdit, onAdd, isAdding, o
   // Удаление адреса целиком — все его биты разом. onDelete не отдаёт промис
   // (родитель просто запускает мутацию), поэтому просто отправляем удаление
   // по каждой строке — каждая сама покажет свой спиннер через deletingId.
-  // Подтверждение нативным confirm(), а не отдельной модалкой — действие
-  // необратимо и затрагивает сразу до 16 строк, а такого узла подтверждения
-  // в этом компоненте больше нигде нет, заводить его ради одной кнопки не стоит.
-  const handleDeleteAddress = (group: RegisterGroup) => {
+  // Действие необратимо и затрагивает сразу до 16 строк — с подтверждением.
+  const handleDeleteAddress = async (group: RegisterGroup) => {
     const word = group.rows.length === 1 ? 'бит' : 'бит(ов)'
-    if (!window.confirm(`Удалить адрес ${hexAddress(group.address)} и все ${group.rows.length} ${word}?`)) return
+    const ok = await confirmDialog({
+      title: `Удалить адрес ${hexAddress(group.address)}?`,
+      message: `Будут удалены все описанные биты этого адреса: ${group.rows.length} ${word}. Отменить нельзя.`,
+      confirmLabel: 'Удалить',
+      danger: true,
+    })
+    if (!ok) return
     for (const row of group.rows) onDelete(row.id)
   }
 

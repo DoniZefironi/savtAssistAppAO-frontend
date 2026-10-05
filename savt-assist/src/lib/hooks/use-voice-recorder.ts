@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useRef, useState } from 'react'
+import { toast } from 'sonner'
 
 export function useVoiceRecorder(onFinish: (blob: Blob, duration: number) => void) {
   const [recording, setRecording] = useState(false)
@@ -37,7 +38,7 @@ export function useVoiceRecorder(onFinish: (blob: Blob, duration: number) => voi
       setRecording(true)
       timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000)
     } catch {
-      alert('Нет доступа к микрофону')
+      toast.error('Нет доступа к микрофону')
     }
   }, [onFinish])
 

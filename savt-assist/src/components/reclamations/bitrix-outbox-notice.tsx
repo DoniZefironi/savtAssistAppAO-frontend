@@ -7,6 +7,7 @@ import { AlertTriangle, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { reclamationsApi } from '@/lib/api/reclamations'
 import { apiErrorMessage } from '@/lib/api/errors'
+import { confirmDialog } from '@/lib/store/confirm'
 import type { ReclamationBitrixDetachedItem, ReclamationBitrixOutboxItem } from '@/types'
 import { reclStatusLabel } from './reclamation-shared'
 
@@ -38,11 +39,10 @@ export function useBitrixDetached(enabled: boolean) {
   })
 }
 
-// Удаление отвязанной от Bitrix рекламации. Нативный confirm(), как и у
-// остальных необратимых удалений в админке (адрес целиком на карте регистров,
-// заготовки рассылки), — но с явным «окончательно» в тексте: заявитель её тоже
-// больше не увидит. Сервер разрешает удаление только для рекламаций из
-// bitrix-detached, поэтому и кнопка есть только в этих двух местах.
+// Удаление отвязанной от Bitrix рекламации. Подтверждение — confirmDialog, с
+// явным «окончательно» в тексте: заявитель её тоже больше не увидит. Сервер
+// разрешает удаление только для рекламаций из bitrix-detached, поэтому и
+// кнопка есть только в этих двух местах.
 export function useDeleteReclamation(onDeleted?: (id: number) => void) {
   const qc = useQueryClient()
   const mut = useMutation({
@@ -61,10 +61,14 @@ export function useDeleteReclamation(onDeleted?: (id: number) => void) {
     },
     onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось удалить рекламацию')),
   })
-  const confirmAndDelete = (id: number) => {
-    if (window.confirm(
-      `Удалить рекламацию #${id} окончательно?\n\nВместе с ней удалятся вложения, у заявителя она тоже пропадёт. Отменить нельзя.`
-    )) mut.mutate(id)
+  const confirmAndDelete = async (id: number) => {
+    const ok = await confirmDialog({
+      title: `Удалить рекламацию #${id}?`,
+      message: 'Вместе с ней удалятся вложения, у заявителя она тоже пропадёт. Отменить нельзя.',
+      confirmLabel: 'Удалить окончательно',
+      danger: true,
+    })
+    if (ok) mut.mutate(id)
   }
   return { confirmAndDelete, isPending: mut.isPending, pendingId: mut.isPending ? mut.variables : undefined }
 }
@@ -90,8 +94,7 @@ function useUpdateBitrixOutboxRow() {
 }
 
 // Снять операцию с повторов насовсем — необратимо (если не почините вручную,
-// она никогда не уйдёт в Bitrix), поэтому тоже через confirm(), как и
-// удаление самой рекламации.
+// она никогда не уйдёт в Bitrix), поэтому тоже с подтверждением.
 function useDeleteBitrixOutboxRow() {
   const qc = useQueryClient()
   const mut = useMutation({
@@ -103,10 +106,14 @@ function useDeleteBitrixOutboxRow() {
     },
     onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось снять с очереди')),
   })
-  const confirmAndRemove = (id: number) => {
-    if (window.confirm('Снять операцию с повторов насовсем?\n\nЕсли не починить вручную, она никогда не уйдёт в Bitrix. Отменить нельзя.')) {
-      mut.mutate(id)
-    }
+  const confirmAndRemove = async (id: number) => {
+    const ok = await confirmDialog({
+      title: 'Снять операцию с повторов?',
+      message: 'Если не починить вручную, она никогда не уйдёт в Bitrix. Отменить нельзя.',
+      confirmLabel: 'Снять с очереди',
+      danger: true,
+    })
+    if (ok) mut.mutate(id)
   }
   return { confirmAndRemove, pendingId: mut.isPending ? mut.variables : undefined }
 }

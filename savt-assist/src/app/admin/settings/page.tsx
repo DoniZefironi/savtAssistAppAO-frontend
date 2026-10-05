@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { ProjectCombobox } from '@/components/ui/project-combobox'
 import { PillButton } from '@/components/ui/pill-button'
 import { useAuthStore } from '@/lib/store/auth'
+import { confirmDialog } from '@/lib/store/confirm'
 import { SpinnerIcon, PlusIcon } from '@/components/ui/icons'
 
 export default function AdminSettingsPage() {
@@ -234,13 +235,16 @@ function PromoMessagesSection() {
     setEditBody(p.body)
   }
 
-  const handleDelete = (p: PromoMessage) => {
-    // Стандартный confirm(), не отдельная модалка — заготовка, использованная
-    // в расписании, просто перестанет учитываться при отправке, без ошибок,
-    // так что последствия удаления не настолько серьёзны, чтобы городить
-    // отдельный узел подтверждения ради одной кнопки (см. похожее решение
-    // для удаления адреса целиком в register-map-table.tsx).
-    if (window.confirm(`Удалить заготовку «${p.title}»?`)) deleteMut.mutate(p.id)
+  const handleDelete = async (p: PromoMessage) => {
+    // Заготовка, использованная в расписании, просто перестанет учитываться
+    // при отправке, без ошибок.
+    const ok = await confirmDialog({
+      title: 'Удалить заготовку?',
+      message: `«${p.title}» будет удалена. Если она стояла в расписании рассылки, при отправке её пропустят.`,
+      confirmLabel: 'Удалить',
+      danger: true,
+    })
+    if (ok) deleteMut.mutate(p.id)
   }
 
   const canCreate = addTitle.trim().length > 0 && addTitle.trim().length <= 255 && addBody.trim().length > 0 && addBody.trim().length <= 1000
