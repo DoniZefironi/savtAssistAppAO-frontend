@@ -28,6 +28,7 @@ import { ProjectDetailDialog } from '@/components/projects/project-detail-dialog
 import { ServiceDialog } from './service-dialog'
 import { ReclamationDialog } from '@/components/reclamations/reclamation-dialog'
 import { BitrixDetachedNotice, BitrixOutboxNotice, useBitrixDetached, useBitrixOutbox } from '@/components/reclamations/bitrix-outbox-notice'
+import { ImageLightbox } from '@/components/chats/attachment-view'
 import { reclStatusCls, reclStatusLabel, reclObjectTypeLabel, reclWarrantyCls, reclWarrantyLabel } from '@/components/reclamations/reclamation-shared'
 import {
   DRow, DRowLink, ModalTextarea, DialogHeader, VerifiedBadge,
@@ -883,6 +884,7 @@ function DocumentRequestList({ items, onSelect, view }: { items: DocumentRequest
 function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClose: () => void }) {
   const qc = useQueryClient()
   const [action, setAction] = useState<'approve' | 'reject' | null>(null)
+  const [photoOpen, setPhotoOpen] = useState(false)
   const [cabinetId, setCabinetId] = useState<number | null>(null)
   const [approveNote, setApproveNote] = useState('')
   const [rejectNote, setRejectNote] = useState('')
@@ -960,9 +962,13 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
           <img
             src={toFullUrl(request.photo_url)}
             alt="Фото заявки"
-            className="max-h-56 rounded-xl object-contain border border-slate-200 dark:border-slate-700"
+            onClick={() => setPhotoOpen(true)}
+            className="max-h-56 rounded-xl object-contain border border-slate-200 dark:border-slate-700 cursor-zoom-in"
           />
         </div>
+      )}
+      {photoOpen && request.photo_url && (
+        <ImageLightbox url={toFullUrl(request.photo_url)} name="Фото заявки" onClose={() => setPhotoOpen(false)} />
       )}
       </div>
 
