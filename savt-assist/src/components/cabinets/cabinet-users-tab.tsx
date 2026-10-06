@@ -7,43 +7,44 @@ import { AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cabinetsApi } from '@/lib/api/cabinets'
 import { projectsApi } from '@/lib/api/projects'
 import type { ProjectUser } from '@/lib/api/projects'
 import { UserDialog } from '@/components/users/user-dialog'
 import { UsersIcon, TrashIcon } from './cabinet-dialog-icons'
 
-// Доступ к ШУ хранится только на уровне проекта (см. README-backend.md, «2. Шкафы
-// управления» — врезка про Cabinet.project_id) — этой вкладке нужен projectId
-// шкафа, а не сам cabinetId. Убрать пользователя отсюда = убрать его разом со
-// всех шкафов проекта, точечно из одного ШУ выйти нельзя.
-export function UsersTab({ projectId, projectName, isAdmin }: { projectId: number | null; projectName: string | null; isAdmin: boolean }) {
+// Здесь две категории: участники проекта (доступ ко всем шкафам проекта разом) и
+// те, кто добавил именно этот ШУ напрямую по его QR (GET /admin/cabinets/{id}/users
+// отдаёт обе, признака «откуда доступ» в ответе нет). Убрать можно только
+// участника проекта — DELETE /admin/projects/{id}/users/{user_id} снимает его
+// разом со всех шкафов проекта; ручки, снимающей прямой доступ к одному ШУ, нет.
+// Поэтому «участник проекта» определяем сверкой со списком участников проекта.
+export function UsersTab({ cabinetId, projectId, projectName, isAdmin }: { cabinetId: number; projectId: number | null; projectName: string | null; isAdmin: boolean }) {
   const qc = useQueryClient()
   const [viewUserId, setViewUserId] = useState<number | null>(null)
 
   const { data, isLoading } = useQuery({
+    queryKey: ['cabinet-users', cabinetId],
+    queryFn: () => cabinetsApi.getUsers(cabinetId),
+  })
+
+  const { data: projectUsers } = useQuery({
     queryKey: ['project-users', projectId],
     queryFn: () => projectsApi.getUsers(projectId!),
-    enabled: projectId != null,
+    enabled: projectId != null && isAdmin,
   })
+  const projectMemberIds = new Set((projectUsers ?? []).map(u => u.user_id))
 
   const removeMut = useMutation({
     mutationFn: ({ userId, reason }: { userId: number; reason: string }) =>
       projectsApi.removeUser(projectId!, userId, reason),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['project-users', projectId] })
+      qc.invalidateQueries({ queryKey: ['cabinet-users', cabinetId] })
       toast.success('Пользователь убран из проекта')
     },
     onError: () => toast.error('Ошибка при удалении'),
   })
-
-  if (projectId == null) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-slate-400 text-center px-6">
-        <UsersIcon className="w-8 h-8 mb-2 opacity-40" />
-        <p className="text-sm">ШУ не привязан к проекту — доступ к нему выводится из проекта, поэтому пока у него нет ни одного пользователя</p>
-      </div>
-    )
-  }
 
   const users = data ?? []
 
@@ -67,14 +68,16 @@ export function UsersTab({ projectId, projectName, isAdmin }: { projectId: numbe
   return (
     <>
       <p className="text-xs text-slate-400 px-6 pt-3">
-        Это участники проекта «{projectName}» — у них доступ ко всем его шкафам разом, не только к этому.
+        {projectId != null
+          ? <>Участники проекта «{projectName}» (доступ ко всем его шкафам разом) и те, кто добавил именно этот ШУ по его QR.</>
+          : <>ШУ не привязан к проекту — здесь только те, кто добавил именно этот шкаф по его QR.</>}
       </p>
       <div className="divide-y divide-slate-50 dark:divide-slate-700/30">
         {users.map(u => (
           <UserRow
             key={u.user_id}
             user={u}
-            isAdmin={isAdmin}
+            isAdmin={isAdmin && projectMemberIds.has(u.user_id)}
             onView={() => setViewUserId(u.user_id)}
             onRemove={(reason) => removeMut.mutate({ userId: u.user_id, reason })}
             removing={removeMut.isPending}
@@ -125,11 +128,6 @@ function UserRow({ user, isAdmin, onView, onRemove, removing }: {
             <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate group-hover:text-[#1B3A72] dark:group-hover:text-blue-400 transition-colors">
               {user.full_name ?? user.phone ?? `#${user.user_id}`}
             </p>
-            {user.is_primary && (
-              <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 shrink-0">
-                Основной
-              </span>
-            )}
           </div>
           <div className="flex items-center gap-3 mt-0.5 flex-wrap">
             {user.phone && (

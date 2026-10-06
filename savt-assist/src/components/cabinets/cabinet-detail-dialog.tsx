@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ProjectCombobox } from '@/components/ui/project-combobox'
 import { SimCombobox, simLabel } from '@/components/ui/sim-combobox'
+import { QrDialog } from '@/components/ui/qr-dialog'
 import { WarrantyBadge } from './warranty-badge'
 import { cabinetsApi, UpdateCabinetDto } from '@/lib/api/cabinets'
 import { apiErrorMessage } from '@/lib/api/errors'
@@ -57,6 +58,7 @@ function DetailContent({ cabinetId, initialMode }: {
   const isAdmin = currentUser?.role !== 'operator'
   const qc = useQueryClient()
   const [tab, setTab] = useState<Tab>('info')
+  const [showQr, setShowQr] = useState(false)
   const [editing, setEditing] = useState(initialMode === 'edit')
   const [fields, setFields] = useState<FormFields | null>(null)
   const [errors, setErrors] = useState<FormErrors>({})
@@ -244,7 +246,7 @@ function DetailContent({ cabinetId, initialMode }: {
         )}
         {tab === 'docs' && <DocsTab cabinetId={cabinetId} isAdmin={isAdmin} />}
         {tab === 'photos' && <PhotosTab cabinetId={cabinetId} isAdmin={isAdmin} />}
-        {tab === 'users' && <UsersTab projectId={cabinet.project_id ?? null} projectName={cabinet.project_name ?? null} isAdmin={isAdmin} />}
+        {tab === 'users' && <UsersTab cabinetId={cabinetId} projectId={cabinet.project_id ?? null} projectName={cabinet.project_name ?? null} isAdmin={isAdmin} />}
         {tab === 'requests' && <ServiceRequestsTab cabinetId={cabinetId} />}
         {tab === 'overrides' && <RegisterOverridesTab cabinetId={cabinetId} isAdmin={isAdmin} />}
         {tab === 'telemetry' && <TelemetryTab cabinetId={cabinetId} />}
@@ -252,6 +254,12 @@ function DetailContent({ cabinetId, initialMode }: {
 
       {tab === 'info' && (
         <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-2 shrink-0">
+          {!editing && (
+            <Button variant="outline" onClick={() => setShowQr(true)} className="h-8 gap-2 cursor-pointer">
+              <QrIcon className="w-4 h-4" />
+              QR-код ШУ
+            </Button>
+          )}
           {!editing && isAdmin && (
             <button
               onClick={() => setEditing(true)}
@@ -277,7 +285,26 @@ function DetailContent({ cabinetId, initialMode }: {
           )}
         </div>
       )}
+
+      <QrDialog
+        open={showQr}
+        onClose={() => setShowQr(false)}
+        title="QR-код ШУ"
+        name={fields.admin_internal_name || fields.object_number}
+        fileName={`qr-cabinet-${fields.object_number}.png`}
+        queryKey={['qr', 'cabinet', cabinetId]}
+        load={() => cabinetsApi.getQr(cabinetId)}
+      />
     </div>
+  )
+}
+
+function QrIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />
+    </svg>
   )
 }
 

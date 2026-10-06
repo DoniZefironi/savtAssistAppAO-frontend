@@ -1,7 +1,7 @@
 import { apiClient } from './client'
-import type { ServiceRequest, AdditionRequest, DocumentRequest, ProjectRequest, PhoneChangeRequest, RegistrationRequest, PasswordResetRequest, PaginatedResponse } from '@/types'
+import type { ServiceRequest, AdditionRequest, DocumentRequest, PhoneChangeRequest, RegistrationRequest, PasswordResetRequest, PaginatedResponse } from '@/types'
 
-export type { ServiceRequest, AdditionRequest, DocumentRequest, ProjectRequest, PhoneChangeRequest, RegistrationRequest, PasswordResetRequest }
+export type { ServiceRequest, AdditionRequest, DocumentRequest, PhoneChangeRequest, RegistrationRequest, PasswordResetRequest }
 
 interface ListParams {
   status?: string
@@ -41,21 +41,6 @@ export const requestsApi = {
 
   rejectAddition: async (id: number, admin_response: string) => {
     const { data } = await apiClient.post(`/admin/cabinet-requests/additions/${id}/reject`, { admin_response })
-    return data
-  },
-
-  getProjectRequests: async (params?: ListParams) => {
-    const { data } = await apiClient.get<PaginatedResponse<ProjectRequest>>('/admin/project-requests', { params })
-    return data
-  },
-
-  approveProjectRequest: async (id: number, admin_response: string | null) => {
-    const { data } = await apiClient.post(`/admin/project-requests/${id}/approve`, { admin_response })
-    return data
-  },
-
-  rejectProjectRequest: async (id: number, admin_response: string) => {
-    const { data } = await apiClient.post(`/admin/project-requests/${id}/reject`, { admin_response })
     return data
   },
 

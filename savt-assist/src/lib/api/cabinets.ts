@@ -1,5 +1,6 @@
 import { apiClient } from './client'
 import type { Cabinet, PaginatedResponse } from '@/types'
+import type { ProjectUser } from './projects'
 
 export interface CabinetsParams {
   search?: string
@@ -88,6 +89,22 @@ export const cabinetsApi = {
     await apiClient.delete(`/admin/cabinets/${id}`)
   },
 
+  // Все, у кого есть доступ к этому ШУ: участники проекта И те, кто добавил
+  // именно этот шкаф напрямую по его QR. Поля те же, что у участников проекта
+  // (ProjectUser), признака «откуда доступ» в ответе нет.
+  getUsers: async (id: number): Promise<ProjectUser[]> => {
+    const { data } = await apiClient.get(`/admin/cabinets/${id}/users`)
+    return data
+  },
+
+  // QR конкретного ШУ (PNG) — по нему пользователь добавляет именно этот шкаф
+  // напрямую, не получая доступа ко всему проекту. Тот же паттерн, что у
+  // projectsApi.getQr.
+  getQr: async (id: number): Promise<Blob> => {
+    const { data } = await apiClient.get(`/admin/cabinets/${id}/qr`, { responseType: 'blob' })
+    return data
+  },
+
   updateCabinetTags: (cabinetId: number, tagIds: number[]): Promise<void> =>
     apiClient.put(`/admin/cabinets/${cabinetId}/tags`, { tag_ids: tagIds }).then(() => undefined),
 
@@ -116,7 +133,6 @@ export const cabinetsApi = {
         unreadChats: s.unread_chats ?? 0,
         openServiceRequests: s.open_service_requests ?? 0,
         pendingDocumentRequests: s.pending_document_requests ?? 0,
-        pendingProjectShareRequests: s.pending_project_share_requests ?? 0,
         pendingAdditionRequests: s.pending_addition_requests ?? 0,
         pendingPhoneChangeRequests: s.pending_phone_change_requests ?? 0,
         pendingRegistrationRequests: s.pending_registration_requests ?? 0,
@@ -130,7 +146,7 @@ export const cabinetsApi = {
 
 export interface ActivityItem {
   id: number
-  type: 'service' | 'document' | 'share' | 'addition' | 'phone_change' | 'password_reset' | 'registration' | 'reclamation'
+  type: 'service' | 'document' | 'addition' | 'phone_change' | 'password_reset' | 'registration' | 'reclamation'
   label: string
   user: string | null
   detail: string
@@ -142,7 +158,6 @@ export interface DashboardStats {
   unreadChats: number
   openServiceRequests: number
   pendingDocumentRequests: number
-  pendingProjectShareRequests: number
   pendingAdditionRequests: number
   pendingPhoneChangeRequests: number
   pendingRegistrationRequests: number
@@ -160,7 +175,7 @@ export interface DashboardData {
 
 interface DashboardActivityRaw {
   id: number
-  type: 'service' | 'document' | 'share' | 'addition' | 'phone_change' | 'password_reset' | 'registration' | 'reclamation'
+  type: 'service' | 'document' | 'addition' | 'phone_change' | 'password_reset' | 'registration' | 'reclamation'
   // Статусы рекламации (review/in_progress/resolved/rejected) — свой набор,
   // не тот же, что у сервисных заявок (open/in_progress/postponed/closed),
   // хотя формально это одно поле status — см. README-backend.md, «Рекламации
@@ -194,7 +209,6 @@ export interface CabinetGeoItem {
 const ACTIVITY_LABELS: Record<string, string> = {
   service: 'Сервисная заявка',
   document: 'Запрос на документ',
-  share: 'Доступ к ШУ',
   addition: 'Добавление ШУ',
   phone_change: 'Смена номера',
   password_reset: 'Смена пароля',

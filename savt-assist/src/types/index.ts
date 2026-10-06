@@ -506,26 +506,6 @@ export interface PhoneChangeRequest {
   pending_rivals: number
 }
 
-export interface ProjectRequest {
-  id: number
-  user_id: number
-  user_full_name: string | null
-  user_phone: string | null
-  user_type: 'individual' | 'organization' | null
-  organization_name: string | null
-  user_is_verified: boolean
-  user_registered_at: string | null
-  project_id: number
-  project_name: string
-  user_comment: string | null
-  status: 'pending' | 'approved' | 'rejected'
-  admin_response: string | null
-  resolved_by_admin_id: number | null
-  resolved_by_admin_name: string | null
-  created_at: string
-  resolved_at: string | null
-}
-
 // Заявка на регистрацию — аккаунта ещё не существует (в отличие от прочих
 // заявок), поэтому вместо user_id/user_phone/... — сырые данные заявителя.
 // После approve заводится аккаунт, id которого попадает в created_user_id.

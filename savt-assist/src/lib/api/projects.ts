@@ -59,7 +59,6 @@ export interface ProjectUser {
   full_name: string | null
   phone: string | null
   user_type: string | null
-  is_primary: boolean
   added_at: string
 }
 

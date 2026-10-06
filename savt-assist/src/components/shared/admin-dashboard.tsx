@@ -25,7 +25,6 @@ import { TAB_DEEPLINK_PARAM, type Tab } from '@/components/requests/requests-vie
 const ACTIVITY_TYPE_TAB: Partial<Record<ActivityItem['type'], Tab>> = {
   service: 'service',
   document: 'docs',
-  share: 'projects',
   addition: 'additions',
   phone_change: 'phone',
   password_reset: 'password',
@@ -52,7 +51,6 @@ function makeStatCategories(base: string, isAdmin: boolean) {
     {
       key: 'projects', title: 'Заявки по проектам', cards: [
         { key: 'pendingDocumentRequests' as const, label: 'Документы', href: `${base}/requests?tab=docs`, accent: '#7C3AED', urgentAbove: 0, icon: <DocIcon /> },
-        { key: 'pendingProjectShareRequests' as const, label: 'Доступ к проекту', href: `${base}/requests?tab=projects`, accent: '#0891B2', urgentAbove: 0, icon: <KeyIcon /> },
         { key: 'pendingAdditionRequests' as const, label: 'Добавление ШУ', href: `${base}/requests?tab=additions`, accent: '#059669', urgentAbove: 0, icon: <PlusBoxIcon /> },
       ],
     },
@@ -211,7 +209,6 @@ export function AdminDashboard() {
 const TYPE_META: Record<ActivityItem['type'], { label: string; color: string; icon: React.ReactNode }> = {
   service:        { label: 'Сервисная заявка',   color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',  icon: <WrenchIcon /> },
   document:       { label: 'Запрос на документ', color: 'bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400', icon: <DocIcon /> },
-  share:          { label: 'Доступ к ШУ',        color: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400',      icon: <KeyIcon /> },
   addition:       { label: 'Добавление ШУ',      color: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400', icon: <PlusBoxIcon /> },
   phone_change:   { label: 'Смена номера',       color: 'bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400',      icon: <PhoneChangeIcon /> },
   password_reset: { label: 'Смена пароля',       color: 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400',         icon: <PasswordResetIcon /> },
@@ -300,9 +297,6 @@ function WrenchIcon() {
 }
 function DocIcon() {
   return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
-}
-function KeyIcon() {
-  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" /></svg>
 }
 function PlusBoxIcon() {
   return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>

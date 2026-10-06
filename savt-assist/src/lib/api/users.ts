@@ -30,7 +30,6 @@ export interface AdminUserDetail extends AdminUser {
 export interface UserProject {
   project_id: number
   name: string
-  is_primary: boolean
   // Сколько шкафов вообще в проекте — не значит, что у пользователя к каждому
   // отдельный доступ: он либо есть ко всем шкафам проекта, либо ни к одному.
   cabinet_count: number
