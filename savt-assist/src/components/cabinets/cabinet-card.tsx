@@ -17,7 +17,7 @@ export function CabinetCard({ cabinet, isAdmin, view = 'list', onOpen, onEdit, o
 
   if (view === 'grid') {
     return (
-      <div className="group relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-4 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-600 transition-all flex flex-col gap-2 cursor-pointer" onClick={onOpen}>
+      <div className="group relative bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600 transition-all flex flex-col gap-2 cursor-pointer" onClick={onOpen}>
 
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -61,7 +61,7 @@ export function CabinetCard({ cabinet, isAdmin, view = 'list', onOpen, onEdit, o
   }
 
   return (
-    <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 sm:p-4 flex items-center gap-3 sm:gap-4 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-600 transition-all group">
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 sm:p-4 flex items-center gap-3 sm:gap-4 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600 transition-all group">
 
       <button
         onClick={onOpen}

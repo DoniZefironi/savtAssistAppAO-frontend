@@ -505,7 +505,7 @@ export function CabinetsView({ isAdmin }: Props) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto scroll-smooth px-3 sm:px-6 py-3 sm:py-4">
+      <div className="flex-1 overflow-y-auto scroll-smooth px-3 sm:px-6 py-3 sm:py-4 bg-slate-50 dark:bg-slate-900">
         <div className="max-w-425 mx-auto">
         {prjQ.isLoading && (
           <div className={view === 'grid' ? GRID_CLASSES : 'space-y-3'}>

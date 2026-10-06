@@ -612,7 +612,7 @@ function ArticleCard({ article, categoryName, view = 'list', onEdit, onDelete }:
 }) {
   if (view === 'grid') {
     return (
-      <div onClick={onEdit} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-4 hover:border-slate-200 dark:hover:border-slate-600 hover:shadow-sm transition-all group cursor-pointer flex flex-col overflow-hidden">
+      <div onClick={onEdit} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-sm transition-all group cursor-pointer flex flex-col overflow-hidden">
         <div className="flex items-start justify-between mb-2.5">
           <div className="w-9 h-9 bg-[#1B3A72] rounded-lg flex items-center justify-center shrink-0">
             <BookIcon className="w-4 h-4 text-white" />
@@ -643,7 +643,7 @@ function ArticleCard({ article, categoryName, view = 'list', onEdit, onDelete }:
   }
 
   return (
-    <div onClick={onEdit} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 p-5 hover:border-slate-200 dark:hover:border-slate-600 hover:shadow-sm transition-all group cursor-pointer overflow-hidden">
+    <div onClick={onEdit} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-sm transition-all group cursor-pointer overflow-hidden">
       <div className="flex items-start gap-3">
         <div className="w-9 h-9 bg-[#1B3A72] rounded-lg flex items-center justify-center shrink-0 mt-0.5">
           <BookIcon className="w-4 h-4 text-white" />

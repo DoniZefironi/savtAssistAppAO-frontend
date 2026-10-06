@@ -493,7 +493,7 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto scroll-smooth px-3 sm:px-6 py-3 sm:py-4">
+      <div className="flex-1 overflow-y-auto scroll-smooth px-3 sm:px-6 py-3 sm:py-4 bg-slate-50 dark:bg-slate-900">
         <div className="max-w-425 mx-auto">
         {pageTab === 'documents' && <ProjectDocsTab projectId={projectId} isAdmin={isAdmin} />}
         {pageTab === 'photos' && <ProjectPhotosTab projectId={projectId} isAdmin={isAdmin} />}

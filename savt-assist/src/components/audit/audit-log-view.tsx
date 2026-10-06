@@ -219,7 +219,7 @@ export function AuditLogView() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto scroll-smooth px-3 sm:px-6 py-3 sm:py-4">
+      <div className="flex-1 overflow-y-auto scroll-smooth px-3 sm:px-6 py-3 sm:py-4 bg-slate-50 dark:bg-slate-900">
         <div className="max-w-425 mx-auto">
         {isLoading && (
           <div className="space-y-2">
@@ -242,7 +242,7 @@ export function AuditLogView() {
         )}
 
         {items.length > 0 && (
-          <div className="divide-y divide-slate-100 dark:divide-slate-700/50 bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 overflow-hidden">
+          <div className="divide-y divide-slate-100 dark:divide-slate-700/50 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
             {items.map((log) => (
               <AuditLogRow key={log.id} log={log} expanded={expandedId === log.id} onToggle={() => setExpandedId(id => id === log.id ? null : log.id)} />
             ))}
