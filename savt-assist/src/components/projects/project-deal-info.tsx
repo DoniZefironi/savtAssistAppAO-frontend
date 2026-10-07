@@ -27,10 +27,10 @@ export function ProjectDealInfo({ project }: { project: ProjectDetail }) {
   const shipment = shipmentLabel(project.shipment_planned_at, project.shipment_actual_at)
 
   return (
-    <div className="mb-3 rounded-xl border border-slate-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/40 px-3 py-2.5">
+    <div className="mb-3 rounded-xl border border-slate-200 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/40 px-3 py-2.5">
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-2.5">
         {project.production_number && (
-          <Field icon={Hash} label="Номер в производство">
+          <Field icon={Hash} label="Номер в производстве">
             <span className="font-medium text-slate-700 dark:text-slate-200">{project.production_number}</span>
           </Field>
         )}
