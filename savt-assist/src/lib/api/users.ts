@@ -25,6 +25,18 @@ export interface AdminUserDetail extends AdminUser {
   // (см. README-backend.md, GET /admin/users/{id}). Переход по строке должен
   // вести на карточку проекта.
   projects: UserProject[]
+  // Только ШУ, которые пользователь добавил отдельно по QR самого шкафа.
+  // Шкафы из его проектов сюда не попадают — они видны в карточке проекта.
+  // У админ-карточки (GET /admin/admins/{id}) поля может не быть.
+  cabinets?: UserCabinet[]
+}
+
+export interface UserCabinet {
+  cabinet_id: number
+  type: string | null
+  object_number: string
+  admin_internal_name: string | null
+  added_at: string
 }
 
 export interface UserProject {

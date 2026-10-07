@@ -25,6 +25,9 @@ const OPERATION_LABEL: Record<ReclamationBitrixOutboxItem['operation'], string> 
 const OUTBOX_QUERY = {
   queryKey: ['reclamation-bitrix-outbox'],
   queryFn: reclamationsApi.getBitrixOutbox,
+  // Строки исчезают сами, когда фоновый повтор на бэкенде проходит успешно, —
+  // без опроса плашка висела бы до перезагрузки страницы.
+  refetchInterval: 30_000,
 } as const
 
 export function useBitrixOutbox(enabled: boolean) {
@@ -36,6 +39,7 @@ export function useBitrixDetached(enabled: boolean) {
     queryKey: ['reclamation-bitrix-detached'],
     queryFn: reclamationsApi.getBitrixDetached,
     enabled,
+    refetchInterval: 30_000,
   })
 }
 

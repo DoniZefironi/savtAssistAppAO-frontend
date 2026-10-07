@@ -3,15 +3,25 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { CheckCircle2, XCircle } from 'lucide-react'
+import { isAxiosError } from 'axios'
+import { CheckCircle2, XCircle, Unlink, UserMinus } from 'lucide-react'
 import { usersApi } from '@/lib/api/users'
+import { projectsApi } from '@/lib/api/projects'
+import { cabinetsApi } from '@/lib/api/cabinets'
+import { apiErrorMessage } from '@/lib/api/errors'
 import { useAuthStore } from '@/lib/store/auth'
 import { cn, isSuperadminRole } from '@/lib/utils'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ProjectDetailDialog } from '@/components/projects/project-detail-dialog'
+import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog'
 import { roleLabel, userTypeLabel, fmtDate, DRow, UserIcon } from './user-shared'
+import { RevokeAccessDialog } from './revoke-access-dialog'
+
+type RevokeTarget =
+  | { kind: 'project'; id: number; name: string; cabinetCount?: number }
+  | { kind: 'cabinet'; id: number; name: string }
 
 export function UserDialog({ userId, role, onClose }: { userId: number; role: string; onClose: () => void }) {
   const qc = useQueryClient()
@@ -22,6 +32,9 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
   const [banReasonError, setBanReasonError] = useState(false)
   const [deleteStep, setDeleteStep] = useState(false)
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null)
+  const [selectedCabinetId, setSelectedCabinetId] = useState<number | null>(null)
+  const [revoke, setRevoke] = useState<RevokeTarget | null>(null)
+  const [revokeError, setRevokeError] = useState<string | null>(null)
 
   // Админ/суперадмин в списке — staff-карточка: верификация/блокировка к ним
   // не применяются. Единственное доступное действие — удаление админа, и только
@@ -79,6 +92,44 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
     mutationFn: () => usersApi.deleteAdmin(userId),
     onSuccess: () => { invalidate(); toast.success('Администратор удалён'); onClose() },
     onError: () => toast.error('Ошибка при удалении'),
+  })
+
+  // Отзыв доступа — только админу (оператору ручки отдают 403) и только у
+  // обычного пользователя: у сотрудников проектов/ШУ нет.
+  const canRevoke = !isReadOnly && !isStaffAdmin
+
+  const openRevoke = (target: RevokeTarget) => { setRevokeError(null); setRevoke(target) }
+
+  const revokeMut = useMutation({
+    mutationFn: ({ target, reason }: { target: RevokeTarget; reason: string }) =>
+      target.kind === 'project'
+        ? projectsApi.removeUser(target.id, userId, reason)
+        : cabinetsApi.unlinkUser(target.id, userId, reason),
+    onSuccess: (_, { target }) => {
+      invalidate()
+      qc.invalidateQueries({ queryKey: ['project-users'] })
+      qc.invalidateQueries({ queryKey: ['cabinet-users'] })
+      qc.invalidateQueries({ queryKey: ['projects'] })
+      toast.success(target.kind === 'project' ? 'Пользователь убран из проекта' : 'ШУ отвязан')
+      setRevoke(null)
+      setRevokeError(null)
+    },
+    onError: (e, { target }) => {
+      const status = isAxiosError(e) ? e.response?.status : undefined
+      const text = apiErrorMessage(e, target.kind === 'project' ? 'Не удалось убрать из проекта' : 'Не удалось отвязать ШУ')
+      if (status === 404) {
+        // Уже убрали (или ШУ нет) — карточка устарела, перечитываем и закрываем окно.
+        invalidate()
+        toast.error(text)
+        setRevoke(null)
+        setRevokeError(null)
+      } else if (status === 409) {
+        // Доступ идёт через проект — текст сервера показываем в самом окне.
+        setRevokeError(text)
+      } else {
+        toast.error(text)
+      }
+    },
   })
 
   const isMutating = verifyMut.isPending || unverifyMut.isPending || banMut.isPending || unbanMut.isPending || deleteOperatorMut.isPending
@@ -171,20 +222,75 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
                 </p>
                 <div className="space-y-1.5">
                   {user.projects.map(p => (
-                    <button
-                      key={p.project_id}
-                      onClick={() => setSelectedProjectId(p.project_id)}
-                      className="w-full flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700/70 rounded-lg px-3 py-2 transition-colors cursor-pointer text-left group"
-                    >
-                      <span className="text-sm font-medium text-slate-700 dark:text-slate-200 flex-1 truncate group-hover:text-[#1B3A72] dark:group-hover:text-blue-400 transition-colors">
-                        {p.name}
-                      </span>
-                      <span className="text-xs text-slate-400 shrink-0">{p.cabinet_count} шкафов</span>
-                      <svg className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 group-hover:text-[#1B3A72] dark:group-hover:text-blue-400 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                      </svg>
-                    </button>
+                    <div key={p.project_id} className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => setSelectedProjectId(p.project_id)}
+                        className="flex-1 min-w-0 flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700/70 rounded-lg px-3 py-2 transition-colors cursor-pointer text-left group"
+                      >
+                        <span className="text-sm font-medium text-slate-700 dark:text-slate-200 flex-1 truncate group-hover:text-[#1B3A72] dark:group-hover:text-blue-400 transition-colors">
+                          {p.name}
+                        </span>
+                        <span className="text-xs text-slate-400 shrink-0">{p.cabinet_count} шкафов</span>
+                        <svg className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 group-hover:text-[#1B3A72] dark:group-hover:text-blue-400 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                        </svg>
+                      </button>
+                      {canRevoke && (
+                        <button
+                          onClick={() => openRevoke({ kind: 'project', id: p.project_id, name: p.name, cabinetCount: p.cabinet_count })}
+                          title="Убрать из проекта"
+                          aria-label={`Убрать из проекта «${p.name}»`}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors cursor-pointer shrink-0"
+                        >
+                          <UserMinus className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {(user.cabinets?.length ?? 0) > 0 && (
+              <div className="px-4 sm:px-6 py-3 border-t border-slate-100 dark:border-slate-700">
+                <p className="text-xs text-slate-400 mb-2">
+                  Отдельно добавленные ШУ ({user.cabinets!.length}) — добавлены по QR самого шкафа, не через проект
+                </p>
+                <div className="space-y-1.5">
+                  {user.cabinets!.map(c => {
+                    const name = c.admin_internal_name || c.object_number
+                    return (
+                      <div key={c.cabinet_id} className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => setSelectedCabinetId(c.cabinet_id)}
+                          className="flex-1 min-w-0 flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700/70 rounded-lg px-3 py-2 transition-colors cursor-pointer text-left group"
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-medium text-slate-700 dark:text-slate-200 truncate group-hover:text-[#1B3A72] dark:group-hover:text-blue-400 transition-colors">
+                              {name}
+                            </span>
+                            <span className="block text-xs text-slate-400 truncate">
+                              {[c.admin_internal_name ? c.object_number : null, c.type].filter(Boolean).join(' · ') || '—'}
+                            </span>
+                          </span>
+                          <span className="text-xs text-slate-400 shrink-0">с {fmtDate(c.added_at)}</span>
+                          <svg className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 group-hover:text-[#1B3A72] dark:group-hover:text-blue-400 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                          </svg>
+                        </button>
+                        {canRevoke && (
+                          <button
+                            onClick={() => openRevoke({ kind: 'cabinet', id: c.cabinet_id, name })}
+                            title="Отвязать ШУ"
+                            aria-label={`Отвязать ШУ «${name}»`}
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors cursor-pointer shrink-0"
+                          >
+                            <Unlink className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -300,6 +406,39 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
         isAdmin
         onClose={() => setSelectedProjectId(null)}
       />
+      {selectedCabinetId !== null && (
+        <CabinetDetailDialog cabinetId={selectedCabinetId} isAdmin onClose={() => setSelectedCabinetId(null)} />
+      )}
+      {revoke && (
+        <RevokeAccessDialog
+          key={`${revoke.kind}-${revoke.id}`}
+          title={revoke.kind === 'project' ? 'Убрать из проекта?' : 'Отвязать ШУ?'}
+          warning={revoke.kind === 'project' ? (
+            <>
+              <strong>{user?.full_name ?? user?.phone ?? `#${userId}`}</strong> потеряет доступ ко{' '}
+              <strong>всем шкафам</strong> проекта «{revoke.name}»
+              {revoke.cabinetCount != null && <> ({revoke.cabinetCount})</>}, а не к одному.
+              Его чаты по проекту и по его шкафам будут архивированы (чаты других участников не затрагиваются),
+              ему придёт уведомление «Доступ к проекту отозван».
+            </>
+          ) : (
+            <>
+              <strong>{user?.full_name ?? user?.phone ?? `#${userId}`}</strong> потеряет доступ к ШУ «{revoke.name}».
+              Его чаты по этому шкафу будут архивированы, ему придёт уведомление «Доступ к ШУ отозван».
+            </>
+          )}
+          confirmLabel={revoke.kind === 'project' ? 'Убрать из проекта' : 'Отвязать'}
+          pending={revokeMut.isPending}
+          error={revokeError}
+          extra={revokeError && revoke.kind === 'cabinet' && (user?.projects?.length ?? 0) > 0 ? (
+            <p className="text-xs text-slate-400">
+              Закройте окно и уберите пользователя из нужного проекта кнопкой рядом с проектом в списке выше.
+            </p>
+          ) : undefined}
+          onConfirm={(reason) => revokeMut.mutate({ target: revoke, reason })}
+          onClose={() => { setRevoke(null); setRevokeError(null) }}
+        />
+      )}
     </AppModal>
   )
 }

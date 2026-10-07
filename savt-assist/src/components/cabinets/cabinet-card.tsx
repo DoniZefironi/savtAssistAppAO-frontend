@@ -10,9 +10,13 @@ interface Props {
   onOpen: () => void
   onEdit: () => void
   onDelete?: () => void
+  // Показать QR самого ШУ — по нему пользователь добавляет именно этот шкаф. Тот
+  // же вид и место, что у ProjectCard: в сетке — крайняя кнопка в шапке карточки,
+  // в списке — ведущая плитка слева. Без onQr карточка выглядит как раньше.
+  onQr?: () => void
 }
 
-export function CabinetCard({ cabinet, isAdmin, view = 'list', onOpen, onEdit, onDelete }: Props) {
+export function CabinetCard({ cabinet, isAdmin, view = 'list', onOpen, onEdit, onDelete, onQr }: Props) {
   const displayName = cabinet.admin_internal_name ?? cabinet.object_number
 
   if (view === 'grid') {
@@ -35,6 +39,15 @@ export function CabinetCard({ cabinet, isAdmin, view = 'list', onOpen, onEdit, o
                   <TrashIcon />
                 </Button>
               </>
+            )}
+            {onQr && (
+              <button
+                onClick={onQr}
+                title="Показать QR-код ШУ"
+                className="w-8 h-8 bg-[#1B3A72] rounded-lg flex items-center justify-center shrink-0 hover:bg-[#1B3A72]/80 transition-colors cursor-pointer"
+              >
+                <QrIcon className="w-4 h-4 text-white" />
+              </button>
             )}
           </div>
         </div>
@@ -63,13 +76,23 @@ export function CabinetCard({ cabinet, isAdmin, view = 'list', onOpen, onEdit, o
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 sm:p-4 flex items-center gap-3 sm:gap-4 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600 transition-all group">
 
-      <button
-        onClick={onOpen}
-        title={displayName}
-        className="w-10 h-10 sm:w-12 sm:h-12 bg-[#1B3A72] rounded-xl flex items-center justify-center shrink-0 hover:bg-[#1B3A72]/80 transition-colors relative cursor-pointer"
-      >
-        <CabinetIcon className="w-5 h-5 text-white" />
-      </button>
+      {onQr ? (
+        <button
+          onClick={onQr}
+          title="Показать QR-код ШУ"
+          className="w-10 h-10 sm:w-12 sm:h-12 bg-[#1B3A72] rounded-xl flex items-center justify-center shrink-0 hover:bg-[#1B3A72]/80 transition-colors cursor-pointer"
+        >
+          <QrIcon className="w-5 h-5 text-white" />
+        </button>
+      ) : (
+        <button
+          onClick={onOpen}
+          title={displayName}
+          className="w-10 h-10 sm:w-12 sm:h-12 bg-[#1B3A72] rounded-xl flex items-center justify-center shrink-0 hover:bg-[#1B3A72]/80 transition-colors relative cursor-pointer"
+        >
+          <CabinetIcon className="w-5 h-5 text-white" />
+        </button>
+      )}
 
       <div className="flex-1 min-w-0 cursor-pointer" onClick={onOpen}>
         <p className="font-semibold text-slate-800 dark:text-slate-100 truncate">{displayName}</p>
@@ -113,8 +136,14 @@ export function CabinetCard({ cabinet, isAdmin, view = 'list', onOpen, onEdit, o
 }
 
 
-// Декоративная иконка вместо убранной кнопки QR (у ШУ больше нет своего QR-кода,
-// см. README-backend.md, «Рут `admin: cabinets`» — /admin/cabinets/{id}/qr убран).
+function QrIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />
+    </svg>
+  )
+}
 function CabinetIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

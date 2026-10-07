@@ -32,6 +32,8 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
     // ответственный приходят только вебхуком из Bitrix и меняются без нашего
     // участия, поэтому карточку читаем заново при каждом открытии.
     staleTime: 0,
+    // Пока карточка открыта, специалист может поменять её в Bitrix — подхватываем.
+    refetchInterval: 15_000,
   })
 
   if (!r) {

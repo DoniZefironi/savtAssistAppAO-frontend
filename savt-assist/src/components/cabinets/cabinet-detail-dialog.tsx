@@ -546,6 +546,13 @@ function CabinetProjectRow({ cabinetId, cabinet, isAdmin }: {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cabinet', cabinetId] })
       qc.invalidateQueries({ queryKey: ['cabinets'] })
+      // Шкаф переехал в другой проект — меняются число шкафов у проектов,
+      // страницы проектов и списки пользователей (доступ идёт через проект).
+      qc.invalidateQueries({ queryKey: ['projects'] })
+      qc.invalidateQueries({ queryKey: ['project'] })
+      qc.invalidateQueries({ queryKey: ['project-users'] })
+      qc.invalidateQueries({ queryKey: ['cabinet-users'] })
+      qc.invalidateQueries({ queryKey: ['admin-user'] })
       toast.success('Проект обновлён')
       setEditing(false)
     },

@@ -3,25 +3,28 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { AlertTriangle } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
+import { isAxiosError } from 'axios'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cabinetsApi } from '@/lib/api/cabinets'
 import { projectsApi } from '@/lib/api/projects'
+import { apiErrorMessage } from '@/lib/api/errors'
 import type { ProjectUser } from '@/lib/api/projects'
 import { UserDialog } from '@/components/users/user-dialog'
+import { RevokeAccessDialog } from '@/components/users/revoke-access-dialog'
 import { UsersIcon, TrashIcon } from './cabinet-dialog-icons'
 
 // Здесь две категории: участники проекта (доступ ко всем шкафам проекта разом) и
 // те, кто добавил именно этот ШУ напрямую по его QR (GET /admin/cabinets/{id}/users
-// отдаёт обе, признака «откуда доступ» в ответе нет). Убрать можно только
-// участника проекта — DELETE /admin/projects/{id}/users/{user_id} снимает его
-// разом со всех шкафов проекта; ручки, снимающей прямой доступ к одному ШУ, нет.
-// Поэтому «участник проекта» определяем сверкой со списком участников проекта.
+// отдаёт обе, признака «откуда доступ» в ответе нет). Поэтому «участник проекта»
+// определяем сверкой со списком участников проекта: ему доступно «Убрать из
+// проекта» (снимает со ВСЕХ шкафов проекта), остальным — «Отвязать ШУ» (только
+// этот шкаф). Пока список участников проекта не загрузился, кнопок нет — иначе
+// участник проекта на секунду выглядел бы как добавивший напрямую.
 export function UsersTab({ cabinetId, projectId, projectName, isAdmin }: { cabinetId: number; projectId: number | null; projectName: string | null; isAdmin: boolean }) {
   const qc = useQueryClient()
   const [viewUserId, setViewUserId] = useState<number | null>(null)
+  const [revoke, setRevoke] = useState<{ user: ProjectUser; kind: 'project' | 'cabinet' } | null>(null)
+  const [revokeError, setRevokeError] = useState<string | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['cabinet-users', cabinetId],
@@ -33,17 +36,40 @@ export function UsersTab({ cabinetId, projectId, projectName, isAdmin }: { cabin
     queryFn: () => projectsApi.getUsers(projectId!),
     enabled: projectId != null && isAdmin,
   })
+  const membersKnown = projectId == null || projectUsers !== undefined
   const projectMemberIds = new Set((projectUsers ?? []).map(u => u.user_id))
 
-  const removeMut = useMutation({
-    mutationFn: ({ userId, reason }: { userId: number; reason: string }) =>
-      projectsApi.removeUser(projectId!, userId, reason),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['project-users', projectId] })
-      qc.invalidateQueries({ queryKey: ['cabinet-users', cabinetId] })
-      toast.success('Пользователь убран из проекта')
+  const closeRevoke = () => { setRevoke(null); setRevokeError(null) }
+
+  const revokeMut = useMutation({
+    mutationFn: ({ user, kind, reason }: { user: ProjectUser; kind: 'project' | 'cabinet'; reason: string }) =>
+      kind === 'project'
+        ? projectsApi.removeUser(projectId!, user.user_id, reason)
+        : cabinetsApi.unlinkUser(cabinetId, user.user_id, reason),
+    onSuccess: (_, { kind }) => {
+      qc.invalidateQueries({ queryKey: ['project-users'] })
+      qc.invalidateQueries({ queryKey: ['cabinet-users'] })
+      qc.invalidateQueries({ queryKey: ['admin-user'] })
+      toast.success(kind === 'project' ? 'Пользователь убран из проекта' : 'ШУ отвязан')
+      closeRevoke()
     },
-    onError: () => toast.error('Ошибка при удалении'),
+    onError: (e, { kind }) => {
+      const status = isAxiosError(e) ? e.response?.status : undefined
+      const text = apiErrorMessage(e, kind === 'project' ? 'Не удалось убрать из проекта' : 'Не удалось отвязать ШУ')
+      if (status === 404) {
+        // Уже убрали — список устарел, перечитываем.
+        qc.invalidateQueries({ queryKey: ['project-users'] })
+        qc.invalidateQueries({ queryKey: ['cabinet-users'] })
+        toast.error(text)
+        closeRevoke()
+      } else if (status === 409) {
+        // Доступ идёт через проект — показываем текст сервера в окне.
+        qc.invalidateQueries({ queryKey: ['project-users'] })
+        setRevokeError(text)
+      } else {
+        toast.error(text)
+      }
+    },
   })
 
   const users = data ?? []
@@ -65,6 +91,8 @@ export function UsersTab({ cabinetId, projectId, projectName, isAdmin }: { cabin
     )
   }
 
+  const who = (u: ProjectUser) => u.full_name ?? u.phone ?? `#${u.user_id}`
+
   return (
     <>
       <p className="text-xs text-slate-400 px-6 pt-3">
@@ -73,43 +101,64 @@ export function UsersTab({ cabinetId, projectId, projectName, isAdmin }: { cabin
           : <>ШУ не привязан к проекту — здесь только те, кто добавил именно этот шкаф по его QR.</>}
       </p>
       <div className="divide-y divide-slate-50 dark:divide-slate-700/30">
-        {users.map(u => (
-          <UserRow
-            key={u.user_id}
-            user={u}
-            isAdmin={isAdmin && projectMemberIds.has(u.user_id)}
-            onView={() => setViewUserId(u.user_id)}
-            onRemove={(reason) => removeMut.mutate({ userId: u.user_id, reason })}
-            removing={removeMut.isPending}
-          />
-        ))}
+        {users.map(u => {
+          const isMember = projectMemberIds.has(u.user_id)
+          return (
+            <UserRow
+              key={u.user_id}
+              user={u}
+              removeKind={isAdmin && membersKnown ? (isMember ? 'project' : 'cabinet') : null}
+              onView={() => setViewUserId(u.user_id)}
+              onRemove={(kind) => { setRevokeError(null); setRevoke({ user: u, kind }) }}
+            />
+          )
+        })}
       </div>
       {viewUserId !== null && (
         <UserDialog userId={viewUserId} role="user" onClose={() => setViewUserId(null)} />
+      )}
+      {revoke && (
+        <RevokeAccessDialog
+          key={`${revoke.kind}-${revoke.user.user_id}`}
+          title={revoke.kind === 'project' ? 'Убрать из проекта?' : 'Отвязать ШУ?'}
+          warning={revoke.kind === 'project' ? (
+            <>
+              <strong>{who(revoke.user)}</strong> потеряет доступ ко <strong>всем шкафам</strong> проекта «{projectName}», а не только к этому.
+              Его чаты по проекту и его шкафам будут архивированы (чаты других участников не затрагиваются),
+              ему придёт уведомление «Доступ к проекту отозван».
+            </>
+          ) : (
+            <>
+              <strong>{who(revoke.user)}</strong> потеряет доступ к этому ШУ. Его чаты по этому шкафу будут архивированы,
+              ему придёт уведомление «Доступ к ШУ отозван».
+            </>
+          )}
+          confirmLabel={revoke.kind === 'project' ? 'Убрать из проекта' : 'Отвязать'}
+          pending={revokeMut.isPending}
+          error={revokeError}
+          extra={revokeError && revoke.kind === 'cabinet' && projectId != null ? (
+            <button
+              type="button"
+              onClick={() => { setRevokeError(null); setRevoke({ user: revoke.user, kind: 'project' }) }}
+              className="text-xs text-red-600 dark:text-red-400 hover:underline cursor-pointer text-left"
+            >
+              Убрать из проекта «{projectName}» целиком…
+            </button>
+          ) : undefined}
+          onConfirm={(reason) => revokeMut.mutate({ user: revoke.user, kind: revoke.kind, reason })}
+          onClose={closeRevoke}
+        />
       )}
     </>
   )
 }
 
-function UserRow({ user, isAdmin, onView, onRemove, removing }: {
+function UserRow({ user, removeKind, onView, onRemove }: {
   user: ProjectUser
-  isAdmin: boolean
+  removeKind: 'project' | 'cabinet' | null
   onView: () => void
-  onRemove: (reason: string) => void
-  removing: boolean
+  onRemove: (kind: 'project' | 'cabinet') => void
 }) {
-  const [showForm, setShowForm] = useState(false)
-  const [reason, setReason] = useState('')
-  const [reasonError, setReasonError] = useState(false)
-
-  const handleRemoveClick = () => {
-    if (!reason.trim()) { setReasonError(true); return }
-    onRemove(reason)
-    setShowForm(false)
-    setReason('')
-    setReasonError(false)
-  }
-
   function fmtDate(d: string) {
     return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
   }
@@ -136,58 +185,16 @@ function UserRow({ user, isAdmin, onView, onRemove, removing }: {
             <span className="text-xs text-slate-400">с {fmtDate(user.added_at)}</span>
           </div>
         </button>
-        {isAdmin && !showForm && (
+        {removeKind && (
           <button
-            onClick={() => setShowForm(true)}
-            title="Убрать из проекта"
+            onClick={() => onRemove(removeKind)}
+            title={removeKind === 'project' ? 'Убрать из проекта' : 'Отвязать ШУ'}
             className="w-7 h-7 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors cursor-pointer shrink-0"
           >
             <TrashIcon className="w-4 h-4" />
           </button>
         )}
       </div>
-
-      {showForm && (
-        <div className="mt-2 space-y-2 pl-12">
-          <p className="text-xs text-amber-600 dark:text-amber-400 flex items-start gap-1">
-            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-            Уберёт доступ разом ко всем шкафам этого проекта, не только к этому.
-          </p>
-          <label className="text-xs font-medium text-slate-500 block">
-            Причина удаления <span className="text-red-500">*</span>
-          </label>
-          <textarea
-            value={reason}
-            onChange={e => { setReason(e.target.value); setReasonError(false) }}
-            placeholder="Укажите причину"
-            rows={2}
-            className={cn(
-              'w-full px-3 py-2 rounded-lg border bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 resize-none focus:outline-none',
-              reasonError
-                ? 'border-red-400 focus:border-red-500 dark:border-red-500'
-                : 'border-slate-200 dark:border-slate-600 focus:border-[#4A8FE7]'
-            )}
-          />
-          {reasonError && <p className="text-xs text-red-500">Обязательное поле</p>}
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="ghost"
-              onClick={() => { setShowForm(false); setReason(''); setReasonError(false) }}
-              disabled={removing}
-              className="h-7 text-xs px-2 cursor-pointer"
-            >
-              Отмена
-            </Button>
-            <Button
-              onClick={handleRemoveClick}
-              disabled={removing}
-              className="h-7 text-xs px-3 bg-red-500 hover:bg-red-600 cursor-pointer"
-            >
-              {removing ? 'Удаление...' : 'Убрать'}
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

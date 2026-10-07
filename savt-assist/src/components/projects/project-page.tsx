@@ -13,6 +13,8 @@ import { CabinetDetailDialog } from '@/components/cabinets/cabinet-detail-dialog
 import { CreateCabinetDialog } from '@/components/cabinets/create-cabinet-dialog'
 import { ProjectQrDialog } from './project-qr-dialog'
 import { ProjectDocsTab } from './project-docs-tab'
+import { ProjectUsersTab } from './project-users-tab'
+import { QrDialog } from '@/components/ui/qr-dialog'
 import { ProjectDealInfo } from './project-deal-info'
 import { ProjectPhotosTab } from '@/components/cabinets/cabinet-photos-tab'
 import { WarrantyChips, type WarrantyFilter } from '@/components/ui/warranty-chips'
@@ -85,6 +87,7 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
   const [warrantyTo, setWarrantyTo] = useState('')
   const [warrantyError, setWarrantyError] = useState<string | undefined>()
   const [showQr, setShowQr] = useState(false)
+  const [qrCabinet, setQrCabinet] = useState<{ id: number; name: string; number: string } | null>(null)
   const [deleteProjectConfirm, setDeleteProjectConfirm] = useState(false)
   const [showCreateCabinet, setShowCreateCabinet] = useState(false)
 
@@ -97,7 +100,7 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
   const [filtersOpen, setFiltersOpen] = usePersistentState('filters-open-project-cabinets', true)
   // Вкладка переживает перезагрузку страницы — иначе, работая с документами
   // или фото проекта, после каждого F5 возвращало на «Шкафы».
-  const [pageTab, setPageTab] = usePersistentState<'cabinets' | 'documents' | 'photos'>('project-page-tab', 'cabinets')
+  const [pageTab, setPageTab] = usePersistentState<'cabinets' | 'documents' | 'users' | 'photos'>('project-page-tab', 'cabinets')
   // Отдельный ключ от общего списка ШУ (cabinets-view.tsx, 'view-mode-cabinets') —
   // можно держать колонки в общем списке и строки внутри проекта, или наоборот.
   const [view, setView] = usePersistentState<'list' | 'grid'>('view-mode-project-cabinets', 'list')
@@ -420,6 +423,7 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
           {([
             { key: 'cabinets', label: 'Шкафы' },
             { key: 'documents', label: 'Документы проекта' },
+            { key: 'users', label: 'Пользователи' },
             { key: 'photos', label: 'Фото проекта' },
           ] as const).map(({ key, label }) => (
             <button
@@ -496,6 +500,7 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
       <div className="flex-1 overflow-y-auto scroll-smooth px-3 sm:px-6 py-3 sm:py-4 bg-slate-50 dark:bg-slate-900">
         <div className="max-w-425 mx-auto">
         {pageTab === 'documents' && <ProjectDocsTab projectId={projectId} isAdmin={isAdmin} />}
+        {pageTab === 'users' && <ProjectUsersTab projectId={projectId} projectName={project.name} isAdmin={isAdmin} />}
         {pageTab === 'photos' && <ProjectPhotosTab projectId={projectId} isAdmin={isAdmin} />}
         {pageTab === 'cabinets' && <>
         {isLoading && (
@@ -531,6 +536,7 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
                 onOpen={() => { setOpenCabinetMode('view'); setOpenCabinetId(cabinet.id) }}
                 onEdit={() => { setOpenCabinetMode('edit'); setOpenCabinetId(cabinet.id) }}
                 onDelete={() => setDeleteCabinetConfirm({ id: cabinet.id, name: cabinet.admin_internal_name ?? cabinet.object_number })}
+                onQr={() => setQrCabinet({ id: cabinet.id, name: cabinet.admin_internal_name ?? cabinet.object_number, number: cabinet.object_number })}
               />
             ))}
           </div>
@@ -563,6 +569,15 @@ export function ProjectPage({ projectId, isAdmin, backHref, startEditing }: Prop
 
       <CabinetDetailDialog cabinetId={openCabinetId} isAdmin={isAdmin} initialMode={openCabinetMode} onClose={() => setOpenCabinetId(null)} />
       <ProjectQrDialog project={showQr ? qrProject : null} onClose={() => setShowQr(false)} />
+      <QrDialog
+        open={qrCabinet !== null}
+        onClose={() => setQrCabinet(null)}
+        title="QR-код ШУ"
+        name={qrCabinet?.name}
+        fileName={`qr-cabinet-${qrCabinet?.number ?? ''}.png`}
+        queryKey={['qr', 'cabinet', qrCabinet?.id]}
+        load={() => cabinetsApi.getQr(qrCabinet!.id)}
+      />
       {isAdmin && (
         <CreateCabinetDialog open={showCreateCabinet} onClose={() => setShowCreateCabinet(false)} projectId={projectId} />
       )}

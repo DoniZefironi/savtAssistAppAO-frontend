@@ -54,6 +54,13 @@ export const TAB_DEEPLINK_PARAM: Record<Tab, string> = {
   reclamations: 'reclamation_id',
 }
 
+// Новые заявки заводят пользователи из приложения, а статусы рекламаций приезжают
+// из Bitrix вебхуком — оба случая не проходят через мутации админки, так что без
+// опроса список менялся бы только после перезагрузки страницы. Опрашивается только
+// открытая вкладка и только пока страница видна (refetchIntervalInBackground
+// по умолчанию выключен).
+const LIST_POLL_MS = 15_000
+
 // Сетка карточек заявок: 1 колонка на самых узких, до 4 на широких мониторах
 const GRID_CLASSES = 'grid grid-cols-1 min-[640px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3'
 
@@ -282,6 +289,7 @@ export function RequestsView() {
     queryFn: ({ pageParam }: { pageParam: number }) =>
       requestsApi.getServiceRequests({ status: sp, search: sq, request_type: rtp, is_under_warranty: iuw, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
+    refetchInterval: LIST_POLL_MS,
     enabled: tab === 'service',
   })
   const addQ = useInfiniteQuery({
@@ -290,6 +298,7 @@ export function RequestsView() {
     queryFn: ({ pageParam }: { pageParam: number }) =>
       requestsApi.getAdditions({ status: sp, search: sq, resolved_by_admin_id: resolvedByAdminId ?? undefined, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
+    refetchInterval: LIST_POLL_MS,
     enabled: tab === 'additions',
     // Без этого — возврат на вкладку спустя >30с после глубокой прокрутки
     // переперезапрашивает все закэшированные страницы по очереди подряд.
@@ -302,6 +311,7 @@ export function RequestsView() {
     queryFn: ({ pageParam }: { pageParam: number }) =>
       requestsApi.getDocumentRequests({ status: sp, search: sq, resolved_by_admin_id: resolvedByAdminId ?? undefined, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
+    refetchInterval: LIST_POLL_MS,
     enabled: tab === 'docs',
     // Без этого — возврат на вкладку спустя >30с после глубокой прокрутки
     // переперезапрашивает все закэшированные страницы по очереди подряд.
@@ -314,6 +324,7 @@ export function RequestsView() {
     queryFn: ({ pageParam }: { pageParam: number }) =>
       requestsApi.getPhoneChangeRequests({ status: sp, search: sq, resolved_by_admin_id: resolvedByAdminId ?? undefined, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
+    refetchInterval: LIST_POLL_MS,
     enabled: tab === 'phone',
     // Без этого — возврат на вкладку спустя >30с после глубокой прокрутки
     // переперезапрашивает все закэшированные страницы по очереди подряд.
@@ -327,6 +338,7 @@ export function RequestsView() {
     queryFn: ({ pageParam }: { pageParam: number }) =>
       requestsApi.getRegistrationRequests({ status: sp, search: sq, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
+    refetchInterval: LIST_POLL_MS,
     enabled: tab === 'registration',
     // Без этого — возврат на вкладку спустя >30с после глубокой прокрутки
     // переперезапрашивает все закэшированные страницы по очереди подряд.
@@ -340,6 +352,7 @@ export function RequestsView() {
     queryFn: ({ pageParam }: { pageParam: number }) =>
       requestsApi.getPasswordResetRequests({ status: sp, search: sq, resolved_by_admin_id: resolvedByAdminId ?? undefined, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
+    refetchInterval: LIST_POLL_MS,
     enabled: tab === 'password',
     // Без этого — возврат на вкладку спустя >30с после глубокой прокрутки
     // переперезапрашивает все закэшированные страницы по очереди подряд.
@@ -363,6 +376,7 @@ export function RequestsView() {
     queryFn: ({ pageParam }: { pageParam: number }) =>
       reclamationsApi.getAll({ status: rsp, object_type: rotp, warranty_classification: rwc, page: pageParam, size: 20 }),
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
+    refetchInterval: LIST_POLL_MS,
     enabled: tab === 'reclamations' && isAdmin,
     // Без этого — возврат на вкладку спустя >30с после глубокой прокрутки
     // переперезапрашивает все закэшированные страницы по очереди подряд.
@@ -841,6 +855,14 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['addition-requests'] })
     qc.invalidateQueries({ queryKey: ['dashboard'] })
+    // Одобрение даёт пользователю доступ к ШУ — меняются списки пользователей
+    // шкафа/проекта, его карточка и счётчики шкафов/проектов.
+    qc.invalidateQueries({ queryKey: ['cabinets'] })
+    qc.invalidateQueries({ queryKey: ['cabinet-users'] })
+    qc.invalidateQueries({ queryKey: ['project-users'] })
+    qc.invalidateQueries({ queryKey: ['projects'] })
+    qc.invalidateQueries({ queryKey: ['admin-user'] })
+    qc.invalidateQueries({ queryKey: ['admin-users'] })
   }
 
   const approveMut = useMutation({
@@ -1124,7 +1146,10 @@ function PasswordResetRequestDialog({ request, onClose }: { request: PasswordRes
   const [approveNote, setApproveNote] = useState('')
   const [rejectNote, setRejectNote] = useState('')
   const [subUserId, setSubUserId] = useState<number | null>(null)
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['password-reset-requests'] })
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['password-reset-requests'] })
+    qc.invalidateQueries({ queryKey: ['dashboard'] })
+  }
 
   const approveMut = useMutation({
     mutationFn: () => requestsApi.approvePasswordResetRequest(request.id, approveNote || null),
@@ -1249,6 +1274,8 @@ function PhoneChangeDialog({ request, onClose }: { request: PhoneChangeRequest; 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['phone-change-requests'] })
     qc.invalidateQueries({ queryKey: ['admin-users'] })
+    qc.invalidateQueries({ queryKey: ['admin-user'] })
+    qc.invalidateQueries({ queryKey: ['dashboard'] })
   }
 
   const approveMut = useMutation({
@@ -1387,7 +1414,10 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
   const [subUserId, setSubUserId] = useState<number | null>(null)
   const [subCabinetId, setSubCabinetId] = useState<number | null>(null)
   const [subProjectId, setSubProjectId] = useState<number | null>(null)
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['document-requests'] })
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['document-requests'] })
+    qc.invalidateQueries({ queryKey: ['dashboard'] })
+  }
 
   const approveMut = useMutation({
     mutationFn: () => requestsApi.approveDocumentRequest(request.id, approveNote || null),

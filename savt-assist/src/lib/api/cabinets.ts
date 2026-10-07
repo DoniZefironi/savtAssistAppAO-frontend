@@ -97,6 +97,15 @@ export const cabinetsApi = {
     return data
   },
 
+  // Отвязать пользователя от ШУ, который он добавил напрямую по QR (только
+  // админ). reason обязателен (1-1000 символов), нужен только для аудита —
+  // пользователю не показывается. 404 — ШУ нет либо прямой привязки уже нет;
+  // 409 — доступ идёт через проект, точечно из ШУ убрать нельзя (detail несёт
+  // готовый текст). Тело в DELETE — через data, axios его отправляет.
+  unlinkUser: async (cabinetId: number, userId: number, reason: string): Promise<void> => {
+    await apiClient.delete(`/admin/cabinets/${cabinetId}/users/${userId}`, { data: { reason } })
+  },
+
   // QR конкретного ШУ (PNG) — по нему пользователь добавляет именно этот шкаф
   // напрямую, не получая доступа ко всему проекту. Тот же паттерн, что у
   // projectsApi.getQr.
