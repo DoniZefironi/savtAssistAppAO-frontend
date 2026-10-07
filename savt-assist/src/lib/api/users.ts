@@ -49,6 +49,29 @@ export interface UserProject {
   warranty_status: 'active' | 'expiring_soon' | 'expired' | 'none'
 }
 
+// Строка отчёта синхронизации сотрудников из Bitrix. Состав полей зависит от
+// списка (см. README-backend.md, POST /admin/staff/bitrix-sync): у заведённых
+// есть login, у пропущенных по дублю — phone, у деактивированных — reason.
+export interface StaffSyncItem {
+  bitrix_user_id: number
+  full_name: string
+  role?: string
+  login?: string
+  phone?: string
+  reason?: string
+}
+
+export const STAFF_SYNC_LISTS = [
+  'created', 'linked', 'role_changed', 'reactivated', 'deactivated',
+  'skipped_no_phone', 'skipped_invalid_phone', 'skipped_duplicate_phone',
+  'skipped_conflict', 'skipped_no_password',
+] as const
+export type StaffSyncList = typeof STAFF_SYNC_LISTS[number]
+
+export type StaffSyncReport = {
+  counts: Record<StaffSyncList, number>
+} & Partial<Record<StaffSyncList, StaffSyncItem[]>>
+
 interface ListParams {
   search?: string
   is_active?: boolean
@@ -110,6 +133,12 @@ export const usersApi = {
   // эндпоинтом удалить нельзя (403), как и самого себя.
   deleteAdmin: (id: number): Promise<void> =>
     apiClient.delete(`/admin/admins/${id}`).then(() => undefined),
+
+  // Запустить синхронизацию сотрудников из Bitrix сейчас (только суперадмин).
+  // Фоново она идёт раз в час сама. 502 — Bitrix недоступен или не настроен,
+  // при этом никого не деактивируем.
+  syncStaff: (): Promise<StaffSyncReport> =>
+    apiClient.post('/admin/staff/bitrix-sync').then(r => r.data),
 
   verify: (id: number) => apiClient.post(`/admin/users/${id}/verify`, {}),
   unverify: (id: number) => apiClient.post(`/admin/users/${id}/unverify`, {}),

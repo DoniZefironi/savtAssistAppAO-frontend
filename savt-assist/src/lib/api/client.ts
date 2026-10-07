@@ -59,10 +59,35 @@ export async function refreshTokens(): Promise<string> {
   }
 }
 
+// Бэкенд отвечает 403 «Необходимо сменить пароль» на любой запрос, кроме смены
+// пароля, выхода и /auth/me, пока у сотрудника стоит must_change_password. Обычно
+// мы до этого не доходим (экран смены показывается сразу после входа и сессию
+// не открывает), но если сессия всё же есть — стираем её (иначе proxy.ts вернёт
+// с /login обратно в панель) и отправляем на вход, где экран смены покажется
+// заново: /auth/admin-login возвращает must_change_password, пока он не сменён.
+const MUST_CHANGE_PASSWORD_DETAIL = 'Необходимо сменить пароль'
+let forcingPasswordChange = false
+
+function isMustChangePassword(status: number | undefined, detail: unknown): boolean {
+  return status === 403 && typeof detail === 'string' && detail.trim() === MUST_CHANGE_PASSWORD_DETAIL
+}
+
+async function forcePasswordChange() {
+  if (forcingPasswordChange) return
+  forcingPasswordChange = true
+  accessToken = null
+  try { await axios.post('/api/auth/logout') } catch {}
+  window.location.href = '/login'
+}
+
 apiClient.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config
+
+    if (isMustChangePassword(error.response?.status, error.response?.data?.detail)) {
+      void forcePasswordChange()
+    }
 
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true
@@ -93,6 +118,10 @@ export async function authorizedFetch(path: string, options: RequestInit = {}): 
   if (res.status === 401) {
     await refreshTokens()
     res = await doFetch()
+  }
+  if (res.status === 403) {
+    const body = await res.clone().json().catch(() => null)
+    if (isMustChangePassword(403, body?.detail)) void forcePasswordChange()
   }
   return res
 }

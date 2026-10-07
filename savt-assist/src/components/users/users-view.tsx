@@ -4,10 +4,11 @@ import { useState, useEffect, useRef } from 'react'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { toast } from 'sonner'
-import { CheckCircle2, XCircle, Smartphone, PhoneOff, Users } from 'lucide-react'
+import { CheckCircle2, XCircle, Smartphone, PhoneOff, Users, RefreshCw } from 'lucide-react'
 import { cn, isSuperadminRole } from '@/lib/utils'
 import { usersApi } from '@/lib/api/users'
-import type { AdminUser } from '@/lib/api/users'
+import type { AdminUser, StaffSyncReport } from '@/lib/api/users'
+import { apiErrorMessage } from '@/lib/api/errors'
 import { useAuthStore } from '@/lib/store/auth'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
@@ -22,6 +23,7 @@ import { FormField, PasswordField } from '@/components/ui/form-field'
 import { DialogHeader } from '@/components/ui/dialog-header'
 import { RequestCard, StatusPill, TypePill } from '@/components/requests/request-card'
 import { UserDialog } from './user-dialog'
+import { StaffSyncReportDialog } from './staff-sync-dialog'
 import { roleLabel, fmtDate, UserIcon } from './user-shared'
 
 // Сетка карточек: 1 колонка на самых узких, до 4 на широких мониторах
@@ -110,6 +112,19 @@ export function UsersView() {
 
   const sentinelRef = useRef<HTMLDivElement>(null)
 
+  const qc = useQueryClient()
+  const [syncReport, setSyncReport] = useState<StaffSyncReport | null>(null)
+  const syncMut = useMutation({
+    mutationFn: () => usersApi.syncStaff(),
+    onSuccess: (report) => {
+      qc.invalidateQueries({ queryKey: ['admin-users'] })
+      qc.invalidateQueries({ queryKey: ['admins-for-filter'] })
+      setSyncReport(report)
+    },
+    // 502 — Bitrix недоступен или не настроен; текст приходит с сервера.
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось запустить синхронизацию')),
+  })
+
   useEffect(() => {
     setStatusFilter('all')
     setUserTypeFilter('all')
@@ -174,6 +189,18 @@ export function UsersView() {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <ViewModeToggle view={view} onViewChange={setView} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen(v => !v)} />
+            {!isReadOnly && isSuperadmin && (
+              <Button
+                variant="outline"
+                onClick={() => syncMut.mutate()}
+                disabled={syncMut.isPending}
+                title="Завести, обновить и деактивировать учётки сотрудников по данным Bitrix. Сама идёт раз в час."
+                className="cursor-pointer"
+              >
+                <RefreshCw className={cn('w-4 h-4 mr-1.5', syncMut.isPending && 'animate-spin')} />
+                {syncMut.isPending ? 'Синхронизация...' : 'Синхронизировать сотрудников'}
+              </Button>
+            )}
             {!isReadOnly && isSuperadmin && (
               <Button onClick={() => setCreateAdminOpen(true)} className="bg-purple-600 hover:bg-purple-700 cursor-pointer dark:text-white">
                 <PlusIcon className="w-4 h-4 mr-1.5" />
@@ -377,6 +404,7 @@ export function UsersView() {
       {createUserOpen && <CreateUserModal onClose={() => setCreateUserOpen(false)} />}
       {createOperatorOpen && <CreateOperatorModal onClose={() => setCreateOperatorOpen(false)} />}
       {createAdminOpen && <CreateStaffModal onClose={() => setCreateAdminOpen(false)} />}
+      {syncReport && <StaffSyncReportDialog report={syncReport} onClose={() => setSyncReport(null)} />}
     </div>
   )
 }
