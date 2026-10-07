@@ -69,7 +69,7 @@ export function LoginForm() {
             onChange={(e) => setLogin(e.target.value)}
             placeholder="Введите логин"
             autoComplete="username"
-            className="h-12 bg-slate-50 border-slate-200 focus-visible:ring-[#4A8FE7] text-black"
+            className="h-12 bg-slate-50 border-slate-200 focus-visible:border-[#4A8FE7] text-black"
           />
         </div>
 
@@ -84,7 +84,7 @@ export function LoginForm() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Введите пароль"
               autoComplete="current-password"
-              className="h-12 bg-slate-50 border-slate-200 focus-visible:ring-[#4A8FE7] pr-10 text-black"
+              className="h-12 bg-slate-50 border-slate-200 focus-visible:border-[#4A8FE7] pr-10 text-black"
             />
             <button
               type="button"

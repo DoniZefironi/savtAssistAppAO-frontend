@@ -63,10 +63,10 @@ export function CabinetTypeCombobox({ value, onChange, placeholder = 'Венти
           placeholder={placeholder}
           autoComplete="off"
           className={cn(
-            'h-8 w-full min-w-0 rounded-lg border bg-transparent px-2.5 py-1 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:ring-3 pr-7',
+            'h-8 w-full min-w-0 rounded-lg border bg-transparent px-2.5 py-1 text-sm transition-colors outline-none placeholder:text-muted-foreground pr-7',
             error
-              ? 'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/20'
-              : 'border-input focus-visible:border-ring focus-visible:ring-ring/50'
+              ? 'border-destructive focus-visible:border-destructive'
+              : 'border-input focus-visible:border-[#4A8FE7]'
           )}
         />
         <ChevronDown

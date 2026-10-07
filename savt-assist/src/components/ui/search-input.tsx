@@ -22,7 +22,7 @@ export function SearchInput({ value, onChange, placeholder, className }: Props) 
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="pl-9 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 focus-visible:ring-[#4A8FE7]"
+        className="pl-9 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-slate-200 dark:placeholder:text-slate-500 focus-visible:border-[#4A8FE7]"
       />
       {value && (
         <button
