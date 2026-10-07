@@ -133,6 +133,17 @@ const PASSWORD_SORT = [
   { value: 'user_full_name', label: 'По имени' },
 ]
 
+// Сортировка рекламаций — sort_by из GET /admin/reclamations; записи без значения
+// (например, без срока) бэкенд всегда кладёт в конец.
+const RECL_SORT = [
+  { value: 'created_at', label: 'По дате' },
+  { value: 'resolved_at', label: 'По закрытию' },
+  { value: 'status', label: 'По статусу' },
+  { value: 'deadline_at', label: 'По сроку' },
+  { value: 'object_type', label: 'По типу объекта' },
+  { value: 'user_full_name', label: 'По имени' },
+]
+
 const REQUEST_TYPE_FILTERS = [
   { value: 'all', label: 'Все типы' },
   { value: 'repair', label: 'Ремонт' },
@@ -371,10 +382,10 @@ export function RequestsView() {
   const { data: detached = [] } = useBitrixDetached(tab === 'reclamations' && isAdmin)
 
   const reclQ = useInfiniteQuery({
-    queryKey: ['reclamations', rsp, rotp, rwc],
+    queryKey: ['reclamations', rsp, rotp, rwc, sq, sortBy, sortOrder],
     initialPageParam: 1,
     queryFn: ({ pageParam }: { pageParam: number }) =>
-      reclamationsApi.getAll({ status: rsp, object_type: rotp, warranty_classification: rwc, page: pageParam, size: 20 }),
+      reclamationsApi.getAll({ status: rsp, object_type: rotp, warranty_classification: rwc, search: sq, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
     refetchInterval: LIST_POLL_MS,
     enabled: tab === 'reclamations' && isAdmin,
@@ -446,6 +457,7 @@ export function RequestsView() {
     tab === 'phone' ? PHONE_SORT :
     tab === 'registration' ? REGISTRATION_SORT :
     tab === 'password' ? PASSWORD_SORT :
+    tab === 'reclamations' ? RECL_SORT :
     DOC_SORT
 
   return (
@@ -478,9 +490,7 @@ export function RequestsView() {
         </div>
         <div className={cn('grid transition-[grid-template-rows] duration-150 ease-out', filtersOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
         <div className="overflow-hidden min-h-0">
-        {tab !== 'reclamations' ? (
-          <>
-        <SearchInput value={searchInput} onChange={setSearchInput} placeholder="Поиск по заявкам..." className="mb-3" />
+        <SearchInput value={searchInput} onChange={setSearchInput} placeholder={tab === 'reclamations' ? 'Поиск по рекламациям...' : 'Поиск по заявкам...'} className="mb-3" />
 
         <div className="flex flex-wrap items-center gap-2 mt-3">
           {sortOptions.map(opt => {
@@ -493,6 +503,8 @@ export function RequestsView() {
             )
           })}
         </div>
+        {tab !== 'reclamations' ? (
+          <>
         <div className="flex flex-wrap items-center gap-2 mt-3">
           <span className="text-xs text-slate-400 font-medium mr-0.5">Фильтр:</span>
           {filters.map(f => (
@@ -524,10 +536,10 @@ export function RequestsView() {
         )}
           </>
         ) : (
-          // Рекламации не поддерживают search/sort_by на бэкенде — свой набор
-          // фильтров вместо общих выше (см. RECL_*_FILTERS).
+          // У рекламаций свой набор фильтров вместо общих выше (см. RECL_*_FILTERS);
+          // поиск и сортировка — общие, выше.
           <>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 mt-3">
           <span className="text-xs text-slate-400 font-medium mr-0.5">Статус:</span>
           {RECL_STATUS_FILTERS.map(f => (
             <PillButton key={f.value} active={reclStatusFilter === f.value} onClick={() => setReclStatusFilter(f.value)}>

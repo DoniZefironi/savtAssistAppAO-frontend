@@ -8,6 +8,14 @@ export interface ReclamationListParams {
   status?: ReclamationStatus
   object_type?: ReclamationObjectType
   warranty_classification?: boolean
+  // Нечёткий поиск (регистр и опечатки не мешают): ФИО/телефон заявителя и из
+  // формы, описание, коды ошибок, номера договора/заказа/ТТН, заводской номер,
+  // название проекта и номер ШУ (последние два — только у старых рекламаций).
+  search?: string
+  // created_at (по умолч.) | resolved_at | status | deadline_at | object_type |
+  // user_full_name. Записи без значения всегда в конце.
+  sort_by?: string
+  sort_order?: 'asc' | 'desc'
   page?: number
   size?: number
 }
