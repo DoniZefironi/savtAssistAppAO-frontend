@@ -15,16 +15,8 @@ export async function POST(request: Request) {
       headers: { Authorization: `Bearer ${tokens.access_token}` },
     })
 
-    const mustChangePassword = tokens.must_change_password === true
-    const res = NextResponse.json({ access_token: tokens.access_token, user, must_change_password: mustChangePassword })
-
-    // Пока пароль не сменён, сессия в панели всё равно бесполезна (на любой
-    // запрос — 403), а смена пароля закрывает все сессии. Поэтому refresh-cookie
-    // в этом случае не ставим: иначе proxy.ts при перезагрузке /login уводил бы
-    // в дашборд, где всё отвечает 403. Access-токена хватает на сам запрос смены.
-    if (!mustChangePassword) {
-      res.cookies.set('refresh_token', tokens.refresh_token, refreshCookieOptions(tokens.refresh_token, request))
-    }
+    const res = NextResponse.json({ access_token: tokens.access_token, user })
+    res.cookies.set('refresh_token', tokens.refresh_token, refreshCookieOptions(tokens.refresh_token, request))
     return res
   } catch (err) {
     if (axios.isAxiosError(err) && err.response) {

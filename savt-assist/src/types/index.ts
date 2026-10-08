@@ -20,10 +20,6 @@ export interface User {
 export interface AuthTokens {
   access_token: string
   refresh_token: string
-  // Только у ответа /auth/admin-login: true — пароль задан не самим человеком
-  // (общий начальный пароль сотрудника из Bitrix), до смены все запросы, кроме
-  // /auth/password-change, /auth/logout и /auth/me, дают 403.
-  must_change_password?: boolean
 }
 
 // Данные о привязанной SIM (внешний сервис — не эта же база) — см.

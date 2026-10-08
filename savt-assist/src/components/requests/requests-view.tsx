@@ -894,6 +894,8 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
   })
 
   const isPending = request.status === 'pending'
+  // Одобрение/отклонение — только админ (README, «заявки по ШУ»); оператору только просмотр
+  const canDecide = useAuthStore(s => s.user?.role) !== 'operator'
 
   return (
     <AppModal open onClose={onClose}>
@@ -954,7 +956,7 @@ function AdditionDialog({ request, onClose }: { request: AdditionRequest; onClos
       </div>
 
       <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700">
-        {!isPending ? null : action === null ? (
+        {!isPending || !canDecide ? null : action === null ? (
           <div className="flex gap-2 justify-end">
             <Button onClick={() => setAction('reject')} className="bg-red-500 hover:bg-red-600 cursor-pointer">Отклонить</Button>
             <Button onClick={() => setAction('approve')} className="bg-green-600 hover:bg-green-700 cursor-pointer">Одобрить</Button>
@@ -1054,6 +1056,8 @@ function RegistrationRequestDialog({ request, onClose }: { request: Registration
   })
 
   const isPending = request.status === 'pending'
+  // Решение по заявке — только админ (оператор видит заявку, но approve/reject ему отдают 403)
+  const canDecide = useAuthStore(s => s.user?.role) !== 'operator'
 
   return (
     <AppModal open onClose={onClose}>
@@ -1099,7 +1103,7 @@ function RegistrationRequestDialog({ request, onClose }: { request: Registration
       </div>
 
       <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700">
-        {!isPending ? null : action === null ? (
+        {!isPending || !canDecide ? null : action === null ? (
           <div className="flex gap-2 justify-end">
             <Button onClick={() => setAction('reject')} className="bg-red-500 hover:bg-red-600 cursor-pointer">Отклонить</Button>
             <Button onClick={() => setAction('approve')} className="bg-green-600 hover:bg-green-700 cursor-pointer">Одобрить</Button>
@@ -1443,6 +1447,8 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
   })
 
   const isPending = request.status === 'pending'
+  // Решение по заявке на закрытый документ — только админ; оператор видит список, approve/reject ему отдают 403
+  const canDecide = useAuthStore(s => s.user?.role) !== 'operator'
 
   return (
     <AppModal open onClose={onClose}>
@@ -1500,7 +1506,7 @@ function DocumentRequestDialog({ request, onClose }: { request: DocumentRequest;
       </div>
 
       <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700">
-        {!isPending ? null : action === null ? (
+        {!isPending || !canDecide ? null : action === null ? (
           <div className="flex gap-2 justify-end">
             <Button onClick={() => setAction('reject')} className="bg-red-500 hover:bg-red-600 cursor-pointer">Отклонить</Button>
             <Button onClick={() => setAction('approve')} className="bg-green-600 hover:bg-green-700 cursor-pointer">Одобрить</Button>

@@ -173,6 +173,67 @@ function sendResultText(res: { sent_to?: number; skipped_opted_out?: number } | 
     : `Отправлено: ${res.sent_to}`
 }
 
+// Параметры заготовки (data) — пары «ключ — значение» для мобильного
+// приложения, например screen = service_request. Бэкенд приводит всё к строкам
+// и сам добавляет promo_id, поэтому вложенных объектов здесь нет.
+type DataPair = { key: string; value: string }
+
+const dataToPairs = (data: Record<string, string> | null | undefined): DataPair[] =>
+  Object.entries(data ?? {}).map(([key, value]) => ({ key, value: String(value) }))
+
+// Пустые строки (без ключа и без значения) отбрасываем; дубликаты и значение
+// без ключа ловит pairsError, до отправки они не доходят.
+const pairsToData = (pairs: DataPair[]): Record<string, string> =>
+  Object.fromEntries(pairs.filter(p => p.key.trim()).map(p => [p.key.trim(), p.value.trim()]))
+
+function pairsError(pairs: DataPair[]): string | null {
+  const seen = new Set<string>()
+  for (const p of pairs) {
+    const key = p.key.trim()
+    if (!key) { if (p.value.trim()) return 'У параметра со значением нужен ключ'; continue }
+    if (seen.has(key)) return `Ключ «${key}» указан дважды`
+    seen.add(key)
+  }
+  return null
+}
+
+function PromoDataEditor({ pairs, onChange }: { pairs: DataPair[]; onChange: (p: DataPair[]) => void }) {
+  const error = pairsError(pairs)
+  const set = (i: number, patch: Partial<DataPair>) => onChange(pairs.map((p, idx) => idx === i ? { ...p, ...patch } : p))
+  const inputCls = 'w-full px-2.5 py-1.5 text-sm font-mono border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]'
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium text-slate-500">Параметры для приложения <span className="font-normal text-slate-400">(необязательно)</span></p>
+      {pairs.map((p, i) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <input value={p.key} onChange={e => set(i, { key: e.target.value })} placeholder="ключ, например screen" aria-label="Ключ параметра" className={inputCls} />
+          <input value={p.value} onChange={e => set(i, { value: e.target.value })} placeholder="значение" aria-label="Значение параметра" className={inputCls} />
+          <button
+            type="button"
+            onClick={() => onChange(pairs.filter((_, idx) => idx !== i))}
+            title="Убрать параметр"
+            aria-label="Убрать параметр"
+            className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors cursor-pointer"
+          >
+            <TrashIcon className="w-4 h-4" />
+          </button>
+        </div>
+      ))}
+      {error && <p className="text-xs text-red-500">{error}</p>}
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          type="button"
+          onClick={() => onChange([...pairs, { key: '', value: '' }])}
+          className="text-xs text-[#1B3A72] dark:text-blue-400 hover:underline cursor-pointer"
+        >
+          + Добавить параметр
+        </button>
+        <span className="text-[11px] text-slate-400">Значения уходят строками; promo_id сервер добавит сам.</span>
+      </div>
+    </div>
+  )
+}
+
 // CRUD рекламных заготовок — сами заготовки те же, что использует ручная
 // отправка (PromoSection) и расписание (PromoScheduleSection), все три шарят
 // один queryKey ['promo-messages'], поэтому после любой правки здесь
@@ -194,27 +255,30 @@ function PromoMessagesSection() {
   const [showAdd, setShowAdd] = useState(false)
   const [addTitle, setAddTitle] = useState('')
   const [addBody, setAddBody] = useState('')
+  const [addPairs, setAddPairs] = useState<DataPair[]>([])
 
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [editBody, setEditBody] = useState('')
+  const [editPairs, setEditPairs] = useState<DataPair[]>([])
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['promo-messages'] })
 
   const createMut = useMutation({
-    mutationFn: () => botApi.createPromoMessage({ title: addTitle.trim(), body: addBody.trim() }),
+    mutationFn: () => botApi.createPromoMessage({ title: addTitle.trim(), body: addBody.trim(), data: pairsToData(addPairs) }),
     onSuccess: () => {
       invalidate()
       toast.success('Заготовка добавлена')
       setShowAdd(false)
       setAddTitle('')
       setAddBody('')
+      setAddPairs([])
     },
     onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось создать заготовку')),
   })
 
   const updateMut = useMutation({
-    mutationFn: (id: number) => botApi.updatePromoMessage(id, { title: editTitle.trim(), body: editBody.trim() }),
+    mutationFn: (id: number) => botApi.updatePromoMessage(id, { title: editTitle.trim(), body: editBody.trim(), data: pairsToData(editPairs) }),
     onSuccess: () => {
       invalidate()
       toast.success('Заготовка обновлена')
@@ -233,6 +297,7 @@ function PromoMessagesSection() {
     setEditingId(p.id)
     setEditTitle(p.title)
     setEditBody(p.body)
+    setEditPairs(dataToPairs(p.data))
   }
 
   const handleDelete = async (p: PromoMessage) => {
@@ -247,8 +312,8 @@ function PromoMessagesSection() {
     if (ok) deleteMut.mutate(p.id)
   }
 
-  const canCreate = addTitle.trim().length > 0 && addTitle.trim().length <= 255 && addBody.trim().length > 0 && addBody.trim().length <= 1000
-  const canSaveEdit = editTitle.trim().length > 0 && editTitle.trim().length <= 255 && editBody.trim().length > 0 && editBody.trim().length <= 1000
+  const canCreate = addTitle.trim().length > 0 && addTitle.trim().length <= 255 && addBody.trim().length > 0 && addBody.trim().length <= 1000 && !pairsError(addPairs)
+  const canSaveEdit = editTitle.trim().length > 0 && editTitle.trim().length <= 255 && editBody.trim().length > 0 && editBody.trim().length <= 1000 && !pairsError(editPairs)
 
   return (
     <Card
@@ -299,10 +364,11 @@ function PromoMessagesSection() {
               />
               <p className="text-[11px] text-slate-400 mt-0.5 text-right">{addBody.length}/1000</p>
             </div>
+            <PromoDataEditor pairs={addPairs} onChange={setAddPairs} />
             <div className="flex justify-end gap-2">
               <Button
                 variant="ghost"
-                onClick={() => { setShowAdd(false); setAddTitle(''); setAddBody('') }}
+                onClick={() => { setShowAdd(false); setAddTitle(''); setAddBody(''); setAddPairs([]) }}
                 disabled={createMut.isPending}
                 className="cursor-pointer"
               >
@@ -348,6 +414,7 @@ function PromoMessagesSection() {
                   />
                   <p className="text-[11px] text-slate-400 mt-0.5 text-right">{editBody.length}/1000</p>
                 </div>
+                <PromoDataEditor pairs={editPairs} onChange={setEditPairs} />
                 <div className="flex justify-end gap-2">
                   <Button variant="ghost" onClick={() => setEditingId(null)} disabled={updateMut.isPending} className="cursor-pointer">
                     Отмена
@@ -366,6 +433,15 @@ function PromoMessagesSection() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{p.title}</p>
                   <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{p.body}</p>
+                  {Object.keys(p.data ?? {}).length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {Object.entries(p.data).map(([k, v]) => (
+                        <span key={k} className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-[11px] font-mono text-slate-500 dark:text-slate-300">
+                          {k}: {v}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <button

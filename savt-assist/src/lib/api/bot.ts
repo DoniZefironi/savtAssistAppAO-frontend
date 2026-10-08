@@ -55,11 +55,14 @@ export const botApi = {
   getPromoMessages: (): Promise<PromoMessage[]> =>
     apiClient.get('/admin/notifications/promo/messages').then(r => r.data),
 
-  createPromoMessage: (data: { title: string; body: string }): Promise<PromoMessage> =>
+  // data — пары «ключ — значение» для клиента (например, screen), уходят в уведомление
+  // вместе с текстом; в пуш всё приводится к строкам, вложенных объектов не нужно.
+  // promo_id сервер добавляет сам.
+  createPromoMessage: (data: { title: string; body: string; data?: Record<string, string> }): Promise<PromoMessage> =>
     apiClient.post('/admin/notifications/promo/messages', data).then(r => r.data),
 
   // Частичное обновление — шлём только реально изменённые поля.
-  updatePromoMessage: (id: number, patch: Partial<{ title: string; body: string }>): Promise<PromoMessage> =>
+  updatePromoMessage: (id: number, patch: Partial<{ title: string; body: string; data: Record<string, string> }>): Promise<PromoMessage> =>
     apiClient.patch(`/admin/notifications/promo/messages/${id}`, patch).then(r => r.data),
 
   deletePromoMessage: (id: number): Promise<void> =>

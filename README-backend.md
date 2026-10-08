@@ -67,7 +67,6 @@ FastAPI-бэкенда (PostgreSQL, Docker). Ядро — шкафы управ�
 | `BITRIX_DEFAULT_GROUP_ID` | ID проекта (рабочей группы) Bitrix24, необязательно — без него задачи создаются без привязки к проекту |
 | `BITRIX_DEFAULT_CREATOR_ID` | ID сотрудника Bitrix24, назначаемого постановщиком (`CREATED_BY`) задачи — отдельно от исполнителя. Необязательно: без него постановщиком становится технический пользователь вебхука |
 | `BITRIX_INCOMING_WEBHOOK_TOKENS` | Секреты для проверки исходящих вебхуков Bitrix24 (`application_token`), через запятую — Bitrix генерирует свой токен на каждое правило отдельно, свой не задать, поэтому тут может быть несколько значений сразу. См. раздел «Вебхуки внешних интеграций» |
-| `BITRIX_STAFF_INITIAL_PASSWORD` | Общий начальный пароль сотрудников, заведённых из Bitrix (минимум 8 символов, они обязаны сменить его при первом входе). Пусто — новых сотрудников синхронизация не создаёт |
 | `BITRIX_PRODUCTION_YEARS` | Годы производства через запятую (`25,26,27`). Пусто — берутся сделки за все годы. Номер проекта всегда начинается с двух цифр года (`26_138`); ограничивать имеет смысл перед разовым импортом, чтобы не затянуть архив портала |
 | `BITRIX_FIELD_PRODUCTION_NUMBER` | Код пользовательского поля сделки с номером в производство. Пусто — номер берётся из названия сделки |
 | `BITRIX_FIELD_SHIPMENT_PLANNED` | Код поля с планируемой датой отгрузки |
@@ -77,8 +76,6 @@ FastAPI-бэкенда (PostgreSQL, Docker). Ядро — шкафы управ�
 | `PROJECT_FOLDERS_ROOT` | Путь внутри контейнера к смонтированной шаре NAS с папками проектов (по умолч. `/mnt/projects`). Пусто — папки проектов не создаются вовсе |
 | `NAS_SHARE_DEVICE` | UNC-путь шары NAS (`//host/share/...`) — нужен только `docker-compose.yml` для CIFS-монтирования, самому приложению не передаётся |
 | `NAS_SHARE_USER` / `NAS_SHARE_PASSWORD` | Учётные данные для монтирования шары NAS — тоже только для `docker-compose.yml` |
-| `PROMO_MESSAGES_FILE` | Путь к своему файлу рекламных заготовок. Пусто — встроенный `app/data/promo_messages.json` (внутри образа, только для чтения). Файл читается заново на каждой отправке, перезапуск после правок не нужен |
-| `PROMO_AUTO_SEND_HOUR` | Час (0–23) ежедневной автоматической рассылки случайной рекламы. **Пусто — автоматической рассылки нет**, только по кнопке админа. Мусор или значение вне диапазона — тоже нет, с `WARNING` в логе |
 | `APP_ENV` | Окружение (`dev`/`prod`), в `dev` включает SQL-логирование |
 | `TELEGRAM_BOT_TOKEN` | Токен бота от @BotFather — доставка кода подтверждения телефона (SMS отключено полностью) |
 | `TELEGRAM_BOT_USERNAME` | Юзернейм бота без `@` — для сборки deep-link `t.me/<username>?start=...` |
@@ -244,6 +241,58 @@ docker compose up -d                # nginx стартует уже с серт�
 curl -I http://helper.savt.by/health    # → 301 на https (в переходном режиме — 200)
 curl https://helper.savt.by/health      # → {"app":"ok","db":true}
 ```
+
+---
+
+## Веб-версия мобильного приложения (`/app/`)
+
+Flutter-приложение (репозиторий `savt_assist`, проект в папке `savt_control_panel`) собирается в статические файлы и отдаётся тем же nginx, что и API, по адресу `https://helper.savt.by/app/`. Тот же домен и HTTPS, поэтому CORS настраивать не нужно, а браузерные функции вроде геолокации работают. Админка живёт отдельно (порт 8080 → контейнер `savt-assist-frontend`) и этого не касается.
+
+**Что должно быть в конфигурации сервера** (в самом репозитории этих правок может не быть, проверьте при выкладке):
+
+1. `docker-compose.yml`, сервис `nginx`, раздел `volumes:` — папка со сборкой:
+   ```yaml
+         - ./mobile-web:/mobile-web:ro
+   ```
+2. `nginx.conf`, блок `server` с `listen 443 ssl;`, перед `location / {`:
+   ```nginx
+   location /app/ {
+       alias /mobile-web/;
+       try_files $uri $uri/ /app/index.html;
+       add_header Cache-Control "no-cache";
+   }
+   ```
+   `try_files` нужен, чтобы адреса внутри приложения открывались по обновлению страницы. Если на сервере включён `nginx.http-fallback.conf`, то же самое — в нём.
+3. Применить и проверить:
+   ```bash
+   docker compose up -d nginx
+   docker exec savt-backend-nginx-1 nginx -t     # syntax is ok
+   curl -I https://helper.savt.by/app/           # HTTP/2 200
+   ```
+
+**Сборка и обновление.** Flutter на сервер ставить не нужно — собираем во временном контейнере:
+
+```bash
+# первый раз (папка должна быть доступна на запись пользователю деплоя)
+cd /opt/savtAssistApp-server
+git clone https://github.com/Nadia111111/savt_assist.git savt-mobile-app
+
+# сборка и выкладка (и при каждом обновлении после git pull)
+cd /opt/savtAssistApp-server/savt-mobile-app && git pull
+cd savt_control_panel
+docker run --rm --network host -v "$PWD":/app -w /app ghcr.io/cirruslabs/flutter:stable \
+  bash -c "flutter pub get && flutter build web --release --base-href /app/"
+mkdir -p /opt/savtAssistApp-server/savt-backend/mobile-web
+rm -rf /opt/savtAssistApp-server/savt-backend/mobile-web/*
+cp -r build/web/. /opt/savtAssistApp-server/savt-backend/mobile-web/
+```
+
+- `--base-href /app/` обязателен: без него приложение ищет свои файлы в корне домена.
+- Образ `stable` скачивается один раз (около 1–2 ГБ), сборка занимает минуту-две. Тег `3.24.0` не подходит: проект требует пакет `path` версии не ниже 1.9.1, а в этом Flutter он закреплён на 1.9.0.
+- `--network host` — по той же причине, что и в `docker-compose.yml`: у сборщика своё изолированное сетевое пространство, в котором иногда ломается DNS.
+- При обновлении перезапускать nginx не нужно — он отдаёт файлы с диска; браузеру может понадобиться `Ctrl+F5`.
+- Файлы, созданные контейнером (`build/`, `.dart_tool/`), принадлежат root; удалять их придётся через `sudo`.
+- Адрес API в приложении должен указывать на `https://helper.savt.by`.
 
 ---
 
@@ -821,6 +870,7 @@ Telegram позволяет менять номер аккаунта. После
 ```json
 {
   "id": 1,
+  "login": null,
   "phone": "+375291234567",
   "contact_phone": "+375291110000",
   "email": null,
@@ -832,6 +882,7 @@ Telegram позволяет менять номер аккаунта. После
   "is_verified": false
 }
 ```
+- `login` — логин оператора/администратора (`operator1`); у обычных пользователей `null`, они входят по телефону. Им удобно подписывать меню профиля сотрудника
 - `phone` — **подтверждённый номер из Telegram, он же логин.** Пользователь его не
   меняет: только через заявку с одобрением админа (`POST /auth/change-phone/request`)
 - `contact_phone` — рабочий номер, необязательный. Не подтверждается, на вход не
@@ -845,6 +896,24 @@ Telegram позволяет менять номер аккаунта. После
 Удаление собственного аккаунта (доступно всем авторизованным пользователям). Отзывает все refresh-токены и удаляет аккаунт безвозвратно.
 
 Ответ: `204 No Content`.
+
+---
+
+### POST `/auth/register/request`
+Заявка на регистрацию — для тех, кому не подходит подтверждение через Telegram. Аккаунт не создаётся сразу, только после ручного одобрения администратором (см. «Рут `admin: registration requests`»). Лимит — 5 запросов в минуту.
+```json
+{
+  "phone": "+375291234567",
+  "password": "password8",
+  "password_confirm": "password8",
+  "full_name": "Иванов Иван",
+  "user_type": "individual",
+  "organization_name": null,
+  "contact_phone": null,
+  "user_comment": "Работаю в ООО Ромашка"
+}
+```
+`user_type` — `individual` или `organization` (для `organization` нужно `organization_name`). Ответ `201`: `{ "id": 5, "status": "pending", "created_at": "…" }`. `409`, если номер уже зарегистрирован или по нему уже есть заявка на рассмотрении.
 
 ---
 
@@ -887,6 +956,20 @@ Telegram позволяет менять номер аккаунта. После
 
 ---
 
+### POST `/auth/password-reset/request`
+Заявка на сброс пароля — для тех, кому не подходит сброс через Telegram-код. Пароль не меняется сразу, только после одобрения администратором (см. «Рут `admin: password reset requests`»). Лимит — 5 запросов в минуту.
+```json
+{
+  "phone": "+375291234567",
+  "new_password": "newPassword8",
+  "new_password_confirm": "newPassword8",
+  "user_comment": "Сменил телефон, нет доступа к Telegram"
+}
+```
+Ответ `201`: `{ "id": 7, "status": "pending", "created_at": "…" }`. `404` — активного пользователя с таким номером нет, `409` — по нему уже есть необработанная заявка.
+
+---
+
 ### POST `/auth/password-change`
 Смена пароля для авторизованного пользователя (требует Bearer-токен).
 ```json
@@ -896,7 +979,7 @@ Telegram позволяет менять номер аккаунта. После
   "new_password_confirm": "newPassword8"
 }
 ```
-Ответ: `200 OK` с сообщением об успехе. Закрывает все сессии пользователя; у сотрудника с `must_change_password` снимает этот флаг.
+Ответ: `200 OK` с сообщением об успехе.  Закрывает все сессии пользователя.
 
 ---
 
@@ -980,49 +1063,7 @@ Telegram позволяет менять номер аккаунта. После
   "password": "P@ssword8"
 }
 ```
-Ответ: пара токенов (`access_token`, `refresh_token`) и `must_change_password`. Доступен только для ролей `operator`, `admin` и `superadmin` — обычный пользователь получит `401`.
-
-Логином сотрудника, заведённого из Bitrix (см. «Рут `admin: staff`»), служит его номер телефона. Вводить можно как угодно — `+375291112233`, `+375 (29) 111-22-33`, `375291112233`, `80291112233`, `291112233`.
-
-**`must_change_password: true`** — пароль задан не самим человеком (общий начальный пароль). Пока он не сменён, любой запрос, кроме `POST /auth/password-change`, `POST /auth/logout` и `GET /auth/me`, получает `403 "Необходимо сменить пароль"`. Фронт должен после входа сразу показать экран смены пароля. После `POST /auth/password-change` все сессии закрываются — войти нужно заново уже с новым паролем.
-
----
-
-## Рут `admin: staff` — сотрудники из Bitrix (только суперадмин)
-
-Операторы, администраторы и суперадмины заводятся из сотрудников Bitrix и не создаются руками. Источник правды — Bitrix.
-
-**Роль по отделам** (ID отдела портала → роль; `app/core/staff_departments.py`): Директор, Главный инженер, Заместитель главного инженера по производству — `superadmin`; Сектор разработки ПО, Заместитель директора по коммерческим вопросам, Помощник директора — `admin`; остальные рабочие отделы (бухгалтерия, наладка, проектирование, производство, конструкторы, механика, коммерческий сектор, снабжение, склад, персонал) — `operator`. «Отпуск по уходу за ребёнком» роли не даёт. Если сотрудник в нескольких отделах — берётся высшая роль. Для отдельных людей роль задана вручную (`USER_ROLE_OVERRIDES` в том же файле, по ID сотрудника в Bitrix) и важнее отдела; `None` — человека в систему не заводят.
-
-**Правила:**
-- заводятся только активные сотрудники (`employee`); внешние (`extranet`) — нет;
-- логин — номер телефона (рабочий, а если нет — личный мобильный) в формате `+375…`, `phone` у такой учётки пустой;
-- начальный пароль у всех один — `BITRIX_STAFF_INITIAL_PASSWORD` из `.env`, при первом входе обязательна смена (`must_change_password`). Пароль пустой — новых сотрудников не заводим;
-- уволенный, неактивный, ушедший в отдел без роли или удалённый из Bitrix **деактивируется** (не удаляется — на него ссылается история), все его сессии закрываются; вернулся — активируется снова;
-- сотрудник без телефона, с нераспознанным телефоном или с телефоном, который указан у нескольких сотрудников, не заводится — попадает в отчёт;
-- если номер сотрудника есть и в обычном аккаунте мобильного приложения — это не конфликт: заводится отдельная учётка для входа в админку (логин — номер), мобильный аккаунт не меняется. Конфликт — номер уже привязан к другому сотруднику или логин с этим номером занят не сотрудником (причина пишется в отчёте);
-- если номер совпал с уже существующим вручную заведённым оператором/админом — учётка привязывается к сотруднику; роль при этом только повышается, не понижается;
-- меняются и деактивируются только учётки, которые завела или привязала синхронизация (`bitrix_user_id`). Остальные не трогаются;
-- роль у привязанных следует за отделом в обе стороны; сменили номер в Bitrix — меняется и логин.
-
-Запускается раз в час фоновой задачей и по запросу:
-
-С сервера, без токена: `docker exec savt-backend-api-1 python -m app.cli sync-bitrix-staff` — печатает тот же отчёт текстом (кого завели, кого деактивировали, кого и почему пропустили).
-
-### POST `/admin/staff/bitrix-sync`
-Запустить синхронизацию сейчас (`superadmin`), например после приёма человека на работу. `502`, если Bitrix недоступен или не настроен (в этом случае никого не деактивируем).
-```json
-{
-  "counts": { "created": 2, "linked": 0, "role_changed": 1, "reactivated": 0, "deactivated": 1,
-              "skipped_no_phone": 3, "skipped_invalid_phone": 0, "skipped_duplicate_phone": 2,
-              "skipped_conflict": 0, "skipped_no_password": 0 },
-  "created": [ { "bitrix_user_id": 7, "full_name": "Иванов Иван Иванович", "role": "operator", "login": "+375291112233" } ],
-  "skipped_no_phone": [ { "bitrix_user_id": 12, "full_name": "Петров Пётр", "role": "operator" } ],
-  "skipped_duplicate_phone": [ { "bitrix_user_id": 15, "full_name": "…", "role": "operator", "phone": "+375291110000" } ],
-  "deactivated": [ { "bitrix_user_id": 4, "full_name": "…", "reason": "уволен или нет роли по отделу" } ]
-}
-```
-Остальные списки (`linked`, `role_changed`, `reactivated`, `skipped_invalid_phone`, `skipped_conflict`, `skipped_no_password`) устроены так же. Каждый запуск пишется в журнал действий (`staff.bitrix_sync`).
+Ответ: пара токенов (`access_token`, `refresh_token`). Доступен только для ролей `operator`, `admin` и `superadmin` — обычный пользователь получит `401`.
 
 ---
 
@@ -1204,6 +1245,7 @@ Telegram позволяет менять номер аккаунта. После
     "object_number": "29_099",
     "admin_internal_name": "Главная подстанция",
     "warranty_status": "active",
+    "warranty_ends_at": "2027-01-01T00:00:00Z",
     "latitude": 53.9,
     "longitude": 27.56,
     "has_open_requests": true
@@ -1212,6 +1254,7 @@ Telegram позволяет менять номер аккаунта. После
 ```
 
 `warranty_status`: `active` | `expiring_soon` | `expired` | `none`.
+`warranty_ends_at`: дата окончания гарантии, `null` — гарантия не задана.
 `has_open_requests`: есть ли хотя бы одна сервисная заявка со статусом `open`.  
 ШУ без координат тоже включены (`latitude`/`longitude` = `null`) — фронт фильтрует сам.
 
@@ -1516,6 +1559,7 @@ QR, в обход проекта (`added_at` — дата именно этой 
       "cabinet_id": null,
       "admin_response": null,
       "resolved_by_admin_id": null,
+      "resolved_by_admin_name": null,
       "created_at": "2026-05-12T08:00:00Z",
       "resolved_at": null
     }
@@ -1598,6 +1642,22 @@ QR, в обход проекта (`added_at` — дата именно этой 
 > ```bash
 > docker exec savt-backend-api-1 python -m app.cli create-admin <login> <password> [full_name]
 > ```
+
+---
+
+### POST `/admin/users`
+Создать обычного пользователя (`role=user`) напрямую, минуя подтверждение через Telegram — когда администратор регистрирует человека сам. Только для администратора. Логируется в `audit_log`. Аккаунт сразу подтверждён (`is_phone_verified` и `is_verified` равны `true`).
+```json
+{
+  "phone": "+375291234567",
+  "password": "password8",
+  "full_name": "Иванов Иван",
+  "user_type": "individual",
+  "organization_name": null,
+  "contact_phone": null
+}
+```
+`user_type` — `individual` или `organization` (для `organization` обязательно `organization_name`). Пароль — минимум 8 символов. Ответ: созданный пользователь (`AdminUserListOut`), `201 Created`.
 
 ---
 
@@ -2620,11 +2680,6 @@ QR кодирует адрес публичной страницы: `{PUBLIC_BAS
 
 ---
 
-### PATCH `/admin/cabinets/{cabinet_id}/project`
-Привязка/отвязка конкретного шкафа к проекту — см. в разделе «Рут `admin: cabinets`» выше.
-
----
-
 ## Рут `qr` — генерация QR-кодов и добавление вне приложения
 
 Вступление в проект и добавление ШУ теперь не требуют ничьего одобрения (см.
@@ -2706,6 +2761,7 @@ Link (отдельная настройка на стороне мобильно
   "status": "pending",
   "admin_response": null,
   "resolved_by_admin_id": null,
+  "resolved_by_admin_name": null,
   "created_at": "2026-07-31T10:00:00Z",
   "resolved_at": null,
   "user_full_name": "Иванов Иван",
@@ -2744,6 +2800,74 @@ Link (отдельная настройка на стороне мобильно
 
 Оба действия пишутся в журнал (`admin: audit`) как `phone_change_request.approve` /
 `phone_change_request.reject` со старым и новым номером.
+
+---
+
+## Рут `admin: registration requests` — заявки на регистрацию (просмотр — оператор/админ, решение — только админ)
+
+Заявку подаёт сам человек через `POST /auth/register/request`. Одобрение заводит настоящий аккаунт (`role=user`) из данных заявки; номер и личность заявителя Telegram-кодом не подтверждены, поэтому проверка — на администраторе.
+
+> **Ответственность на администраторе.** Система подтвердить владение номером не может — перед одобрением нужно убедиться в этом вне системы (позвонить, сверить организацию).
+
+### GET `/admin/registration-requests`
+Параметры: `status` (`pending`/`approved`/`rejected`), `search` (по ФИО, телефону, организации, подписи статуса — «На рассмотрении», «Одобрена», «Отклонена» — и типу пользователя), `sort_by` (`created_at`/`resolved_at`/`status`/`full_name`), `sort_order`, `page`, `size`.
+```json
+{
+  "items": [
+    {
+      "id": 5, "phone": "+375291234567", "full_name": "Иванов Иван", "user_type": "individual",
+      "organization_name": null, "contact_phone": null, "user_comment": "Работаю в ООО Ромашка",
+      "status": "pending", "admin_response": null,
+      "resolved_by_admin_id": null, "resolved_by_admin_name": null,
+      "created_user_id": null, "created_at": "2026-10-01T09:00:00Z", "resolved_at": null
+    }
+  ],
+  "total": 1, "page": 1, "size": 20, "pages": 1
+}
+```
+
+### POST `/admin/registration-requests/{request_id}/approve`
+Одобрить — заводит аккаунт, `204 No Content`. Тело: `{ "admin_response": "Проверено звонком" }` (`admin_response` необязателен). Заводятся и чаты «Поддержка» и «Заметки». Заявителю в приложении сообщить нечем — он ещё не пользователь, о решении узнаёт вне приложения. `409`, если заявка уже обработана или номер за это время занят.
+
+### POST `/admin/registration-requests/{request_id}/reject`
+Отклонить, `204 No Content`. `admin_response` **обязателен** (1–1000 символов). `409`, если заявка уже обработана.
+
+Оба действия пишутся в журнал: `registration_request.approve` / `registration_request.reject`.
+
+---
+
+## Рут `admin: password reset requests` — заявки на сброс пароля (просмотр — оператор/админ, решение — только админ)
+
+Заявку подаёт сам человек через `POST /auth/password-reset/request`, предложив новый пароль.
+
+> **Ответственность на администраторе.** Система подтвердить, что заявку подаёт владелец аккаунта, не может — перед одобрением это нужно проверить вне системы. Одобрение меняет пароль сразу.
+
+### GET `/admin/password-reset-requests`
+Параметры: `status` (`pending`/`approved`/`rejected`), `search` (по ФИО, телефону, организации и подписи статуса), `sort_by` (`created_at`/`resolved_at`/`status`/`user_full_name`), `sort_order`, `page`, `size`.
+```json
+{
+  "items": [
+    {
+      "id": 7, "user_id": 12, "user_full_name": "Иванов Иван", "user_phone": "+375291234567",
+      "user_type": "individual", "organization_name": null,
+      "user_is_verified": true, "user_registered_at": "2026-01-15T08:00:00Z",
+      "user_comment": "Нет доступа к Telegram",
+      "status": "pending", "admin_response": null,
+      "resolved_by_admin_id": null, "resolved_by_admin_name": null,
+      "created_at": "2026-10-01T09:00:00Z", "resolved_at": null
+    }
+  ],
+  "total": 1, "page": 1, "size": 20, "pages": 1
+}
+```
+
+### POST `/admin/password-reset-requests/{request_id}/approve`
+Одобрить, `204 No Content`. Тело: `{ "admin_response": "Проверено звонком" }` (необязателен). Пароль меняется на предложенный заявителем, **все его сессии закрываются**, пользователю уходит уведомление «Пароль изменён» (`request_status`). `409`, если заявка уже обработана.
+
+### POST `/admin/password-reset-requests/{request_id}/reject`
+Отклонить, `204 No Content`. `admin_response` **обязателен**; пользователю уходит уведомление с этой причиной.
+
+Оба действия пишутся в журнал: `password_reset_request.approve` / `password_reset_request.reject`.
 
 ---
 
@@ -2867,7 +2991,7 @@ NAS-папки: такие всегда заводятся с `is_internal: true
 ---
 
 ### GET `/admin/document-requests`
-Заявки пользователей на доступ к закрытым документам. Параметры:
+Заявки пользователей на доступ к закрытым документам. **Список видят `admin` и `operator`, решают (`approve`/`reject`) — только `admin`: оператор получит `403`, кнопки решения ему показывать не нужно.** Параметры:
 - `status` — `pending` / `approved` / `rejected`
 - `resolved_by_admin_id` — заявки, обработанные конкретным администратором
 - `search` — поиск по ФИО/телефону/организации пользователя, типу документа, сообщению пользователя и ответу администратора
@@ -2895,6 +3019,7 @@ NAS-папки: такие всегда заводятся с `is_internal: true
       "user_message": "Нужен для проверки",
       "admin_response": null,
       "resolved_by_admin_id": null,
+      "resolved_by_admin_name": null,
       "created_at": "2026-06-01T09:00:00Z",
       "resolved_at": null
     }
@@ -3395,7 +3520,7 @@ NAS-папки: такие всегда заводятся с `is_internal: true
 
 Сортировка: сначала ожидающие оператора (`operator_requested=true`) — это очередь, личный пин её не перекрывает; внутри — сначала закреплённые ЭТИМ оператором (`is_pinned`, см. `PUT /operator/chats/{chat_id}/pin-chat` ниже); затем по последнему сообщению.
 
-Каждый чат содержит `user_id`, `user_name`, `cabinet_object_number`/`project_name`, `is_pinned` (личное для этого оператора, не видно другим), а для чатов заявок — ещё и `service_request_id`/`service_request_type`/`service_request_status`/`service_request_description`/`service_request_created_at` (см. `GET /chats` выше — формат ответа общий).
+Каждый чат содержит `user_id`, `user_name` (имя заявителя), `user_phone` (его телефон), `cabinet_object_number`/`project_name`, `is_pinned` (личное для этого оператора, не видно другим), а для чатов заявок — ещё и `service_request_id`/`service_request_type`/`service_request_status`/`service_request_description`/`service_request_created_at` (см. `GET /chats` выше — формат ответа общий).
 
 > **Оптимизация:** запрос выполняется за 3 DB-запроса независимо от числа чатов (JOIN на User+Cabinet + batch unread counts + batch last messages), вместо 4N+1 в предыдущей версии.
 
@@ -3403,7 +3528,7 @@ NAS-папки: такие всегда заводятся с `is_internal: true
 
 ### GET `/operator/chats/{chat_id}`
 Один чат по ID, с тем же набором полей, что и в `GET /operator/chats`
-(`user_id`/`user_name`, `cabinet_id`/`cabinet_name`/`cabinet_object_number`,
+(`user_id`/`user_name`/`user_phone`, `cabinet_id`/`cabinet_name`/`cabinet_object_number`,
 `project_id`/`project_name`, статус заявки и т.п.) — для прямого перехода к
 чату без предзагруженного списка: пуш-уведомление, ссылка, обновление
 страницы. `notes`-чаты (личные заметки пользователя) недоступны оператору
@@ -3691,6 +3816,7 @@ ws.onmessage = (e) => {
       "user_full_name": "Иванов Иван",
       "cabinet_id": 3,
       "project_id": null,
+      "detail": "Не включается вентилятор приточной установки",
       "created_at": "2026-06-24T10:00:00Z"
     }
   ]
@@ -3701,6 +3827,11 @@ ws.onmessage = (e) => {
 `password_reset` | `registration` | `reclamation`. У `type: "registration"`
 `user_id` всегда `null` — заявитель ещё не пользователь на момент заявки, имя
 берётся прямо из полей самой заявки, а не через связь с аккаунтом.
+`detail` — короткая подпись для ленты, суть заявки одной строкой (до 80 символов,
+длиннее обрезается с «…»), может быть `null`. Зависит от `type`: `service` и
+`reclamation` — начало описания, `document` — тип документа (`doc_type`),
+`addition` и `password_reset` — комментарий заявителя, `phone_change` — новый
+номер, `registration` — организация, а если её нет — номер телефона.
 `pending_reclamations` считает рекламации со статусом `new` (новая) или `review`
 (на рассмотрении) — обе ранние стадии, до того как их взяли в работу.
 `in_progress`/`resolved`/`rejected`/`invalid` уже не «висят» в очереди на
@@ -3711,7 +3842,7 @@ ws.onmessage = (e) => {
 ## Рут `service requests` — сервисные заявки
 
 Типы заявок (`request_type`): `repair` (ремонт), `diagnostics` (диагностика), `remote_adjustment` (наладка удалённо), `onsite_adjustment` (наладка с выездом), `other` (другое).
-Статусы: `open`, `in_progress`, `postponed`, `closed`. Переход между статусами не валидируется — администратор/оператор может установить любой статус через `PATCH /admin/service-requests/{req_id}/status` (типичный сценарий: `open → in_progress → closed`).
+Статусы: `open`, `in_progress`, `postponed`, `closed`. Переход между статусами не валидируется — администратор и оператор (оба) могут установить любой статус через `PATCH /admin/service-requests/{req_id}/status` (типичный сценарий: `open → in_progress → closed`).
 
 ### POST `/service-requests`
 Создать заявку — по конкретному ШУ либо по проекту в целом. Ровно одно из
@@ -4361,52 +4492,56 @@ ws.onmessage = (e) => {
 
 ---
 
-### GET `/admin/notifications/promo`
-Что лежит в подборке рекламных заготовок. Только для администратора.
+### GET `/admin/notifications/promo/messages`
+Список рекламных заготовок. Только для администратора. Заготовки хранятся в БД и целиком управляются из админки — файла `promo_messages.json` и переменных `.env` для этого больше нет.
 ```json
 [
-  { "id": "service_reminder", "title": "Плановое обслуживание",
-    "body": "Регулярное ТО шкафа управления…", "data": { "screen": "service_request" } }
+  { "id": 1, "title": "Плановое обслуживание", "body": "Регулярное ТО шкафа управления…",
+    "data": { "screen": "service_request" },
+    "created_at": "2026-10-01T09:00:00Z", "updated_at": "2026-10-01T09:00:00Z" }
 ]
 ```
-Файл читается заново на каждый запрос — список сразу показывает результат правок, перезапуск не нужен.
+`id` — число.
 
----
+### POST `/admin/notifications/promo/messages`
+Создать заготовку. `201 Created`, ответ — созданная заготовка. Пишется в журнал (`notification.promo_message_create`).
+```json
+{ "title": "Плановое обслуживание", "body": "Регулярное ТО шкафа управления…", "data": { "screen": "service_request" } }
+```
+`title` 1–255 символов, `body` 1–1000, `data` — произвольные ключи для клиента (например, экран для перехода).
+
+### PATCH `/admin/notifications/promo/messages/{message_id}`
+Изменить заготовку — передаются только изменяемые поля (`title`, `body`, `data`). Ответ — обновлённая заготовка.
+
+### DELETE `/admin/notifications/promo/messages/{message_id}`
+Удалить заготовку, `204 No Content`. Если на неё ссылается расписание (`message_ids`), оно просто перестаёт её учитывать — без ошибки.
 
 ### POST `/admin/notifications/promo/send`
-Разослать рекламу из подборки. Только для администратора. Параметры:
-- `promo_id` — конкретная заготовка. Без него берётся **случайная**
-- `role` — как в `broadcast`: `null` = всем активным, либо `user` / `operator` / `admin`
+Разослать рекламу из заготовок. Только для администратора. Параметры запроса:
+- `promo_id` — числовой id конкретной заготовки. Без него берётся **случайная**
+- `role` — `user` / `operator` / `admin`; без него — всем активным
 
 ```json
 { "sent_to": 42, "skipped_opted_out": 7,
-  "message": { "id": "remote_diagnostics", "title": "Удалённая диагностика", "body": "…", "data": {} } }
+  "message": { "id": 3, "title": "Удалённая диагностика", "body": "…", "data": {},
+               "created_at": "2026-10-01T09:00:00Z", "updated_at": "2026-10-01T09:00:00Z" } }
 ```
-Уважает переключатель `promotional`, как и обычная рассылка. В `data` уведомления кладётся `promo_id` — по нему в приложении можно понять, какую именно заготовку показали. Действие пишется в журнал.
+Уважает переключатель `promotional`, как и обычная рассылка. В `data` уведомления кладётся `promo_id`. Действие пишется в журнал.
 
-`400` — подборка пуста или файл не читается. `404` — заготовки с таким `promo_id` нет.
+`404` — заготовки с таким `promo_id` нет. `400` — заготовок нет вообще.
 
-#### Файл с рекламой
-
-Подборка лежит в `savt-backend/app/data/promo_messages.json` и правится руками:
+### GET `/admin/notifications/promo/schedule` и PATCH `/admin/notifications/promo/schedule`
+Расписание автоматической рассылки. Только для администратора. Настройки лежат в БД и действуют сразу, без перезапуска сервера.
 ```json
-{
-  "messages": [
-    { "id": "service_reminder",
-      "title": "Плановое обслуживание",
-      "body": "Регулярное ТО шкафа управления продлевает срок службы…",
-      "data": { "screen": "service_request" } }
-  ]
-}
+{ "enabled": false, "interval_days": 7, "send_hour": 10, "message_ids": null, "last_sent_at": null }
 ```
-- `id` — уникальный, попадает в `data.promo_id`;
-- `title` до 255 символов, `body` до 1000 — длиннее обрезается;
-- `data` — произвольные ключи для клиента (например, экран для перехода), значения приводятся к строкам;
-- записи без `title` или `body` пропускаются с `WARNING` в логе, остальные всё равно разошлются.
+- `enabled` — включена ли автоматическая рассылка. **По умолчанию выключена**: реклама уходит живым людям, включать её стоит осознанно
+- `interval_days` — не чаще, чем раз в столько дней (1–365)
+- `send_hour` — час суток по UTC (0–23), в который уходит рассылка
+- `message_ids` — `null` или `[]`: случайная заготовка среди всех; иначе — только среди перечисленных id
+- `last_sent_at` — когда рассылка уходила в последний раз
 
-Файл внутри образа только для чтения. Чтобы править без пересборки, положите свою копию рядом и укажите путь в `PROMO_MESSAGES_FILE` — например на уже примонтированной шаре NAS (`/mnt/projects/promo_messages.json`) или отдельным томом. Отсутствующий и битый файл рассылку не роняют: она просто не находит, что отправить, и говорит об этом `400`-м.
-
-**Автоматическая рассылка** по умолчанию выключена. Включается `PROMO_AUTO_SEND_HOUR` — час (0–23), в который раз в сутки уходит случайная заготовка всем пользователям с ролью `user`. Пусто, не число или значение вне диапазона — рассылка не регистрируется вовсе, остаётся только кнопка. Так по умолчанию сделано намеренно: реклама уходит живым людям, и включать её стоит осознанно.
+`PATCH` принимает любые из `enabled`, `interval_days`, `send_hour`, `message_ids`. Явный `message_ids: null` снимает ограничение. Раз в час фоновая задача сверяется с этими настройками; автоматическая рассылка идёт только пользователям с ролью `user`, и подряд не выбирается одна и та же заготовка. Изменение расписания пишется в журнал.
 
 ---
 
@@ -4898,7 +5033,8 @@ SELECT source_type, COUNT(*) FROM embeddings GROUP BY source_type;
 
 ### GET `/admin/audit-logs`
 Журнал административных действий. Доступ разный по уровню:
-- **`admin`/`operator`** — видят только логи по заявкам (создание, одобрение, отклонение): `entity_type` принудительно ограничен списком `cabinet_addition_request`, `document_request`, `project_share_request`, `service_request` — сервер сам сужает выдачу до этого набора независимо от того, что передано в `entity_type`/`entity_id`. Заявок на доступ к отдельному ШУ (`cabinet_share_request`) больше нет — убраны вместе с самой сущностью.
+- **`operator`** — видит только логи по заявкам (создание, одобрение, отклонение): `entity_type` принудительно ограничен списком `cabinet_addition_request`, `document_request`, `service_request` (и устаревшего `project_share_request`, заявок которого больше нет) — сервер сам сужает выдачу до этого набора независимо от того, что передано в `entity_type`/`entity_id`.
+- **`admin`** — то же самое плюс логи по рекламациям (`entity_type = reclamation`).
 - **`superadmin`** — видит вообще всё, без ограничений: CUD по шкафам, проектам, документам, пользователям (баны/верификации), плюс те же заявки.
 
 Параметры:
@@ -4914,6 +5050,27 @@ SELECT source_type, COUNT(*) FROM embeddings GROUP BY source_type;
 - `sort_order` — `asc` / `desc`
 - `page`, `size` — пагинация (по умолч. `1` / `50`, максимум `200`)
 
+Ответ — страница:
+```json
+{
+  "items": [
+    {
+      "id": 812,
+      "actor_id": 3,
+      "actor_role": "admin",
+      "actor_name": "Иванов Иван",
+      "action": "reclamation.delete",
+      "entity_type": "reclamation",
+      "entity_id": 12,
+      "payload": { "status": "new", "user_id": 8 },
+      "created_at": "2026-10-07T09:12:00Z"
+    }
+  ],
+  "total": 1, "page": 1, "size": 50, "pages": 1
+}
+```
+`actor_id` и `actor_name` — `null` у системных действий (фоновые задачи, вебхуки) и у удалённых аккаунтов. `payload` — произвольный объект, состав зависит от `action` (что именно изменили, причина, количество получателей и т.п.). Поиск `search` понимает несколько слов и находит их в любом порядке; цифры ищутся точно.
+
 ---
 
 ## Рут `admin: bot` — управление ботом
@@ -4923,7 +5080,9 @@ SELECT source_type, COUNT(*) FROM embeddings GROUP BY source_type;
 
 Параметры:
 - `force=false` (по умолчанию) — индексирует только записи без существующих эмбеддингов (быстро)
-- `force=true` — полная переиндексация всего (медленно, пропорционально объёму данных)
+- `force=true` — полная переиндексация (медленно, пропорционально объёму данных)
+- `scope` — что индексировать: `all` (по умолчанию) / `faq` / `kb_article` / `document`
+- `project_id` — только документы этого проекта (вместе с его шкафами и дочерними проектами); имеет смысл со `scope=document` или `all`
 
 Считает в фоне — сам HTTP-запрос отвечает сразу (`202 Accepted`), не дожидаясь окончания. При заметном объёме данных `force=true` — это десятки/сотни синхронных вызовов Yandex API (эмбеддинги), что легко превышает `proxy_read_timeout` nginx, если считать синхронно внутри запроса.
 
@@ -4971,10 +5130,6 @@ Data:      { "cabinet_id": 5, "days_left": 30 }
 Тип уведомления в БД: `warranty_expiring`.
 
 ---
-
-### Синхронизация сотрудников из Bitrix
-
-**Расписание:** каждый час в 30 минут. Создаёт/обновляет/деактивирует операторов и админов по отделам Bitrix, подробности и отчёт — в «Рут `admin: staff`». Если Bitrix не ответил, ничего не меняется.
 
 ---
 

@@ -44,8 +44,8 @@ export function FormField({
   )
 }
 
-export function PasswordField({ label, hint, value, onChange, error }: {
-  label: string; hint?: string; value: string; onChange: (v: string) => void; error?: string
+export function PasswordField({ label, hint, value, onChange, error, autoComplete = 'new-password' }: {
+  label: string; hint?: string; value: string; onChange: (v: string) => void; error?: string; autoComplete?: string
 }) {
   const [show, setShow] = useState(false)
   return (
@@ -59,7 +59,7 @@ export function PasswordField({ label, hint, value, onChange, error }: {
           onChange={e => onChange(e.target.value)}
           type={show ? 'text' : 'password'}
           placeholder="••••••••"
-          autoComplete="new-password"
+          autoComplete={autoComplete}
           className={cn(
             'w-full px-3 py-2 pr-10 text-sm border rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none',
             error ? 'border-red-400 focus:border-red-500 dark:border-red-500' : 'border-slate-200 dark:border-slate-600 focus:border-[#4A8FE7]'
