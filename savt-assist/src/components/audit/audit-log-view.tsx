@@ -18,6 +18,7 @@ const PAGE_SIZE = 50
 
 const ACTOR_ROLE_FILTERS = [
   { value: undefined, label: 'Все' },
+  { value: 'superadmin', label: 'Суперадмин' },
   { value: 'admin', label: 'Админ' },
   { value: 'operator', label: 'Оператор' },
   { value: 'user', label: 'Пользователь' },
@@ -41,6 +42,7 @@ const SEARCH_IN_OPTIONS = [
 ] as const
 
 function actorRoleLabel(role: string): string {
+  if (role === 'superadmin') return 'Суперадмин'
   if (role === 'admin') return 'Админ'
   if (role === 'operator') return 'Оператор'
   if (role === 'user') return 'Пользователь'
@@ -50,7 +52,7 @@ function actorRoleLabel(role: string): string {
 
 function ActorIcon({ role, className }: { role: string; className?: string }) {
   if (role === 'system') return <Settings2 className={className} />
-  if (role === 'admin') return <Shield className={className} />
+  if (role === 'admin' || role === 'superadmin') return <Shield className={className} />
   if (role === 'operator') return <Bot className={className} />
   return <User className={className} />
 }
@@ -76,9 +78,8 @@ function fmtDateTime(iso: string): string {
 }
 
 // Журнал административных действий, только для просмотра. Суперадмин видит всё
-// (CUD по шкафам/проектам/документам/пользователям + заявки), обычный админ/оператор —
-// только заявочные entity_type (сервер сам сужает выдачу, см. README-backend.md,
-// "Рут admin: audit" — отдельного client-side ограничения делать не нужно).
+// (CUD по шкафам/проектам/документам/пользователям, все виды заявок и рекламации);
+// остальные роли получают 403 (в меню пункт показывается только суперадмину).
 export function AuditLogView() {
   const [search, setSearch] = useState('')
   const [searchIn, setSearchIn] = useState<typeof SEARCH_IN_OPTIONS[number]['value']>('all')

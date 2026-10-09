@@ -642,8 +642,7 @@ function EntryModal({ entry, categories, defaultCategoryId, onClose, isReadOnly 
           answer: answer !== entry.answer ? answer : undefined,
         })
       }
-      const created = await faqApi.createEntry({ question, answer, category_id: categoryId })
-      return faqApi.updateEntry(created.id, { is_published: true })
+      return faqApi.createEntry({ question, answer, category_id: categoryId })
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['faq-entries'] })

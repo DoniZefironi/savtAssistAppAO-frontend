@@ -1,14 +1,11 @@
 import { apiClient } from './client'
 import type { PaginatedResponse } from '@/types'
 
-// Ответ GET /admin/audit-logs не задокументирован примером JSON в README-backend.md —
-// форма ответа собрана по перечисленным параметрам фильтрации/сортировки
-// (actor_id/actor_role/actor_name, action, entity_type/entity_id, payload, created_at).
-// Стоит свериться с реальным ответом сервера при первом использовании.
+// Ответ GET /admin/audit-logs: страница записей. Журнал доступен только суперадмину.
 export interface AuditLog {
   id: number
   actor_id: number | null
-  actor_role: 'admin' | 'operator' | 'user' | 'system'
+  actor_role: 'superadmin' | 'admin' | 'operator' | 'user' | 'system'
   actor_name: string | null
   action: string
   entity_type: string
@@ -19,7 +16,7 @@ export interface AuditLog {
 
 export interface AuditLogsParams {
   actor_id?: number
-  actor_role?: 'admin' | 'operator' | 'user' | 'system'
+  actor_role?: 'superadmin' | 'admin' | 'operator' | 'user' | 'system'
   action?: string
   entity_type?: string
   entity_id?: number
