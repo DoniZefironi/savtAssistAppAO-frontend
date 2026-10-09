@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { reclamationsApi } from '@/lib/api/reclamations'
 import { toFullUrl } from '@/lib/api/base-url'
 import { fmtSize } from '@/components/cabinets/cabinet-dialog-shared'
+import { useAuthStore } from '@/lib/store/auth'
 import { AppModal } from '@/components/ui/app-modal'
 import { Skeleton } from '@/components/ui/skeleton'
 import { UserDialog } from '@/components/users/user-dialog'
@@ -21,6 +22,8 @@ import { BitrixDeletedCardWarning, BitrixPendingCreateBlock } from './bitrix-out
 // можно сделать отсюда, — повторно отправить рекламацию в Bitrix, если она не
 // доехала (BitrixPendingCreateBlock), и удалить, если карточку там удалили.
 export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: number; onClose: () => void }) {
+  // Оператор видит карточку целиком, но очередь Bitrix (повторная отправка, снятие) и удаление — только админ.
+  const isAdmin = useAuthStore(s => s.user?.role) !== 'operator'
   const [subUserId, setSubUserId] = useState<number | null>(null)
   const [subCabinetId, setSubCabinetId] = useState<number | null>(null)
   const [subProjectId, setSubProjectId] = useState<number | null>(null)
@@ -67,13 +70,17 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
             }
           />
 
-          <BitrixDeletedCardWarning
-            reclamationId={r.id}
-            deletedAt={r.bitrix_deleted_at}
-            itemId={r.bitrix_item_id}
-            onDeleted={onClose}
-          />
-          <BitrixPendingCreateBlock item={r.pending_create_outbox} />
+          {isAdmin && (
+            <>
+              <BitrixDeletedCardWarning
+                reclamationId={r.id}
+                deletedAt={r.bitrix_deleted_at}
+                itemId={r.bitrix_item_id}
+                onDeleted={onClose}
+              />
+              <BitrixPendingCreateBlock item={r.pending_create_outbox} />
+            </>
+          )}
 
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="divide-y divide-slate-50 dark:divide-slate-700/50">

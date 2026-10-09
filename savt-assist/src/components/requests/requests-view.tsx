@@ -71,9 +71,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'phone', label: 'Смена номера' },
   { id: 'password', label: 'Смена пароля' },
   { id: 'registration', label: 'Регистрация' },
-  // Только админ — GET /admin/reclamations недоступен оператору (403), см.
-  // README-backend.md, «Рут reclamations». Отфильтровывается для оператора
-  // ниже, в visibleTabs.
+  // Список и карточка — и у оператора (только просмотр); очереди Bitrix и удаление — только у админа.
   { id: 'reclamations', label: 'Рекламации' },
 ]
 
@@ -245,7 +243,7 @@ export function RequestsView() {
     const t = params.get('tab')
     if (
       t === 'service' || t === 'additions' || t === 'docs' || t === 'phone' || t === 'registration' || t === 'password' ||
-      (t === 'reclamations' && isAdmin)
+      t === 'reclamations'
     ) {
       setTab(t)
     }
@@ -257,7 +255,6 @@ export function RequestsView() {
     // (admin-dashboard.tsx). Если такой параметр есть — переключаем и
     // вкладку на нужную, даже если ?tab= не пришёл вовсе или пришёл другой.
     for (const [tabId, param] of Object.entries(TAB_DEEPLINK_PARAM) as [Tab, string][]) {
-      if (tabId === 'reclamations' && !isAdmin) continue
       const raw = params.get(param)
       if (!raw || !/^\d+$/.test(raw)) continue
       setTab(tabId)
@@ -388,7 +385,7 @@ export function RequestsView() {
       reclamationsApi.getAll({ status: rsp, object_type: rotp, warranty_classification: rwc, search: sq, sort_by: sortBy, sort_order: sortOrder, page: pageParam, size: 20 }),
     getNextPageParam: p => p.page < p.pages ? p.page + 1 : undefined,
     refetchInterval: LIST_POLL_MS,
-    enabled: tab === 'reclamations' && isAdmin,
+    enabled: tab === 'reclamations',
     // Без этого — возврат на вкладку спустя >30с после глубокой прокрутки
     // переперезапрашивает все закэшированные страницы по очереди подряд.
     // Своя инвалидация после PATCH уже держит список актуальным.
@@ -449,7 +446,7 @@ export function RequestsView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingOpenId, tab, svcQ.data, addQ.data, docQ.data, phoneQ.data, regQ.data, pwQ.data])
 
-  const visibleTabs = isAdmin ? TABS : TABS.filter(t => t.id !== 'reclamations')
+  const visibleTabs = TABS
   const filters = tab === 'service' ? SVC_FILTERS : tab === 'phone' ? PHONE_FILTERS : REQ_FILTERS
   const sortOptions =
     tab === 'service' ? SVC_SORT :
@@ -606,8 +603,12 @@ export function RequestsView() {
         )}
         {tab === 'reclamations' && !reclQ.isLoading && !reclQ.isError && (
           <>
-            <BitrixDetachedNotice items={detached} onOpen={setSelectedReclamationId} />
-            <BitrixOutboxNotice items={outbox} />
+            {isAdmin && (
+              <>
+                <BitrixDetachedNotice items={detached} onOpen={setSelectedReclamationId} />
+                <BitrixOutboxNotice items={outbox} />
+              </>
+            )}
             <ReclamationsList items={reclItems} onSelect={r => setSelectedReclamationId(r.id)} view={view} />
           </>
         )}

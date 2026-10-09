@@ -36,7 +36,7 @@ const ACTIVITY_TYPE_TAB: Partial<Record<ActivityItem['type'], Tab>> = {
 // нечитаемым. Группируем по смыслу: чаты и сервисные заявки — по одному
 // счётчику как раньше, «по проектам» и «по аккаунтам» — по нескольку строк
 // внутри одной карточки-категории.
-function makeStatCategories(base: string, isAdmin: boolean) {
+function makeStatCategories(base: string) {
   return [
     {
       key: 'chats', title: 'Чаты', cards: [
@@ -61,15 +61,13 @@ function makeStatCategories(base: string, isAdmin: boolean) {
         { key: 'pendingRegistrationRequests' as const, label: 'Регистрация', href: `${base}/requests?tab=registration`, accent: '#4F46E5', urgentAbove: 0, icon: <RegistrationIcon /> },
       ],
     },
-    // Только админ — вкладка «Рекламации» в «Заявках» и сами эндпоинты
-    // недоступны оператору (403), см. README-backend.md, «Рут reclamations».
-    ...(isAdmin ? [{
+    {
       key: 'reclamations', title: 'Рекламации', cards: [
         // Считает new + review (см. README-backend.md) — обе стадии до того,
         // как рекламацию взяли в работу, не только «На рассмотрении».
         { key: 'pendingReclamations' as const, label: 'Не в работе', href: `${base}/requests?tab=reclamations`, accent: '#EA580C', urgentAbove: 0, icon: <ReclamationIcon /> },
       ],
-    }] : []),
+    },
   ] as const
 }
 
@@ -80,7 +78,7 @@ export function AdminDashboard() {
   const isOperator = user?.role === 'operator'
   const base = isOperator ? '/operator' : '/admin'
   const displayName = user?.full_name ?? user?.login ?? (isOperator ? 'Оператор' : 'Администратор')
-  const statCategories = makeStatCategories(base, !isOperator)
+  const statCategories = makeStatCategories(base)
   const [selectedReclamationId, setSelectedReclamationId] = useState<number | null>(null)
 
   const openActivityItem = (item: ActivityItem) => {
@@ -116,7 +114,7 @@ export function AdminDashboard() {
             заполнялся ровно и ничего не повисало одиноко с пустым местом
             (было с «Рекламациями» на фиксированных 4 колонках, см.
             обсуждение по скриншоту при 1440px). */}
-        <div className={cn('grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6', isOperator ? 'xl:grid-cols-4' : 'xl:grid-cols-5')}>
+        <div className={cn('grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6', 'xl:grid-cols-5')}>
           {statCategories.map((cat) => (
             <div key={cat.key} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
               <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b border-slate-100 dark:border-slate-700/60">
