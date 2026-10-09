@@ -33,6 +33,8 @@ interface Props {
   onUnpinAll: () => void
   onClearHistory: () => void
   onDeleteChat: () => void
+  // Очистка истории и удаление чата — только администратор (оператору 403)
+  canDeleteChat: boolean
 }
 
 // Верхняя панель разговора: аватар/имя/статус, поиск по сообщениям, взять/вернуть
@@ -43,7 +45,7 @@ export function ChatHeader({
   name, avatarBg, AvatarIcon, botActive, hideBotControls, operatorRequested, onAvatarClick,
   onTake, takePending, onReturnToBot, returnToBotPending,
   headerMenuOpen, onToggleHeaderMenu, headerMenuRef,
-  pinnedCount, onJumpToPinned, onUnpinAll, onClearHistory, onDeleteChat,
+  pinnedCount, onJumpToPinned, onUnpinAll, onClearHistory, onDeleteChat, canDeleteChat,
 }: Props) {
   return (
     <div className="flex items-center gap-3 px-3 py-2 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700/60 shrink-0 shadow-sm">
@@ -126,9 +128,13 @@ export function ChatHeader({
               {pinnedCount > 1 && (
                 <HeaderMenuItem icon={<PinOff className="w-4 h-4" />} onClick={onUnpinAll} danger>Открепить все ({pinnedCount})</HeaderMenuItem>
               )}
-              <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
-              <HeaderMenuItem icon={<Trash2 className="w-4 h-4" />} onClick={onClearHistory} danger>Очистить историю</HeaderMenuItem>
-              <HeaderMenuItem icon={<Ban className="w-4 h-4" />} onClick={onDeleteChat} danger>Удалить чат</HeaderMenuItem>
+              {canDeleteChat && (
+                <>
+                  <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
+                  <HeaderMenuItem icon={<Trash2 className="w-4 h-4" />} onClick={onClearHistory} danger>Очистить историю</HeaderMenuItem>
+                  <HeaderMenuItem icon={<Ban className="w-4 h-4" />} onClick={onDeleteChat} danger>Удалить чат</HeaderMenuItem>
+                </>
+              )}
             </div>
           )}
         </div>

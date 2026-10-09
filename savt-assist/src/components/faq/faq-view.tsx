@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { AlertTriangle, FolderTree } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { faqApi } from '@/lib/api/faq'
+import { apiErrorMessage } from '@/lib/api/errors'
 import type { FaqCategory, FaqEntry } from '@/lib/api/faq'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
@@ -172,7 +173,7 @@ export function FaqView() {
       toast.success('Категория удалена')
       setDeleteConfirm(null)
     },
-    onError: () => toast.error('Не удалось удалить категорию'),
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось удалить категорию')),
   })
 
   const deleteEntryMut = useMutation({
@@ -182,7 +183,7 @@ export function FaqView() {
       toast.success('Вопрос удалён')
       setDeleteConfirm(null)
     },
-    onError: () => toast.error('Не удалось удалить вопрос'),
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось удалить вопрос')),
   })
 
   const handleConfirmDelete = () => {

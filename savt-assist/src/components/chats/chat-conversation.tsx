@@ -940,6 +940,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         onUnpinAll={() => { unpinAll(); setHeaderMenuOpen(false) }}
         onClearHistory={() => { setConfirmModal('clear'); setHeaderMenuOpen(false) }}
         onDeleteChat={() => { setConfirmModal('delete'); setHeaderMenuOpen(false) }}
+          canDeleteChat={currentUser?.role !== 'operator'}
       />
 
       {!!activePin && !searchOpen && (

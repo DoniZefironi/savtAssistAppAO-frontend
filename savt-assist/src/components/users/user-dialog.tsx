@@ -65,33 +65,33 @@ export function UserDialog({ userId, role, onClose }: { userId: number; role: st
   const verifyMut = useMutation({
     mutationFn: () => usersApi.verify(userId),
     onSuccess: () => { invalidate(); toast.success('Верификация выдана') },
-    onError: () => toast.error('Ошибка при верификации'),
+    onError: (e) => toast.error(apiErrorMessage(e, 'Ошибка при верификации')),
   })
   const unverifyMut = useMutation({
     mutationFn: () => usersApi.unverify(userId),
     onSuccess: () => { invalidate(); toast.success('Верификация снята') },
-    onError: () => toast.error('Ошибка'),
+    onError: (e) => toast.error(apiErrorMessage(e, 'Ошибка')),
   })
   const banMut = useMutation({
     mutationFn: () => usersApi.ban(userId, banReason),
     onSuccess: () => { invalidate(); toast.success('Пользователь заблокирован'); setBanStep(false); setBanReason(''); onClose() },
-    onError: () => toast.error('Ошибка при блокировке'),
+    onError: (e) => toast.error(apiErrorMessage(e, 'Ошибка при блокировке')),
   })
   const unbanMut = useMutation({
     mutationFn: () => usersApi.unban(userId),
     onSuccess: () => { invalidate(); toast.success('Пользователь разблокирован') },
-    onError: () => toast.error('Ошибка при разблокировке'),
+    onError: (e) => toast.error(apiErrorMessage(e, 'Ошибка при разблокировке')),
   })
   const deleteOperatorMut = useMutation({
     mutationFn: () => usersApi.deleteOperator(userId),
     onSuccess: () => { invalidate(); toast.success('Оператор удалён'); onClose() },
-    onError: () => toast.error('Ошибка при удалении'),
+    onError: (e) => toast.error(apiErrorMessage(e, 'Ошибка при удалении')),
   })
 
   const deleteAdminMut = useMutation({
     mutationFn: () => usersApi.deleteAdmin(userId),
     onSuccess: () => { invalidate(); toast.success('Администратор удалён'); onClose() },
-    onError: () => toast.error('Ошибка при удалении'),
+    onError: (e) => toast.error(apiErrorMessage(e, 'Ошибка при удалении')),
   })
 
   // Отзыв доступа — только админу (оператору ручки отдают 403) и только у

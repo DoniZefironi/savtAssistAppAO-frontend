@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { AlertTriangle, FolderTree, FolderUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { kbApi } from '@/lib/api/kb'
+import { apiErrorMessage } from '@/lib/api/errors'
 import type { KbArticleDetail, KbArticleList, KbAttachment, KbCategory, Tag } from '@/lib/api/kb'
 import { AppModal } from '@/components/ui/app-modal'
 import { Button } from '@/components/ui/button'
@@ -184,7 +185,7 @@ export function KbView() {
       toast.success('Категория удалена')
       setDeleteConfirm(null)
     },
-    onError: () => toast.error('Не удалось удалить категорию'),
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось удалить категорию')),
   })
 
   const deleteArticleMut = useMutation({
@@ -194,7 +195,7 @@ export function KbView() {
       toast.success('Статья удалена')
       setDeleteConfirm(null)
     },
-    onError: () => toast.error('Не удалось удалить статью'),
+    onError: (e) => toast.error(apiErrorMessage(e, 'Не удалось удалить статью')),
   })
 
   const handleConfirmDelete = () => {
@@ -832,12 +833,24 @@ function ArticleModal({ article, categories, defaultCategoryId, onClose, isReadO
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-500 block mb-1.5">Теги</label>
-                <TagSelector
-                  selected={selectedTags}
-                  allTags={allTags}
-                  onChange={setSelectedTags}
-                  onCreateTag={handleCreateTag}
-                />
+                {isReadOnly ? (
+                  selectedTags.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedTags.map(tag => (
+                        <span key={tag.id} className="text-xs px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">{tag.name}</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400">Без тегов</p>
+                  )
+                ) : (
+                  <TagSelector
+                    selected={selectedTags}
+                    allTags={allTags}
+                    onChange={setSelectedTags}
+                    onCreateTag={handleCreateTag}
+                  />
+                )}
               </div>
             </div>
           )}

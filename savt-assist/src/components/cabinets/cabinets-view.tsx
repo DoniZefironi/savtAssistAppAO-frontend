@@ -313,6 +313,7 @@ export function CabinetsView({ isAdmin }: Props) {
           <div className="flex items-center gap-2">
             <ViewModeToggle view={view} onViewChange={setView} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen(v => !v)} />
 
+            {isAdmin && (
             <Button
               onClick={() => syncAllFoldersMutation.mutate()}
               disabled={syncAllFoldersMutation.isPending}
@@ -323,6 +324,7 @@ export function CabinetsView({ isAdmin }: Props) {
               <RefreshCw className={`w-4 h-4 ${syncAllFoldersMutation.isPending ? 'animate-spin' : ''}`} />
               {syncAllFoldersMutation.isPending ? 'Синхронизация...' : 'Синхронизировать все'}
             </Button>
+            )}
             {isAdmin && (
               <Button
                 onClick={() => setShowCreate(true)}

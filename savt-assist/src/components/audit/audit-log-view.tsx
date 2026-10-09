@@ -55,6 +55,21 @@ function ActorIcon({ role, className }: { role: string; className?: string }) {
   return <User className={className} />
 }
 
+// Подпись исполнителя. У события создания заявки на регистрацию автора нет
+// (actor_id: null — заявитель ещё не пользователь), поэтому подпись берётся
+// из данных самого события: телефон и тип заявителя.
+function actorLabel(log: AuditLog): string {
+  if (log.actor_name) return log.actor_name
+  if (log.actor_id != null) return `#${log.actor_id}`
+  const phone = log.payload?.phone
+  if (typeof phone === 'string' && phone) {
+    const type = log.payload?.user_type
+    const typeLabel = type === 'organization' ? ', организация' : type === 'individual' ? ', физлицо' : ''
+    return `Заявитель ${phone}${typeLabel}`
+  }
+  return '—'
+}
+
 function fmtDateTime(iso: string): string {
   const d = new Date(iso)
   return d.toLocaleString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -295,7 +310,7 @@ function AuditLogRow({ log, expanded, onToggle }: { log: AuditLog; expanded: boo
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
-            {log.actor_name ?? (log.actor_id != null ? `#${log.actor_id}` : '—')} · {actorRoleLabel(log.actor_role)}
+            {actorLabel(log)} · {actorRoleLabel(log.actor_role)}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
