@@ -20,11 +20,12 @@ export interface ReclamationListParams {
   size?: number
 }
 
-// Только admin — оператору эти эндпоинты недоступны (403), см.
-// README-backend.md, «Рут reclamations». Обработки через админку нет: статус,
-// гарантию, ответственного и срок меняет специалист в Bitrix, к нам это
-// приезжает вебхуком. Ручек, меняющих состояние рекламации, у админки нет —
-// только повторная отправка в Bitrix, если рекламация туда не доехала.
+// Список и карточка доступны админу и оператору; очереди Bitrix и удаление —
+// только админу, см. README-backend.md, «Рут reclamations». Обработки через
+// админку нет: статус, гарантию, ответственного и срок меняет специалист в
+// Bitrix, к нам это приезжает вебхуком. Ручек, меняющих состояние рекламации,
+// у админки нет — только повторная отправка в Bitrix, если рекламация туда не
+// доехала.
 export const reclamationsApi = {
   getAll: async (params?: ReclamationListParams): Promise<PaginatedResponse<ReclamationListItem>> => {
     const { data } = await apiClient.get('/admin/reclamations', { params })
