@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { isAxiosError } from 'axios'
 import { eventsApi } from '@/lib/api/events'
 
 export interface RealtimeEnvelope<T = unknown> {
@@ -12,6 +13,7 @@ export interface RealtimeEnvelope<T = unknown> {
 // Обёртка над Server-Sent Events канала /operator/events/* (см. README-backend.md,
 // раздел "Realtime (SSE) для операторской панели"). Берёт на себя:
 // - обмен Bearer-токена на одноразовый тикет перед каждым (пере)подключением —
+//   если на выдаче тикета 403 (права отозваны), переподключение прекращается;
 //   EventSource не умеет слать заголовок Authorization, а нативный реконнект
 //   браузера переиспользовал бы уже протухший/использованный тикет из URL, поэтому
 //   на error мы сами закрываем поток и переподключаемся с новым тикетом;
@@ -88,8 +90,12 @@ export function useRealtimeEvents(
           if (!everConnected && ++failedHandshakes >= MAX_FAILED_HANDSHAKES) return
           retryTimer = setTimeout(connect, 3000)
         }
-      } catch {
+      } catch (err) {
         if (cancelled) return
+        // 403 на выдаче билета — доступ отозван (или нет прав на канал): поток
+        // закрыт насовсем, больше не переподключаемся. 401 обрабатывает apiClient
+        // (обновление токена или переход на вход).
+        if (isAxiosError(err) && err.response?.status === 403) return
         if (!everConnected && ++failedHandshakes >= MAX_FAILED_HANDSHAKES) return
         retryTimer = setTimeout(connect, 3000)
       }
