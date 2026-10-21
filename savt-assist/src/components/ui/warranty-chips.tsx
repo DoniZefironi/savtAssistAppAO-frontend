@@ -10,7 +10,7 @@ import { CheckCircle2, XCircle, AlertTriangle, MinusCircle } from 'lucide-react'
 // просто пропадали из списка, хотя на карточке статус был виден.
 export type WarrantyFilter = 'active' | 'expiring_soon' | 'expired' | 'none' | null
 
-export const WARRANTY_CHIPS = [
+const WARRANTY_CHIPS = [
   { value: 'active', label: 'Действует', icon: CheckCircle2, on: 'bg-emerald-500 text-white border-emerald-500', off: 'hover:border-emerald-400 hover:text-emerald-600' },
   { value: 'expiring_soon', label: 'Истекает', icon: AlertTriangle, on: 'bg-amber-500 text-white border-amber-500', off: 'hover:border-amber-400 hover:text-amber-600' },
   { value: 'expired', label: 'Истекла', icon: XCircle, on: 'bg-rose-500 text-white border-rose-500', off: 'hover:border-rose-400 hover:text-rose-500' },

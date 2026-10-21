@@ -1,8 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { toast } from 'sonner'
+import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/lib/store/auth'
 import { usePersistentState } from '@/lib/hooks/use-persistent-state'
@@ -14,8 +13,7 @@ export function AdminSidebar({ mobileOpen, onMobileClose }: { mobileOpen: boolea
   // поэтому в открытом mobileOpen-состоянии всегда показываем развёрнутый вид
   const isCollapsed = collapsed && !mobileOpen
   const pathname = usePathname()
-  const router = useRouter()
-  const { user, logout } = useAuthStore()
+  const { user } = useAuthStore()
 
   const isOperator = user?.role === 'operator'
   const isSuperadmin = user?.role === 'superadmin'
@@ -36,12 +34,6 @@ export function AdminSidebar({ mobileOpen, onMobileClose }: { mobileOpen: boolea
     // заявок, но отдельный пункт меню для них не нужен (это уже видно в «Заявках»)
     ...(isSuperadmin ? [{ href: `${base}/audit-logs`, label: 'Журнал действий', icon: ScrollTextIcon }] : []),
   ]
-
-  const handleLogout = async () => {
-    await logout()
-    router.push('/login')
-    toast.success('Вы вышли из системы')
-  }
 
   return (
     <>
@@ -159,9 +151,6 @@ function SettingsIcon({ className }: { className?: string }) {
 }
 function ChatIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8.625 9.75a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375m-13.5 3.01c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.184-4.183a1.14 1.14 0 01.778-.332 48.294 48.294 0 005.83-.498c1.585-.233 2.708-1.626 2.708-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" /></svg>
-}
-function LogoutIcon({ className }: { className?: string }) {
-  return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" /></svg>
 }
 function ClipboardIcon({ className }: { className?: string }) {
   return <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>

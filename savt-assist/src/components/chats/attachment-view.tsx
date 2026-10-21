@@ -80,9 +80,9 @@ interface Props {
 export function AttachmentView({ attachment, isOwn, transcription, transcribing, onTranscribe }: Props) {
   const { mime_type, attachment_type } = attachment
   if (attachment_type === 'location') return <LocationAttachment a={attachment} isOwn={isOwn} />
-  if (mime_type?.startsWith('image/')) return <ImageAttachment a={attachment} isOwn={isOwn} />
+  if (mime_type?.startsWith('image/')) return <ImageAttachment a={attachment} />
   if (mime_type?.startsWith('audio/')) return <AudioAttachment a={attachment} isOwn={isOwn} transcription={transcription} transcribing={transcribing} onTranscribe={onTranscribe} />
-  if (mime_type?.startsWith('video/')) return <VideoAttachment a={attachment} isOwn={isOwn} />
+  if (mime_type?.startsWith('video/')) return <VideoAttachment a={attachment} />
   return <FileAttachment a={attachment} isOwn={isOwn} />
 }
 
@@ -115,7 +115,7 @@ function LocationAttachment({ a, isOwn }: { a: ChatAttachment; isOwn: boolean })
   )
 }
 
-function ImageAttachment({ a, isOwn }: { a: ChatAttachment; isOwn: boolean }) {
+function ImageAttachment({ a }: { a: ChatAttachment }) {
   const [lightbox, setLightbox] = useState(false)
   const url = toFullUrl(a.file_url ?? '')
   const name = a.file_name ?? ''
@@ -288,7 +288,7 @@ function AudioAttachment({ a, isOwn, transcription, transcribing, onTranscribe }
   )
 }
 
-function VideoAttachment({ a, isOwn }: { a: ChatAttachment; isOwn: boolean }) {
+function VideoAttachment({ a }: { a: ChatAttachment }) {
   const url = toFullUrl(a.file_url ?? '')
   const name = a.file_name ?? ''
 
@@ -366,7 +366,7 @@ export function ImageLightbox({ url, name, onClose }: { url: string; name: strin
   if (typeof document === 'undefined') return null
 
   // Портал в body + zIndex выше модального стека (AppModal на 1200+, см.
-  // app-modal.tsx) — тот же приём, что и у BitrixUserCombobox/тегов в
+  // app-modal.tsx) — тот же приём, что и у выпадающих списков в
   // kb-view.tsx: без портала фиксированный оверлей клипался бы overflow-hidden
   // контейнера AppModal, если лайтбокс открыт из вложения внутри модалки
   // (например, reclamation-dialog.tsx), и выглядел бы «поверх модалки внутри

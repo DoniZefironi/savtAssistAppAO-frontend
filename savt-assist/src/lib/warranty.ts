@@ -19,10 +19,6 @@ export function formatDate(iso: string | null | undefined): string {
   return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`
 }
 
-export function toIsoDate(date: Date): string {
-  return date.toISOString()
-}
-
 // Отгрузка проекта одной строкой. Порядок важен: факт вытесняет план, а когда
 // нет ни того ни другого — это не «пусто», а осмысленное «ещё не запланирована»,
 // иначе непонятно, то ли даты нет, то ли её не подтянули из сделки.

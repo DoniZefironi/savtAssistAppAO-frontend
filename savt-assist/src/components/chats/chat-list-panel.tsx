@@ -380,7 +380,7 @@ function chatColor(chat: Chat): string {
   return colors[chat.id % colors.length]
 }
 
-export function formatTime(iso: string): string {
+function formatTime(iso: string): string {
   const d = new Date(iso)
   const now = new Date()
   if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })

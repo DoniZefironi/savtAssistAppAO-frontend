@@ -47,7 +47,7 @@ export function useBitrixDetached(enabled: boolean) {
 // явным «окончательно» в тексте: заявитель её тоже больше не увидит. Сервер
 // разрешает удаление только для рекламаций из bitrix-detached, поэтому и
 // кнопка есть только в этих двух местах.
-export function useDeleteReclamation(onDeleted?: (id: number) => void) {
+function useDeleteReclamation(onDeleted?: (id: number) => void) {
   const qc = useQueryClient()
   const mut = useMutation({
     mutationFn: (id: number) => reclamationsApi.remove(id),
