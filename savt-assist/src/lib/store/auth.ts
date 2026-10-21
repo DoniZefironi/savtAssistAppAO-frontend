@@ -1,7 +1,6 @@
 'use client'
 
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import type { User } from '@/types'
 import { authApi } from '@/lib/api/auth'
 import { setAccessToken } from '@/lib/api/client'
@@ -12,19 +11,17 @@ interface AuthState {
   logout: () => Promise<void>
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
-      user: null,
-      setUser: (user) => set({ user }),
-      logout: async () => {
-        try {
-          await authApi.logout()
-        } catch {}
-        setAccessToken(null)
-        set({ user: null })
-      },
-    }),
-    { name: 'savt-auth' }
-  )
-)
+// Профиль только в памяти: AuthBootstrap подтягивает его через /auth/me при
+// каждой загрузке, а в localStorage он лишь раскрывал бы роль и данные при XSS.
+export const useAuthStore = create<AuthState>()((set) => ({
+  user: null,
+  setUser: (user) => set({ user }),
+  logout: async () => {
+    try {
+      await authApi.logout()
+    } catch {}
+    setAccessToken(null)
+    set({ user: null })
+    try { localStorage.removeItem('savt-auth') } catch { /* storage недоступен */ }
+  },
+}))

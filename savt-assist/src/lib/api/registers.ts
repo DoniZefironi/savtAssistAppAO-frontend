@@ -48,7 +48,7 @@ async function downloadFile(path: string, fallbackFilename: string): Promise<voi
     document.body.removeChild(a)
     URL.revokeObjectURL(blobUrl)
   } catch {
-    window.open(`/backend${path}`, '_blank')
+    window.open(`/backend${path}`, '_blank', 'noopener,noreferrer')
   }
 }
 

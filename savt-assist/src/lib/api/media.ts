@@ -108,7 +108,7 @@ export const mediaApi = {
       if (!res.ok) throw new Error(`Download failed: ${res.status}`)
       saveBlob(await res.blob(), filename)
     } catch {
-      window.open(url, '_blank')
+      window.open(url, '_blank', 'noopener,noreferrer')
     }
   },
 

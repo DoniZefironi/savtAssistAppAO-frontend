@@ -151,7 +151,7 @@ export function ReclamationDialog({ reclamationId, onClose }: { reclamationId: n
                 <DRowLink
                   label="Подтверждающий документ"
                   value={r.confirmation_file_name || 'Скачать'}
-                  onClick={() => window.open(toFullUrl(r.confirmation_file_url!), '_blank')}
+                  onClick={() => window.open(toFullUrl(r.confirmation_file_url!), '_blank', 'noopener,noreferrer')}
                 />
               )}
             </div>
@@ -189,7 +189,7 @@ function AttachmentRow({ a }: { a: { id: number; file_url: string; file_name: st
   return (
     <>
       <div
-        onClick={() => isImage ? setLightbox(true) : window.open(url, '_blank')}
+        onClick={() => isImage ? setLightbox(true) : window.open(url, '_blank', 'noopener,noreferrer')}
         className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg border border-slate-100 dark:border-slate-700/60 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer"
       >
         <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">

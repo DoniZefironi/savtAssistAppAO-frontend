@@ -152,7 +152,7 @@ export function ChatAttachmentsPanel({
                       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e, item.message_id) }}>
                       <FileTypeIcon mime={item.mime} className="w-6 h-6 shrink-0 text-slate-400" />
                       <div className="flex-1 min-w-0 cursor-pointer"
-                        onClick={() => window.open(fullUrl, '_blank')}>
+                        onClick={() => window.open(fullUrl, '_blank', 'noopener,noreferrer')}>
                         <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{item.name}</p>
                         <p className="text-xs text-slate-400 mt-0.5">
                           {item.size > 0 ? `${(item.size / 1024).toFixed(0)} КБ` : ''}

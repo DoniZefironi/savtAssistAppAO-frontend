@@ -205,7 +205,7 @@ export function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: bo
               allTags={allTags}
               isAdmin={isAdmin}
               onOpen={() => doc.file_url
-                ? window.open(mediaApi.toFullUrl(doc.file_url), '_blank')
+                ? window.open(mediaApi.toFullUrl(doc.file_url), '_blank', 'noopener,noreferrer')
                 : mediaApi.downloadDocumentById(doc.id, doc.title).catch(() => toast.error('Не удалось открыть документ'))}
               onDownload={() => (doc.file_url
                 ? mediaApi.downloadDocument(doc.file_url, doc.title)
