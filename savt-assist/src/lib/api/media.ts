@@ -1,4 +1,4 @@
-import { apiClient, authorizedFetch } from './client'
+import { apiClient, authorizedFetch, ensureFreshToken } from './client'
 import { API_URL, toFullUrl } from './base-url'
 import type { PaginatedResponse } from '@/types'
 import type { Tag } from './kb'
@@ -58,18 +58,40 @@ async function uploadMultipart<T>(path: string, form: FormData): Promise<T> {
   return res.json()
 }
 
+export interface UploadOptions {
+  signal?: AbortSignal
+  onProgress?: (percent: number) => void
+}
+
+// Загрузка документа через axios (а не fetch): нужны прогресс и отмена, а
+// ошибки должны оставаться AxiosError — иначе apiErrorMessage не достанет из
+// них `detail` (415, 422 антивирус, 503 и т.д.). Обновление токена на 401 делает
+// интерцептор клиента, FormData при повторе отправляется заново.
+async function uploadDocumentForm(form: FormData, opts?: UploadOptions): Promise<CabinetDocument> {
+  await ensureFreshToken()
+  const res = await apiClient.post<CabinetDocument>('/admin/documents', form, {
+    signal: opts?.signal,
+    timeout: 0,
+    headers: { 'Content-Type': undefined },
+    onUploadProgress: (e) => {
+      if (e.total) opts?.onProgress?.(Math.round((e.loaded / e.total) * 100))
+    },
+  })
+  return res.data
+}
+
 export const mediaApi = {
   listDocuments: (cabinetId: number): Promise<PaginatedResponse<CabinetDocument>> =>
     apiClient.get('/admin/documents', { params: { cabinet_id: cabinetId, size: 100 } }).then(r => r.data),
 
-  uploadDocument: (cabinetId: number, file: File, title?: string, requiresApproval = false, isInternal = false): Promise<CabinetDocument> => {
+  uploadDocument: (cabinetId: number, file: File, title?: string, requiresApproval = false, isInternal = false, opts?: UploadOptions): Promise<CabinetDocument> => {
     const form = new FormData()
     form.append('file', file)
     form.append('cabinet_id', String(cabinetId))
     if (title) form.append('title', title)
     form.append('requires_approval', String(requiresApproval))
     form.append('is_internal', String(isInternal))
-    return uploadMultipart('/admin/documents', form)
+    return uploadDocumentForm(form, opts)
   },
 
   // Документация проекта в целом (не привязанная к конкретному ШУ) — тот же
@@ -78,14 +100,14 @@ export const mediaApi = {
   listProjectDocuments: (projectId: number): Promise<PaginatedResponse<CabinetDocument>> =>
     apiClient.get('/admin/documents', { params: { project_id: projectId, size: 100 } }).then(r => r.data),
 
-  uploadProjectDocument: (projectId: number, file: File, title?: string, requiresApproval = false, isInternal = false): Promise<CabinetDocument> => {
+  uploadProjectDocument: (projectId: number, file: File, title?: string, requiresApproval = false, isInternal = false, opts?: UploadOptions): Promise<CabinetDocument> => {
     const form = new FormData()
     form.append('file', file)
     form.append('project_id', String(projectId))
     if (title) form.append('title', title)
     form.append('requires_approval', String(requiresApproval))
     form.append('is_internal', String(isInternal))
-    return uploadMultipart('/admin/documents', form)
+    return uploadDocumentForm(form, opts)
   },
 
   deleteDocument: (docId: number) => apiClient.delete(`/admin/documents/${docId}`),

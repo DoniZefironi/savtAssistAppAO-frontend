@@ -27,6 +27,23 @@ export const apiClient = axios.create({
   },
 })
 
+function accessTokenExpiresInMs(): number {
+  if (!accessToken) return 0
+  try {
+    const payload = JSON.parse(atob(accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    return typeof payload.exp === 'number' ? payload.exp * 1000 - Date.now() : Infinity
+  } catch {
+    return Infinity
+  }
+}
+
+// Перед долгой операцией (загрузка крупного файла идёт минутами) обновляем
+// access_token заранее, если он скоро истечёт: иначе 401 придёт уже после
+// отправки всего тела.
+export async function ensureFreshToken(minMs = 5 * 60_000) {
+  if (accessTokenExpiresInMs() < minMs) await refreshTokens()
+}
+
 apiClient.interceptors.request.use((config) => {
   if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`
   return config

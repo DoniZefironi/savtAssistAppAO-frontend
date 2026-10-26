@@ -26,6 +26,20 @@ export function validateDocFile(file: File): string | null {
   return null
 }
 
+// Документы в админке (POST /admin/documents): любые типы, кроме исполняемых и
+// сценариев (иначе 415), размер до 500 МБ (иначе 413) — проверяем до отправки.
+const BLOCKED_EXTENSIONS = new Set([
+  'exe', 'msi', 'bat', 'cmd', 'scr', 'dll', 'lnk', 'js', 'vbs', 'ps1', 'jar', 'apk', 'sh',
+  'com', 'pif', 'reg', 'wsf', 'vbe', 'jse', 'msp', 'cpl', 'hta',
+])
+
+export function validateAdminDocFile(file: File): string | null {
+  const ext = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : ''
+  if (BLOCKED_EXTENSIONS.has(ext)) return `Файлы .${ext} загружать нельзя (исполняемые и сценарии запрещены)`
+  if (file.size > DOC_MAX_SIZE) return `Файл слишком большой (максимум ${fmtSize(DOC_MAX_SIZE)})`
+  return null
+}
+
 const PHOTO_MAX_SIZE = 500 * 1024 * 1024
 
 export function validatePhotoFile(file: File): string | null {

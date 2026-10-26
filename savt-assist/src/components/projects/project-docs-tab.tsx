@@ -13,7 +13,8 @@ import { apiErrorMessage } from '@/lib/api/errors'
 import type { CabinetDocument } from '@/lib/api/media'
 import { kbApi, type Tag } from '@/lib/api/kb'
 import { useFolderUpload } from '@/lib/hooks/use-folder-upload'
-import { fmtSize, validateDocFile, DOC_ACCEPT } from '@/components/cabinets/cabinet-dialog-shared'
+import { fmtSize, validateAdminDocFile } from '@/components/cabinets/cabinet-dialog-shared'
+import { useCancellableUpload } from '@/lib/hooks/use-cancellable-upload'
 import { FileIcon, PdfIcon, ImageIcon, TrashIcon, UploadIcon, DownloadIcon, TagIcon, PencilIcon } from '@/components/cabinets/cabinet-dialog-icons'
 
 // Документация проекта в целом (не привязанная к конкретному ШУ) — тот же UX,
@@ -25,6 +26,7 @@ export function ProjectDocsTab({ projectId, isAdmin }: { projectId: number; isAd
   const [pending, setPending] = useState<{ file: File; title: string; requiresApproval: boolean; isInternal: boolean } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; title: string } | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
+  const upload = useCancellableUpload()
 
   const { data, isLoading } = useQuery({
     queryKey: ['project-docs', projectId],
@@ -35,13 +37,16 @@ export function ProjectDocsTab({ projectId, isAdmin }: { projectId: number; isAd
   const allTags = tagsQ.data ?? []
 
   const uploadMut = useMutation({
-    mutationFn: () => mediaApi.uploadProjectDocument(projectId, pending!.file, pending!.title || undefined, pending!.requiresApproval, pending!.isInternal),
+    mutationFn: () => mediaApi.uploadProjectDocument(projectId, pending!.file, pending!.title || undefined, pending!.requiresApproval, pending!.isInternal, upload.start()),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['project-docs', projectId] })
       toast.success('Документ загружен')
       setPending(null)
     },
-    onError: (e) => toast.error(apiErrorMessage(e, 'Ошибка при загрузке')),
+    onError: (e) => {
+      if (upload.isCancelled(e)) toast.info('Загрузка отменена')
+      else toast.error(apiErrorMessage(e, 'Ошибка при загрузке'))
+    },
   })
 
   const deleteMut = useMutation({
@@ -55,7 +60,7 @@ export function ProjectDocsTab({ projectId, isAdmin }: { projectId: number; isAd
   })
 
   const folderUpload = useFolderUpload({
-    validate: validateDocFile,
+    validate: validateAdminDocFile,
     upload: (file) => mediaApi.uploadProjectDocument(projectId, file, file.name.replace(/\.[^.]+$/, ''), false),
     onDone: ({ uploaded, skipped, failed }) => {
       qc.invalidateQueries({ queryKey: ['project-docs', projectId] })
@@ -68,7 +73,7 @@ export function ProjectDocsTab({ projectId, isAdmin }: { projectId: number; isAd
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const error = validateDocFile(file)
+    const error = validateAdminDocFile(file)
     if (error) { toast.error(error); e.target.value = ''; return }
     setPending({ file, title: file.name.replace(/\.[^.]+$/, ''), requiresApproval: false, isInternal: false })
     e.target.value = ''
@@ -80,7 +85,7 @@ export function ProjectDocsTab({ projectId, isAdmin }: { projectId: number; isAd
     if (!isAdmin || pending) return
     const file = e.dataTransfer.files?.[0]
     if (!file) return
-    const error = validateDocFile(file)
+    const error = validateAdminDocFile(file)
     if (error) { toast.error(error); return }
     setPending({ file, title: file.name.replace(/\.[^.]+$/, ''), requiresApproval: false, isInternal: false })
   }
@@ -101,7 +106,7 @@ export function ProjectDocsTab({ projectId, isAdmin }: { projectId: number; isAd
       )}
       {isAdmin && (
         <div className="px-1 py-3 border-b border-slate-50 dark:border-slate-700/30">
-          <input ref={fileRef} type="file" accept={DOC_ACCEPT} className="hidden" onChange={handleFileSelect} />
+          <input ref={fileRef} type="file" className="hidden" onChange={handleFileSelect} />
           {pending ? (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
@@ -118,6 +123,11 @@ export function ProjectDocsTab({ projectId, isAdmin }: { projectId: number; isAd
                 }`}
               />
               {!pending.title.trim() && <p className="text-xs text-red-500">Обязательное поле</p>}
+              {uploadMut.isPending && (
+                <div className="h-1.5 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+                  <div className="h-full bg-[#4A8FE7] transition-[width] duration-200" style={{ width: `%` }} />
+                </div>
+              )}
               <div className="flex items-end justify-between gap-3 flex-wrap">
                 {/* requires_approval и is_internal — разные вещи: первый виден
                     пользователю без ссылки и доступ можно запросить, второй не
@@ -145,13 +155,13 @@ export function ProjectDocsTab({ projectId, isAdmin }: { projectId: number; isAd
                   </label>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="ghost" onClick={() => setPending(null)} className="h-7 text-xs px-2 cursor-pointer">Отмена</Button>
+                  <Button variant="ghost" onClick={() => uploadMut.isPending ? upload.cancel() : setPending(null)} className="h-7 text-xs px-2 cursor-pointer">{uploadMut.isPending ? 'Отменить загрузку' : 'Отмена'}</Button>
                   <Button
                     onClick={() => uploadMut.mutate()}
                     disabled={uploadMut.isPending || !pending.title.trim()}
                     className="h-7 text-xs px-3 bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer"
                   >
-                    {uploadMut.isPending ? 'Загрузка...' : 'Загрузить'}
+                    {uploadMut.isPending ? `Загрузка %` : 'Загрузить'}
                   </Button>
                 </div>
               </div>
