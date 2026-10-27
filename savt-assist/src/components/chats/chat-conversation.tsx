@@ -17,6 +17,7 @@ import { authApi } from '@/lib/api/auth'
 import { useAuthStore } from '@/lib/store/auth'
 import { useChatNavStore } from '@/lib/store/chat-nav'
 import { useVoiceRecorder } from '@/lib/hooks/use-voice-recorder'
+import { useUrgentChatIds } from '@/lib/hooks/use-urgent-chats'
 import type { Chat, ChatMessage, MessageAttachment } from '@/types'
 import type { InfiniteData } from '@tanstack/react-query'
 import { ForwardDialog } from './forward-dialog'
@@ -881,6 +882,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
   const canSend = !sendMutation.isPending && !editMutation.isPending && !voice.recording && !uploadingFile
   const inputDisabled = voice.recording || uploadingFile
   const botActive = chat.bot_active
+  const urgentChatIds = useUrgentChatIds()
   // archived_at — флаг состояния чата (см. README-backend.md, "Рут `chats`"):
   // проставляется автоматически при закрытии заявки, сбрасывается при повторном
   // открытии. Архивный чат read-only на бэкенде (POST .../messages -> 403).
@@ -927,6 +929,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
         botActive={botActive}
         hideBotControls={chat.chat_type === 'service_request'}
         operatorRequested={chat.operator_requested}
+        urgent={chat.operator_requested && urgentChatIds.has(chat.id)}
         onAvatarClick={() => { setAttachmentsOpen(true); setAttachTab('media') }}
         onTake={() => { takeMutation.mutate(); setHeaderMenuOpen(false) }}
         takePending={takeMutation.isPending}

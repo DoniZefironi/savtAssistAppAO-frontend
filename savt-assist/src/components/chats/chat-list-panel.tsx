@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { chatsApi } from '@/lib/api/chats'
 import type { MessageSearchResult } from '@/lib/api/chats'
 import { useChatNavStore } from '@/lib/store/chat-nav'
+import { useUrgentChatIds } from '@/lib/hooks/use-urgent-chats'
 import type { Chat } from '@/types'
 
 // Закреп чата — личный для каждого, кто его видит (см. is_pinned в Chat). Внутри
@@ -39,13 +40,19 @@ interface Props {
 
 export function ChatListPanel({ chats, selectedId, onSelect, onSelectChatId, loading, compact, searchValue, onSearchChange, onCollapse, archived, onToggleArchived }: Props) {
   const setPending = useChatNavStore((s) => s.setPending)
+  // Срочные (опасная ситуация) — красным и выше остальных ждущих оператора
+  const urgentIds = useUrgentChatIds()
+  const isUrgent = (c: Chat) => c.operator_requested && urgentIds.has(c.id)
   const sorted = useMemo(() => [...chats].sort((a, b) => {
     if (a.operator_requested && !b.operator_requested) return -1
     if (!a.operator_requested && b.operator_requested) return 1
+    if (isUrgent(a) && !isUrgent(b)) return -1
+    if (!isUrgent(a) && isUrgent(b)) return 1
     if (a.is_pinned && !b.is_pinned) return -1
     if (!a.is_pinned && b.is_pinned) return 1
     return new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime()
-  }), [chats])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [chats, urgentIds])
 
   const trimmed = searchValue.trim()
 
@@ -78,6 +85,7 @@ export function ChatListPanel({ chats, selectedId, onSelect, onSelectChatId, loa
                 key={chat.id}
                 chat={chat}
                 selected={chat.id === selectedId}
+                urgent={isUrgent(chat)}
                 onSelect={() => onSelect(chat)}
               />
             ))
@@ -153,7 +161,7 @@ export function ChatListPanel({ chats, selectedId, onSelect, onSelectChatId, loa
                   <span className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Чаты</span>
                 </div>
                 {sorted.map((chat) => (
-                  <ChatRow key={chat.id} chat={chat} selected={chat.id === selectedId} onSelect={() => onSelect(chat)} />
+                  <ChatRow key={chat.id} chat={chat} selected={chat.id === selectedId} urgent={isUrgent(chat)} onSelect={() => onSelect(chat)} />
                 ))}
               </>
             )}
@@ -210,7 +218,7 @@ export function ChatListPanel({ chats, selectedId, onSelect, onSelectChatId, loa
               </div>
             )}
             {sorted.map((chat) => (
-              <ChatRow key={chat.id} chat={chat} selected={chat.id === selectedId} onSelect={() => onSelect(chat)} />
+              <ChatRow key={chat.id} chat={chat} selected={chat.id === selectedId} urgent={isUrgent(chat)} onSelect={() => onSelect(chat)} />
             ))}
           </>
         )}
@@ -219,7 +227,7 @@ export function ChatListPanel({ chats, selectedId, onSelect, onSelectChatId, loa
   )
 }
 
-function CompactChatRow({ chat, selected, onSelect }: { chat: Chat; selected: boolean; onSelect: () => void }) {
+function CompactChatRow({ chat, selected, urgent, onSelect }: { chat: Chat; selected: boolean; urgent: boolean; onSelect: () => void }) {
   const hasUnread = chat.unread_count > 0
   const isWaiting = chat.operator_requested
   const bg = selected ? 'ring-2 ring-[#1B3A72] ring-offset-1' : ''
@@ -233,8 +241,10 @@ function CompactChatRow({ chat, selected, onSelect }: { chat: Chat; selected: bo
         'relative w-full flex justify-center py-1.5 transition-colors cursor-pointer',
         selected
           ? 'bg-[#1B3A72]/10 dark:bg-[#1B3A72]/20'
-          : isWaiting
-            ? 'bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30'
+          : urgent
+            ? 'bg-red-50 dark:bg-red-900/25 hover:bg-red-100 dark:hover:bg-red-900/35'
+            : isWaiting
+              ? 'bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30'
             : 'hover:bg-slate-50 dark:hover:bg-slate-800'
       )}
     >
@@ -252,7 +262,7 @@ function CompactChatRow({ chat, selected, onSelect }: { chat: Chat; selected: bo
       )}
 
       {isWaiting && !hasUnread && (
-        <span className="absolute top-1.5 right-2 w-2 h-2 bg-amber-500 rounded-full" />
+        <span className={cn('absolute top-1.5 right-2 w-2 h-2 rounded-full', urgent ? 'bg-red-500' : 'bg-amber-500')} />
       )}
 
       {chat.is_pinned && (
@@ -262,7 +272,7 @@ function CompactChatRow({ chat, selected, onSelect }: { chat: Chat; selected: bo
   )
 }
 
-function ChatRow({ chat, selected, onSelect }: { chat: Chat; selected: boolean; onSelect: () => void }) {
+function ChatRow({ chat, selected, urgent, onSelect }: { chat: Chat; selected: boolean; urgent: boolean; onSelect: () => void }) {
   const name = chatDisplayName(chat)
   const hasUnread = chat.unread_count > 0
   const isWaiting = chat.operator_requested
@@ -278,8 +288,10 @@ function ChatRow({ chat, selected, onSelect }: { chat: Chat; selected: boolean; 
         'group w-full text-left flex items-center gap-3 px-3 py-2.5 transition-colors relative cursor-pointer',
         selected
           ? 'bg-[#1B3A72] text-white'
-          : isWaiting
-            ? 'bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30'
+          : urgent
+            ? 'bg-red-50 dark:bg-red-900/25 hover:bg-red-100 dark:hover:bg-red-900/35'
+            : isWaiting
+              ? 'bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30'
             : 'hover:bg-slate-50 dark:hover:bg-slate-800'
       )}
     >
@@ -317,7 +329,8 @@ function ChatRow({ chat, selected, onSelect }: { chat: Chat; selected: boolean; 
             {chat.last_message_text ?? ''}
           </p>
           <div className="flex items-center gap-1 shrink-0">
-            {isWaiting && !selected && <span className="w-2 h-2 bg-amber-500 rounded-full" />}
+            {urgent && !selected && <span className="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase">Срочно</span>}
+            {isWaiting && !selected && <span className={cn('w-2 h-2 rounded-full', urgent ? 'bg-red-500' : 'bg-amber-500')} />}
             {hasUnread && (
               <span className={cn(
                 'min-w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center px-1.5',

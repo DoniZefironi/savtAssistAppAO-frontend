@@ -498,7 +498,7 @@ function CreateOperatorModal({ onClose }: { onClose: () => void }) {
             error={login && !loginValid ? 'Мин. 3 символа, без пробелов' : ''} placeholder="operator1" />
           <PasswordField label="Пароль" hint="мин. 8 символов" value={password} onChange={setPassword}
             error={password && !passwordValid ? 'Минимум 8 символов' : ''} />
-          <FormField label="ФИО" value={fullName} onChange={setFullName} placeholder="Иванов Иван Иванович" />
+          <FormField label="ФИО" hint="это имя клиент видит в чате" value={fullName} onChange={setFullName} placeholder="Иванов Иван Иванович" />
         </div>
         <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end shrink-0">
           <Button onClick={() => createMut.mutate()} disabled={!canSave} className="bg-[#1B3A72] hover:bg-[#1B3A72]/90 cursor-pointer dark:text-white">
@@ -544,7 +544,7 @@ function CreateStaffModal({ onClose }: { onClose: () => void }) {
             error={login && !loginValid ? 'Мин. 3 символа, без пробелов' : ''} placeholder="admin2" />
           <PasswordField label="Пароль" hint="мин. 8 символов" value={password} onChange={setPassword}
             error={password && !passwordValid ? 'Минимум 8 символов' : ''} />
-          <FormField label="ФИО" value={fullName} onChange={setFullName} placeholder="Иванов Иван Иванович" />
+          <FormField label="ФИО" hint="это имя клиент видит в чате" value={fullName} onChange={setFullName} placeholder="Иванов Иван Иванович" />
         </div>
         <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end shrink-0">
           <Button onClick={() => createMut.mutate()} disabled={!canSave} className="bg-purple-600 hover:bg-purple-700 cursor-pointer dark:text-white">

@@ -18,6 +18,18 @@ export interface Notification {
   created_at: string
 }
 
+// Срочный случай (пользователь сообщил об опасной ситуации): тот же тип
+// operator_requested, но заголовок начинается со слова «СРОЧНО» — на него и
+// опираемся (см. README-backend.md), отдельного поля у уведомления нет.
+export const isUrgentNotification = (n: Pick<Notification, 'type' | 'title'>) =>
+  n.type === 'operator_requested' && n.title.trimStart().toUpperCase().startsWith('СРОЧНО')
+
+// Номер чата берём из текста «…в чате #N…»; если его там нет — null.
+export const urgentChatId = (n: Pick<Notification, 'body'>): number | null => {
+  const m = /#(\d+)/.exec(n.body)
+  return m ? Number(m[1]) : null
+}
+
 interface NotifList {
   items: Notification[]
   total: number

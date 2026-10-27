@@ -20,6 +20,7 @@ interface Props {
   // где он структурно никогда не участвует.
   hideBotControls?: boolean
   operatorRequested: boolean
+  urgent?: boolean
   onAvatarClick: () => void
   onTake: () => void
   takePending: boolean
@@ -42,7 +43,7 @@ interface Props {
 // самый заметный визуально блок шапки — см. разбор декомпозиции chat-conversation.tsx.
 export function ChatHeader({
   onBack, searchOpen, searchInput, onSearchInputChange, onToggleSearch,
-  name, avatarBg, AvatarIcon, botActive, hideBotControls, operatorRequested, onAvatarClick,
+  name, avatarBg, AvatarIcon, botActive, hideBotControls, operatorRequested, urgent, onAvatarClick,
   onTake, takePending, onReturnToBot, returnToBotPending,
   headerMenuOpen, onToggleHeaderMenu, headerMenuRef,
   pinnedCount, onJumpToPinned, onUnpinAll, onClearHistory, onDeleteChat, canDeleteChat,
@@ -76,7 +77,7 @@ export function ChatHeader({
                   : <span className="text-xs text-blue-500 flex items-center gap-1 min-w-0 shrink"><span className="inline-block w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0" /><span className="truncate">Оператор отвечает</span></span>
                 )}
                 {operatorRequested && (
-                  <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium shrink-0">Ожидает оператора</span>
+                  <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium shrink-0', urgent ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 font-bold' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400')}>{urgent ? 'СРОЧНО: ожидает оператора' : 'Ожидает оператора'}</span>
                 )}
               </div>
             </>

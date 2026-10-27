@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { notificationsApi } from '@/lib/api/notifications'
+import { isUrgentNotification, notificationsApi } from '@/lib/api/notifications'
 import { apiErrorMessage } from '@/lib/api/errors'
 import type { NotifType } from '@/lib/api/notifications'
 import { SpinnerIcon } from '@/components/ui/icons'
@@ -181,14 +181,19 @@ export function NotificationBell() {
               </div>
             ) : (
               <ul>
-                {currentItems.map(n => (
+                {currentItems.map(n => {
+                  const urgent = isUrgentNotification(n)
+                  return (
                   <li key={n.id}>
                     <button
                       onClick={() => { if (!n.is_read) markReadMut.mutate(n.id) }}
                       className={cn(
                         'w-full flex items-start gap-3 px-4 py-3 text-left transition-colors',
+                        urgent && 'border-l-4 border-red-500',
                         tab === 'unread'
-                          ? 'bg-blue-50/60 dark:bg-blue-900/10 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer'
+                          ? urgent
+                            ? 'bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 cursor-pointer'
+                            : 'bg-blue-50/60 dark:bg-blue-900/10 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer'
                           : 'hover:bg-slate-50 dark:hover:bg-slate-700/40 cursor-default'
                       )}
                     >
@@ -202,9 +207,11 @@ export function NotificationBell() {
                         <div className="flex items-start justify-between gap-2">
                           <p className={cn(
                             'text-sm leading-tight',
-                            tab === 'unread'
-                              ? 'font-semibold text-slate-800 dark:text-slate-100'
-                              : 'text-slate-500 dark:text-slate-400'
+                            urgent
+                              ? 'font-bold text-red-600 dark:text-red-400'
+                              : tab === 'unread'
+                                ? 'font-semibold text-slate-800 dark:text-slate-100'
+                                : 'text-slate-500 dark:text-slate-400'
                           )}>
                             {n.title}
                           </p>
@@ -217,7 +224,8 @@ export function NotificationBell() {
                       </div>
                     </button>
                   </li>
-                ))}
+                  )
+                })}
               </ul>
             )}
           </div>
