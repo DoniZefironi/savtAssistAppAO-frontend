@@ -26,6 +26,7 @@ interface Props {
   onCancelContext: () => void
   fileInputRef: React.RefObject<HTMLInputElement | null>
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onPasteFiles: (files: File[]) => void
   onShareLocation: () => void
   locating: boolean
   voice: ReturnType<typeof useVoiceRecorder>
@@ -45,7 +46,7 @@ interface Props {
 export function ChatComposer({
   stickerPickerOpen, onToggleStickerPicker, stickerCat, onStickerCatChange, onPickSticker,
   pendingAttachments, onRemoveAttachment, replyTo, editingMessage, onCancelContext,
-  fileInputRef, onFileChange, onShareLocation, locating, voice, canSend, uploadingFile,
+  fileInputRef, onFileChange, onPasteFiles, onShareLocation, locating, voice, canSend, uploadingFile,
   text, onTextChange, onKeyDown, inputDisabled, textareaRef, onSend,
 }: Props) {
   const stickerPanelRef = useRef<HTMLDivElement>(null)
@@ -178,6 +179,14 @@ export function ChatComposer({
               value={text}
               onChange={(e) => onTextChange(e.target.value)}
               onKeyDown={onKeyDown}
+              // Скриншот или файл из буфера (Ctrl+V) прикрепляем как вложение;
+              // обычный текст вставляется как всегда.
+              onPaste={(e) => {
+                const files = Array.from(e.clipboardData.files)
+                if (files.length === 0) return
+                e.preventDefault()
+                onPasteFiles(files)
+              }}
               disabled={inputDisabled}
               placeholder={editingMessage ? 'Редактировать сообщение...' : 'Сообщение'}
               rows={1}

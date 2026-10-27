@@ -1152,6 +1152,7 @@ export function ChatConversation({ chat, onBack, onMessagesLoaded, onChatDeleted
           onCancelContext={cancelContext}
           fileInputRef={fileInputRef}
           onFileChange={handleFileChange}
+          onPasteFiles={uploadFiles}
           onShareLocation={handleShareLocation}
           locating={locating}
           voice={voice}
