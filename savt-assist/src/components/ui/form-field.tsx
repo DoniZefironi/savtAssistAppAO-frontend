@@ -15,13 +15,16 @@ interface FormFieldProps {
   type?: string
   autoComplete?: string
   required?: boolean
+  // Предел длины из README-backend.md («Формат ошибок и лимиты запросов»): без
+  // него длинный текст уходит на сервер и возвращается 422
+  maxLength?: number
 }
 
 // Подписанный инпут (label + поле + текст ошибки) — раньше было минимум две
 // независимые копии (форма ШУ и формы создания оператора/админа/пользователя)
 // с почти одинаковой разметкой.
 export function FormField({
-  label, hint, value, onChange, placeholder, error, multiline, type = 'text', autoComplete, required,
+  label, hint, value, onChange, placeholder, error, multiline, type = 'text', autoComplete, required, maxLength,
 }: FormFieldProps) {
   const base = cn(
     'w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none placeholder:text-slate-400',
@@ -35,9 +38,9 @@ export function FormField({
         {label}{required && <span className="text-red-500"> *</span>}{hint && <span className="text-slate-400 font-normal ml-1">({hint})</span>}
       </label>
       {multiline ? (
-        <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={2} className={cn(base, 'resize-none')} />
+        <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={2} maxLength={maxLength} className={cn(base, 'resize-none')} />
       ) : (
-        <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} autoComplete={autoComplete} className={base} />
+        <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} autoComplete={autoComplete} maxLength={maxLength} className={base} />
       )}
       {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
     </div>

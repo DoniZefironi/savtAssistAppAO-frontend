@@ -39,6 +39,8 @@ export interface GetChatsParams {
   archived?: boolean
 }
 
+const BULK_LIMIT = 100
+
 export const chatsApi = {
   getChats: async (params: GetChatsParams = {}): Promise<Chat[]> => {
     const { data } = await apiClient.get<Chat[]>('/operator/chats', { params })
@@ -91,9 +93,16 @@ export const chatsApi = {
   // Одним запросом вместо цикла отдельных DELETE — тот упирается в общий
   // rate-limit (200/minute) на паре десятков выбранных сообщений. Чужие/
   // несуществующие/уже удалённые id сервер молча пропускает.
+  // Сервер принимает не больше 100 id за запрос — больший список режем на пачки.
   deleteMessages: async (chatId: number, messageIds: number[]): Promise<{ deleted_ids: number[] }> => {
-    const { data } = await apiClient.delete(`/chats/${chatId}/messages`, { data: { message_ids: messageIds } })
-    return data
+    const deleted: number[] = []
+    for (let i = 0; i < messageIds.length; i += BULK_LIMIT) {
+      const { data } = await apiClient.delete<{ deleted_ids: number[] }>(`/chats/${chatId}/messages`, {
+        data: { message_ids: messageIds.slice(i, i + BULK_LIMIT) },
+      })
+      deleted.push(...data.deleted_ids)
+    }
+    return { deleted_ids: deleted }
   },
 
   addReaction: async (chatId: number, messageId: number, emoji: string): Promise<void> => {

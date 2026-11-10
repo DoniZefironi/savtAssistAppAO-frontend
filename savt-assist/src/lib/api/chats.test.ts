@@ -58,6 +58,23 @@ describe('сообщения', () => {
     expect(res.deleted_ids).toEqual([1, 2])
   })
 
+  it('удаление больше 100 сообщений режется на пачки по 100, результаты складываются', async () => {
+    const ids = Array.from({ length: 250 }, (_, i) => i + 1)
+    http.delete.mockImplementation(async (_url: string, cfg: { data: { message_ids: number[] } }) => ({
+      data: { deleted_ids: cfg.data.message_ids },
+    }))
+    const res = await chatsApi.deleteMessages(1, ids)
+    expect(http.delete).toHaveBeenCalledTimes(3)
+    expect(http.delete.mock.calls.map((c) => (c[1] as { data: { message_ids: number[] } }).data.message_ids.length)).toEqual([100, 100, 50])
+    expect(res.deleted_ids).toEqual(ids)
+  })
+
+  it('ровно 100 сообщений — один запрос', async () => {
+    http.delete.mockResolvedValue({ data: { deleted_ids: [] } })
+    await chatsApi.deleteMessages(1, Array.from({ length: 100 }, (_, i) => i))
+    expect(http.delete).toHaveBeenCalledTimes(1)
+  })
+
   it('реакция: эмодзи кодируется в URL', async () => {
     await chatsApi.addReaction(1, 2, '👍')
     expect(http.post).toHaveBeenCalledWith(`/chats/1/messages/2/reactions/${encodeURIComponent('👍')}`)

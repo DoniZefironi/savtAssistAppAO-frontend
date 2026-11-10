@@ -1,4 +1,5 @@
 import { apiClient, authorizedFetch } from './client'
+import { httpErrorFromResponse } from './errors'
 import type { PaginatedResponse } from '@/types'
 
 export interface KbCategory {
@@ -60,7 +61,7 @@ export interface Tag {
 
 async function multipartPost<T>(path: string, form: FormData): Promise<T> {
   const res = await authorizedFetch(path, { method: 'POST', body: form })
-  if (!res.ok) throw new Error('Upload failed')
+  if (!res.ok) throw await httpErrorFromResponse(res)
   return res.json()
 }
 

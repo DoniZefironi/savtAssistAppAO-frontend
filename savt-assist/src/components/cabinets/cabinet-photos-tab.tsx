@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { mediaApi } from '@/lib/api/media'
+import { apiErrorMessage } from '@/lib/api/errors'
 import type { CabinetPhoto } from '@/lib/api/media'
 import { fmtSize, validatePhotoFile } from './cabinet-dialog-shared'
 import { ImageIcon, PencilIcon, TrashIcon, UploadIcon, XIcon, ChevronLeftIcon, ChevronRightIcon } from './cabinet-dialog-icons'
@@ -53,7 +54,7 @@ function PhotosTabCore({ owner, isAdmin }: { owner: PhotoOwner; isAdmin: boolean
       setPendingFile(null)
       setCaption('')
     },
-    onError: () => toast.error('Ошибка при загрузке'),
+    onError: (e) => toast.error(apiErrorMessage(e, 'Ошибка при загрузке')),
   })
 
   const deleteMut = useMutation({
@@ -127,6 +128,7 @@ function PhotosTabCore({ owner, isAdmin }: { owner: PhotoOwner; isAdmin: boolean
               <input
                 value={caption}
                 onChange={e => setCaption(e.target.value)}
+                maxLength={500}
                 placeholder="Подпись (необязательно)"
                 className="w-full px-3 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-[#4A8FE7]"
               />

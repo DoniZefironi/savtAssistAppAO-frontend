@@ -427,11 +427,11 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
           gradient="from-emerald-500 to-emerald-700"
         />
         <div className="px-4 sm:px-6 py-4 space-y-4">
-          <FormField label="Телефон" hint="логин, формат +375291234567" value={phone} onChange={setPhone}
+          <FormField label="Телефон" hint="логин, формат +375291234567" value={phone} onChange={setPhone} maxLength={32}
             error={phone && !phoneValid ? 'Формат: + и от 9 до 15 цифр' : ''} placeholder="+375291234567" />
           <PasswordField label="Пароль" hint="мин. 8 символов" value={password} onChange={setPassword}
             error={password && !passwordValid ? 'Минимум 8 символов' : ''} />
-          <FormField label="ФИО" value={fullName} onChange={setFullName} placeholder="Иванов Иван Иванович" />
+          <FormField label="ФИО" value={fullName} onChange={setFullName} maxLength={255} placeholder="Иванов Иван Иванович" />
           <div>
             <label className="text-xs font-medium text-slate-500 block mb-1.5">Тип</label>
             <div className="flex gap-2">
@@ -453,11 +453,11 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
           {userType === 'organization' && (
-            <FormField label="Организация" value={organizationName} onChange={setOrganizationName}
+            <FormField label="Организация" value={organizationName} onChange={setOrganizationName} maxLength={255}
               error={!orgValid ? 'Обязательно для организации' : ''}
               placeholder="ООО «Ромашка»" />
           )}
-          <FormField label="Контактный телефон" hint="необязательно" value={contactPhone} onChange={setContactPhone} placeholder="+375291234567" />
+          <FormField label="Контактный телефон" hint="необязательно" value={contactPhone} onChange={setContactPhone} maxLength={32} placeholder="+375291234567" />
         </div>
         <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end shrink-0">
           <Button onClick={() => createMut.mutate()} disabled={!canSave} className="bg-emerald-600 hover:bg-emerald-700 cursor-pointer dark:text-white">

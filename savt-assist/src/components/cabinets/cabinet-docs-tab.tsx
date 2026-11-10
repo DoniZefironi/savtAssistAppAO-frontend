@@ -75,7 +75,7 @@ export function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: bo
     if (!file) return
     const error = validateAdminDocFile(file)
     if (error) { toast.error(error); e.target.value = ''; return }
-    setPending({ file, title: file.name.replace(/\.[^.]+$/, ''), requiresApproval: false, isInternal: false })
+    setPending({ file, title: file.name.replace(/\.[^.]+$/, '').slice(0, 255), requiresApproval: false, isInternal: false })
     e.target.value = ''
   }
 
@@ -87,7 +87,7 @@ export function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: bo
     if (!file) return
     const error = validateAdminDocFile(file)
     if (error) { toast.error(error); return }
-    setPending({ file, title: file.name.replace(/\.[^.]+$/, ''), requiresApproval: false, isInternal: false })
+    setPending({ file, title: file.name.replace(/\.[^.]+$/, '').slice(0, 255), requiresApproval: false, isInternal: false })
   }
 
   const docs = data?.items ?? []
@@ -117,6 +117,7 @@ export function DocsTab({ cabinetId, isAdmin }: { cabinetId: number; isAdmin: bo
               <input
                 value={pending.title}
                 onChange={e => setPending(p => p ? { ...p, title: e.target.value } : p)}
+                maxLength={255}
                 placeholder="Название документа"
                 className={`w-full px-3 py-1.5 text-sm border rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none ${
                   pending.title.trim() ? 'border-slate-200 dark:border-slate-600 focus:border-[#4A8FE7]' : 'border-red-400 dark:border-red-500 focus:border-red-500'

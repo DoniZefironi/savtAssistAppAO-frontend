@@ -1,5 +1,6 @@
 import { apiClient, authorizedFetch, ensureFreshToken } from './client'
 import { API_URL, toFullUrl } from './base-url'
+import { httpErrorFromResponse } from './errors'
 import type { PaginatedResponse } from '@/types'
 import type { Tag } from './kb'
 
@@ -51,10 +52,7 @@ function saveBlob(blob: Blob, filename: string) {
 
 async function uploadMultipart<T>(path: string, form: FormData): Promise<T> {
   const res = await authorizedFetch(path, { method: 'POST', body: form })
-  if (!res.ok) {
-    const err = await res.text().catch(() => 'Upload failed')
-    throw new Error(err)
-  }
+  if (!res.ok) throw await httpErrorFromResponse(res)
   return res.json()
 }
 
