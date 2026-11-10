@@ -10,6 +10,7 @@ import type { MessageSearchResult } from '@/lib/api/chats'
 import { useChatNavStore } from '@/lib/store/chat-nav'
 import { useUrgentChatIds } from '@/lib/hooks/use-urgent-chats'
 import type { Chat } from '@/types'
+import { chatDisplayName, sortChats } from './chat-utils'
 
 // Закреп чата — личный для каждого, кто его видит (см. is_pinned в Chat). Внутри
 // очереди operator_requested пин не перекрывает: это реально ждущие обращения,
@@ -43,16 +44,7 @@ export function ChatListPanel({ chats, selectedId, onSelect, onSelectChatId, loa
   // Срочные (опасная ситуация) — красным и выше остальных ждущих оператора
   const urgentIds = useUrgentChatIds()
   const isUrgent = (c: Chat) => c.operator_requested && urgentIds.has(c.id)
-  const sorted = useMemo(() => [...chats].sort((a, b) => {
-    if (a.operator_requested && !b.operator_requested) return -1
-    if (!a.operator_requested && b.operator_requested) return 1
-    if (isUrgent(a) && !isUrgent(b)) return -1
-    if (!isUrgent(a) && isUrgent(b)) return 1
-    if (a.is_pinned && !b.is_pinned) return -1
-    if (!a.is_pinned && b.is_pinned) return 1
-    return new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [chats, urgentIds])
+  const sorted = useMemo(() => sortChats(chats, urgentIds), [chats, urgentIds])
 
   const trimmed = searchValue.trim()
 
@@ -355,28 +347,7 @@ function ChatAvatar({ chat, selected }: { chat: Chat; selected: boolean }) {
   )
 }
 
-function truncate(s: string, n: number): string {
-  return s.length > n ? `${s.slice(0, n).trimEnd()}…` : s
-}
-
-export function chatDisplayName(chat: Chat): string {
-  const user = chat.user_name ?? null
-  if (chat.chat_type === 'cabinet') {
-    const cabinet = chat.cabinet_name ?? `ШУ #${chat.id}`
-    return chat.user_name ? `${cabinet} — ${chat.user_name}` : cabinet
-  }
-  if (chat.chat_type === 'project') {
-    const project = chat.project_name ?? `Проект #${chat.id}`
-    return user ? `${project} — ${user}` : project
-  }
-  if (chat.chat_type === 'notes') return user ? `Заметки — ${user}` : `Заметки #${chat.id}`
-  if (chat.chat_type === 'support') return user ? `Поддержка — ${user}` : `Поддержка #${chat.id}`
-  if (chat.chat_type === 'service_request') {
-    const title = chat.service_request_description ? truncate(chat.service_request_description, 36) : `Заявка #${chat.id}`
-    return user ? `${title} — ${user}` : title
-  }
-  return `Чат #${chat.id}`
-}
+export { chatDisplayName }
 
 function chatInitials(chat: Chat): ReactNode {
   const name = chat.user_name
